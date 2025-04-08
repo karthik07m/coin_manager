@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/category_amount.dart';
 import '../providers/monthly_budget_provider.dart';
 import '../providers/category_provider.dart';
 
 class ManageBudgetScreen extends StatefulWidget {
+  const ManageBudgetScreen({super.key});
+
   @override
   _ManageBudgetScreenState createState() => _ManageBudgetScreenState();
 }
@@ -48,7 +49,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Manage Budget'),
+        title: const Text('Manage Budget'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -64,7 +65,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                       width: 40,
                       height: 40,
                     ),
-                    SizedBox(width: 10),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: TextFormField(
                         decoration: InputDecoration(
@@ -88,11 +89,11 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                     ),
                   ],
                 );
-              }).toList(),
-              SizedBox(height: 20),
+              }),
+              const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _saveBudgets,
-                child: Text('Save Budgets'),
+                child: const Text('Save Budgets'),
               ),
             ],
           ),

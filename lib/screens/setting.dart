@@ -28,7 +28,7 @@ class SettingsScreen extends StatelessWidget {
             // Navigate to the Manage Budget screen
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => ManageBudgetScreen()),
+              MaterialPageRoute(builder: (context) => const ManageBudgetScreen()),
             );
           },
         ),

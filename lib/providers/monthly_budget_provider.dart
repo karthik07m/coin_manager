@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/monthly_budget.dart';
 
 class MonthlyBudgetProvider with ChangeNotifier {
-  List<MonthlyBudget> _monthlyBudgets = []; // List to store monthly budgets
+  final List<MonthlyBudget> _monthlyBudgets = []; // List to store monthly budgets
 
   List<MonthlyBudget> get monthlyBudgets => _monthlyBudgets;
 

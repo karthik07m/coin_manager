@@ -10,7 +10,7 @@ import '../widgets/balance_item.dart';
 import '../utilities/functions.dart';
 
 class TransactionList extends StatefulWidget {
-  const TransactionList({Key? key}) : super(key: key);
+  const TransactionList({super.key});
 
   @override
   State<TransactionList> createState() => _TransactionListState();

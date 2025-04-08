@@ -9,8 +9,7 @@ class TransactionItem extends StatelessWidget {
   final bool enableDel;
 
   const TransactionItem(this.transaction, this.category,
-      {this.enableDel = false, Key? key})
-      : super(key: key);
+      {this.enableDel = false, super.key});
 
   @override
   Widget build(BuildContext context) {

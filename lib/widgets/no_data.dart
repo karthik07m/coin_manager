@@ -5,11 +5,10 @@ class NoData extends StatelessWidget {
   final imagePath;
   final double textFontSize;
   const NoData(
-      {Key? key,
+      {super.key,
       required this.title,
       required this.imagePath,
-      required this.textFontSize})
-      : super(key: key);
+      required this.textFontSize});
 
   @override
   Widget build(BuildContext context) {
