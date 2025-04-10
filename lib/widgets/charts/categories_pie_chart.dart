@@ -41,86 +41,39 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
 
   void showTransactionList(
       BuildContext context, int categoryId, String categoryName) {
-    // Implement this
+    // Implement this if needed
   }
 
   List<PieChartSectionData> buildPieChartSections() {
     return sortedCategories.asMap().entries.map((entry) {
       int index = entry.key;
       CategoryAmount category = entry.value;
+
       final double percentage = widget.totalExpenses > 0
           ? (category.amount / widget.totalExpenses).clamp(0.0, 1.0)
           : 0.0;
 
-      double radius = _touchedIndex == index ? 50 : 40;
+      double radius = _touchedIndex == index ? 55 : 45;
 
       return PieChartSectionData(
         color: Colors.primaries[index % Colors.primaries.length],
         value: percentage * 100,
         radius: radius,
-        showTitle: false,
+        showTitle: true,
+        title: '${(percentage * 100).toStringAsFixed(1)}%',
+        titleStyle: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+        badgeWidget: Image.asset(
+          category.icon,
+          width: 24,
+          height: 24,
+        ), // ✅ Transparent icon
+        badgePositionPercentageOffset: 1.2,
       );
     }).toList();
-  }
-
-  List<Widget> buildExternalLabels() {
-    final List<Widget> labelWidgets = [];
-    final double chartRadius = widget.screenHeight * 0.15;
-    final double centerX = widget.screenHeight * 0.25;
-    final double centerY = widget.screenHeight * 0.25;
-    double startAngle = -90.0;
-
-    for (int i = 0; i < sortedCategories.length; i++) {
-      final category = sortedCategories[i];
-      final double sweepAngle = widget.totalExpenses > 0
-          ? (category.amount / widget.totalExpenses) * 360
-          : 0.0;
-      final double midAngle = startAngle + sweepAngle / 2;
-      final double radians = midAngle * (math.pi / 180);
-
-      final double lineStartX =
-          centerX + (chartRadius + 10) * math.cos(radians);
-      final double lineStartY =
-          centerY + (chartRadius + 10) * math.sin(radians);
-      final double lineEndX =
-          centerX + (chartRadius + 40) * math.cos(radians);
-      final double lineEndY =
-          centerY + (chartRadius + 40) * math.sin(radians);
-
-      labelWidgets.add(CustomPaint(
-        painter: LinePainter(
-          startX: lineStartX,
-          startY: lineStartY,
-          endX: lineEndX,
-          endY: lineEndY,
-          color: Colors.primaries[i % Colors.primaries.length],
-        ),
-      ));
-
-      labelWidgets.add(Positioned(
-        left: lineEndX - 10,
-        top: lineEndY - 10,
-        child: GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedCategoryName = category.name;
-              _selectedCategoryAmount = category.amount;
-              _touchedIndex = i;
-            });
-            showTransactionList(context, category.id, category.name);
-          },
-          child: Image.asset(
-            category.icon,
-            width: 20,
-            height: 20,
-          ),
-        ),
-      ));
-
-      startAngle += sweepAngle;
-    }
-
-    return labelWidgets;
   }
 
   @override
@@ -159,13 +112,15 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
                           } else {
                             setState(() {
                               _touchedIndex = null;
+                              _selectedCategoryName = null;
+                              _selectedCategoryAmount = null;
                             });
                           }
                         }
                       },
                     ),
                   ),
-                  swapAnimationDuration: Duration(milliseconds: 300),
+                  swapAnimationDuration: const Duration(milliseconds: 300),
                 ),
               ),
               Align(
@@ -194,7 +149,6 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
                       )
                     : Container(),
               ),
-              ...buildExternalLabels(),
             ],
           ),
         ),
@@ -204,20 +158,22 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
         ListView.builder(
           itemCount: sortedCategories.length,
           shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
+          physics: const NeverScrollableScrollPhysics(),
           itemBuilder: (context, index) {
             final category = sortedCategories[index];
             final percentage = widget.totalExpenses > 0
                 ? (category.amount / widget.totalExpenses) * 100
                 : 0.0;
+            final bgColor = Colors.primaries[index % Colors.primaries.length];
 
             return ListTile(
               leading: CircleAvatar(
-                backgroundColor: Colors.white,
+                backgroundColor: bgColor.withOpacity(0.15),
                 child: Image.asset(
                   category.icon,
                   width: 24,
                   height: 24,
+                  color: bgColor, // Colorize icon (optional)
                 ),
               ),
               title: Text(
@@ -246,29 +202,4 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
       ],
     );
   }
-}
-
-class LinePainter extends CustomPainter {
-  final double startX, startY, endX, endY;
-  final Color color;
-
-  LinePainter({
-    required this.startX,
-    required this.startY,
-    required this.endX,
-    required this.endY,
-    required this.color,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(Offset(startX, startY), Offset(endX, endY), paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

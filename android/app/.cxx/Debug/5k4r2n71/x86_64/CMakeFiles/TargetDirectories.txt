@@ -1,0 +1,2 @@
+/Users/manikarthik/development/Projects/coin_manager/android/app/.cxx/Debug/5k4r2n71/x86_64/CMakeFiles/edit_cache.dir
+/Users/manikarthik/development/Projects/coin_manager/android/app/.cxx/Debug/5k4r2n71/x86_64/CMakeFiles/rebuild_cache.dir
