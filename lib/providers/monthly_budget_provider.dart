@@ -6,6 +6,10 @@ class MonthlyBudgetProvider with ChangeNotifier {
 
   List<MonthlyBudget> get monthlyBudgets => _monthlyBudgets;
 
+  Map<String, double> _totalBudgets = {};
+
+double getTotalBudget(String month) => _totalBudgets[month] ?? 0.0;
+
   // Method to set budget for a specific category and month
   void setBudget(String categoryName, String month, double budget) {
     MonthlyBudget? monthlyBudget = _monthlyBudgets.firstWhere(
@@ -32,4 +36,11 @@ class MonthlyBudgetProvider with ChangeNotifier {
 
     return monthlyBudget.getBudget(month);
   }
+
+
+void setTotalBudget(String month, double amount) {
+  _totalBudgets[month] = amount;
+  notifyListeners();
+}
+
 }

@@ -13,33 +13,50 @@ class ManageBudgetScreen extends StatefulWidget {
 class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
   final _formKey = GlobalKey<FormState>();
   final Map<String, double> _budgets = {};
+  double _totalBudget = 0.0;
+  double _remainingBudget = 0.0;
 
   @override
   void initState() {
     super.initState();
-    // Load existing categories and their budgets
-    final categories =
-        Provider.of<CategoryProvider>(context, listen: false).categories;
-    final monthlyBudgetProvider =
-        Provider.of<MonthlyBudgetProvider>(context, listen: false);
+    final categories = Provider.of<CategoryProvider>(context, listen: false).categories;
+    final monthlyBudgetProvider = Provider.of<MonthlyBudgetProvider>(context, listen: false);
 
     for (var category in categories) {
-      _budgets[category.name] = monthlyBudgetProvider.getBudget(
-          category.name, DateTime.now().month.toString());
+      final budget = monthlyBudgetProvider.getBudget(category.name, DateTime.now().month.toString());
+      _budgets[category.name] = budget;
     }
+
+    _totalBudget = monthlyBudgetProvider.getTotalBudget(DateTime.now().month.toString());
+    _calculateRemaining();
+  }
+
+  void _calculateRemaining() {
+    final used = _budgets.values.fold(0.0, (sum, val) => sum + val);
+    setState(() {
+      _remainingBudget = _totalBudget - used;
+    });
   }
 
   void _saveBudgets() {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
-      // Save budgets to the provider
-      final monthlyBudgetProvider =
-          Provider.of<MonthlyBudgetProvider>(context, listen: false);
+      final totalUsed = _budgets.values.fold(0.0, (sum, val) => sum + val);
+      if (totalUsed > _totalBudget) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Total of category budgets exceeds total budget')),
+        );
+        return;
+      }
+
+      final monthlyBudgetProvider = Provider.of<MonthlyBudgetProvider>(context, listen: false);
+      monthlyBudgetProvider.setTotalBudget(DateTime.now().month.toString(), _totalBudget);
+
       _budgets.forEach((categoryName, budget) {
-        monthlyBudgetProvider.setBudget(
-            categoryName, DateTime.now().month.toString(), budget);
+        monthlyBudgetProvider.setBudget(categoryName, DateTime.now().month.toString(), budget);
       });
-      Navigator.pop(context); // Go back to the previous screen
+
+      Navigator.pop(context);
     }
   }
 
@@ -48,23 +65,48 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
     final categories = Provider.of<CategoryProvider>(context).categories;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Manage Budget'),
-      ),
+      appBar: AppBar(title: const Text('Manage Budget')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
           child: ListView(
             children: [
+              TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'Total Monthly Budget / Income',
+                  prefixIcon: Icon(Icons.attach_money),
+                ),
+                keyboardType: TextInputType.number,
+                initialValue: _totalBudget > 0 ? _totalBudget.toString() : '',
+                validator: (value) {
+                  if (value == null || value.isEmpty) return 'Please enter total income';
+                  return null;
+                },
+                onChanged: (value) {
+                  final parsed = double.tryParse(value) ?? 0;
+                  setState(() {
+                    _totalBudget = parsed;
+                    _calculateRemaining();
+                  });
+                },
+                onSaved: (value) {
+                  if (value != null) _totalBudget = double.parse(value);
+                },
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Remaining Budget: \$${_remainingBudget.toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: _remainingBudget < 0 ? Colors.red : Colors.green,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 20),
               ...categories.map((category) {
                 return Row(
                   children: [
-                    Image.asset(
-                      category.icon, // Assuming category has an icon field
-                      width: 40,
-                      height: 40,
-                    ),
+                    Image.asset(category.icon, width: 40, height: 40),
                     const SizedBox(width: 10),
                     Expanded(
                       child: TextFormField(
@@ -75,10 +117,14 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                         keyboardType: TextInputType.number,
                         initialValue: _budgets[category.name]?.toString(),
                         validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter a budget';
-                          }
+                          if (value == null || value.isEmpty) return 'Enter amount';
                           return null;
+                        },
+                        onChanged: (value) {
+                          setState(() {
+                            _budgets[category.name] = double.tryParse(value) ?? 0;
+                            _calculateRemaining();
+                          });
                         },
                         onSaved: (value) {
                           if (value != null) {
