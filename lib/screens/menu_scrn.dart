@@ -1,79 +1,151 @@
-import 'package:coin_manager/utilities/functions.dart';
 import 'package:flutter/material.dart';
-
-import '../utilities/constants.dart';
-
+import 'package:provider/provider.dart';
+import '../providers/transaction_provider.dart';
+import '../providers/category_provider.dart';
 import 'home_scrn.dart';
+import 'transaction_list.dart';
 import 'setting.dart';
 import 'transaction_form.dart';
-import 'transaction_list.dart';
+import '../utilities/constants.dart';
 
 class MenuScrn extends StatefulWidget {
   const MenuScrn({super.key});
 
   @override
-  BottomNavBarState createState() => BottomNavBarState();
+  State<MenuScrn> createState() => BottomNavBarState();
 }
 
-class BottomNavBarState extends State<MenuScrn> {
+class BottomNavBarState extends State<MenuScrn>
+    with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
+  late AnimationController _animationController;
+  late Animation<double> _animation;
 
-  final List<Widget> _scrns = [
+  final List<Widget> _screens = [
     const HomePage(),
     const TransactionList(),
     const TransactionList(),
-    const SettingsScreen()
+    const SettingsScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: AppDurations.fast,
+      vsync: this,
+    );
+    _animation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
 
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
+    _animationController.forward(from: 0.0);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(UtilityFunction.getScreenTitle(_selectedIndex)),
-      ),
-      body: _scrns[_selectedIndex],
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: <Widget>[
-            IconButton(
-              icon: const Icon(Icons.home),
-              color: _selectedIndex == 0 ? kPrimaryColor : Colors.grey,
-              onPressed: () => _onItemTapped(0),
-            ),
-            IconButton(
-              focusColor: Colors.blue,
-              icon: const Icon(Icons.swap_horiz),
-              color: _selectedIndex == 1 ? kPrimaryColor : Colors.grey,
-              onPressed: () => _onItemTapped(1),
-            ),
-            const SizedBox(width: 40), // Adjust spacing for circular button
-            IconButton(
-              icon: const Icon(Icons.monetization_on),
-              color: _selectedIndex == 2 ? kPrimaryColor : Colors.grey,
-              onPressed: () => _onItemTapped(2),
-            ),
-            IconButton(
-              icon: const Icon(Icons.settings),
-              color: _selectedIndex == 3 ? kPrimaryColor : Colors.grey,
-              onPressed: () => _onItemTapped(3),
-            ),
-          ],
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      body: _screens[_selectedIndex],
       floatingActionButton: FloatingActionButton(
         onPressed: () =>
             Navigator.of(context).pushNamed(TransactionForm.routeName),
-        tooltip: 'Add',
-        child: const Icon(Icons.add),
+        backgroundColor: AppColors.primary,
+        elevation: AppDimensions.elevationMedium,
+        child: const Icon(
+          Icons.add,
+          size: 24,
+          color: Colors.white,
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimensions.spacing8,
+              vertical: AppDimensions.spacing4,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildNavItem(0, Icons.home_outlined, Icons.home, 'Home'),
+                _buildNavItem(1, Icons.receipt_long_outlined,
+                    Icons.receipt_long, 'Transactions'),
+                _buildNavItem(2, Icons.calendar_month_outlined,
+                    Icons.calendar_month, 'Monthly'),
+                _buildNavItem(
+                    3, Icons.settings_outlined, Icons.settings, 'Settings'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(
+      int index, IconData outlinedIcon, IconData filledIcon, String label) {
+    final isSelected = _selectedIndex == index;
+
+    return GestureDetector(
+      onTap: () => _onItemTapped(index),
+      child: AnimatedContainer(
+        duration: AppDurations.fast,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimensions.spacing12,
+          vertical: AppDimensions.spacing8,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary.withOpacity(0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ScaleTransition(
+              scale: _animation,
+              child: Icon(
+                isSelected ? filledIcon : outlinedIcon,
+                color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                size: AppDimensions.iconMedium,
+              ),
+            ),
+            if (isSelected) ...[
+              const SizedBox(width: AppDimensions.spacing8),
+              Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

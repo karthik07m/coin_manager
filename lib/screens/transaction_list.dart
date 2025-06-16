@@ -8,6 +8,7 @@ import '../models/category.dart';
 import '../providers/category_provider.dart';
 import '../widgets/balance_item.dart';
 import '../utilities/functions.dart';
+import '../utilities/constants.dart';
 
 class TransactionList extends StatefulWidget {
   const TransactionList({super.key});
@@ -35,6 +36,13 @@ class _TransactionListState extends State<TransactionList> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToSelectedMonth(_selectedDate.month - 1);
     });
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _updateMonthDates(DateTime date) {
@@ -99,86 +107,142 @@ class _TransactionListState extends State<TransactionList> {
 
       return Column(
         children: [
-          const SizedBox(height: 5),
+          const SizedBox(height: AppDimensions.spacing16),
           _buildMonthScroller(),
-          transactions.isEmpty
-              ? const Flexible(
-                  child: NoData(
-                    title: "No transactions!",
-                    imagePath: "assets/nodata.png",
-                    textFontSize: 24,
+          const SizedBox(height: AppDimensions.spacing16),
+          if (transactions.isEmpty)
+            const Flexible(
+              child: NoData(
+                title: "No transactions!",
+                imagePath: "assets/nodata.png",
+                textFontSize: 24,
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimensions.spacing16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius:
+                      BorderRadius.circular(AppDimensions.radiusMedium),
+                  border: Border.all(
+                    color: AppColors.primary.withOpacity(0.1),
+                    width: 1,
                   ),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    BalanceDetail(
-                      label: 'Income',
-                      amount: transactionProvider.totalIncome,
-                      icon: Icons.arrow_upward,
-                      color: Colors.green,
-                    ),
-                    BalanceDetail(
-                      label: "Expenses",
-                      amount: transactionProvider.totalExpenses,
-                      icon: Icons.arrow_downward,
-                      color: Colors.redAccent,
-                    ),
-                    BalanceDetail(
-                      label: 'Balance',
-                      amount: transactionProvider.totalIncome -
-                          transactionProvider.totalExpenses,
-                      icon: Icons.account_balance_wallet,
-                      color: Colors.blue,
-                    ),
-                  ],
                 ),
-          const SizedBox(height: 10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimensions.spacing16,
+                    vertical: AppDimensions.spacing12,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildBalanceDetail(
+                        label: 'Income',
+                        amount: transactionProvider.totalIncome,
+                        icon: Icons.arrow_upward,
+                        color: Colors.green,
+                      ),
+                      _buildBalanceDetail(
+                        label: "Expenses",
+                        amount: transactionProvider.totalExpenses,
+                        icon: Icons.arrow_downward,
+                        color: Colors.redAccent,
+                      ),
+                      _buildBalanceDetail(
+                        label: 'Balance',
+                        amount: transactionProvider.totalIncome -
+                            transactionProvider.totalExpenses,
+                        icon: Icons.account_balance_wallet,
+                        color: AppColors.primary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: AppDimensions.spacing16),
           Expanded(
             child: PageView.builder(
               controller: _pageController,
               onPageChanged: _onPageChanged,
               itemCount: 12,
               itemBuilder: (context, pageIndex) {
-                return ListView.builder(
-                  itemCount: filteredTransactions.length,
-                  itemBuilder: (context, index) {
-                    final transaction = filteredTransactions[index];
-                    final showDate = index == 0 ||
-                        !UtilityFunction.isSameDate(transaction.date,
-                            filteredTransactions[index - 1].date);
+                return NotificationListener<ScrollNotification>(
+                  onNotification: (ScrollNotification notification) {
+                    if (notification is ScrollEndNotification) {
+                      // Handle scroll end if needed
+                    }
+                    return true;
+                  },
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppDimensions.spacing16),
+                    itemCount: filteredTransactions.length,
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    itemBuilder: (context, index) {
+                      final transaction = filteredTransactions[index];
+                      final showDate = index == 0 ||
+                          !UtilityFunction.isSameDate(transaction.date,
+                              filteredTransactions[index - 1].date);
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (showDate)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 8.0, horizontal: 16.0),
-                            child: Text(
-                              UtilityFunction.formatDate(transaction.date),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeInOut,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (showDate)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppDimensions.spacing8,
+                                  horizontal: AppDimensions.spacing8,
+                                ),
+                                child: Text(
+                                  UtilityFunction.formatDate(transaction.date),
+                                  style: AppTextStyles.h3.copyWith(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                borderRadius: BorderRadius.circular(
+                                    AppDimensions.radiusMedium),
+                                border: Border.all(
+                                  color: AppColors.primary.withOpacity(0.1),
+                                  width: 1,
+                                ),
+                              ),
+                              child: FutureBuilder<Category?>(
+                                future: Provider.of<CategoryProvider>(context,
+                                        listen: false)
+                                    .getCategoryDetailsById(
+                                        transaction.categoryId),
+                                builder: (context, snapshot) {
+                                  final category = snapshot.data;
+                                  if (snapshot.connectionState ==
+                                      ConnectionState.waiting) {
+                                    return const Center(
+                                      child: CircularProgressIndicator(),
+                                    );
+                                  }
+                                  return TransactionItem(transaction, category);
+                                },
                               ),
                             ),
-                          ),
-                        FutureBuilder<Category?>(
-                          future: Provider.of<CategoryProvider>(context,
-                                  listen: false)
-                              .getCategoryDetailsById(transaction.categoryId),
-                          builder: (context, snapshot) {
-                            final category = snapshot.data;
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return const CircularProgressIndicator();
-                            }
-                            return TransactionItem(transaction, category);
-                          },
+                            const SizedBox(height: AppDimensions.spacing8),
+                          ],
                         ),
-                      ],
-                    );
-                  },
+                      );
+                    },
+                  ),
                 );
               },
             ),
@@ -188,20 +252,60 @@ class _TransactionListState extends State<TransactionList> {
     });
   }
 
+  Widget _buildBalanceDetail({
+    required String label,
+    required double amount,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: AppDimensions.iconMedium),
+        const SizedBox(height: AppDimensions.spacing4),
+        Text(
+          label,
+          style: AppTextStyles.caption.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: AppDimensions.spacing4),
+        Text(
+          '\$${amount.toStringAsFixed(2)}',
+          style: AppTextStyles.amount.copyWith(
+            color: AppColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildMonthScroller() {
     final monthNames = List.generate(
       12,
       (index) => DateFormat.MMMM().format(DateTime(0, index + 1)),
     );
 
-    return SizedBox(
-      height: 60,
+    return Container(
+      height: 50,
+      margin: const EdgeInsets.symmetric(horizontal: AppDimensions.spacing16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+        border: Border.all(
+          color: AppColors.primary.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
       child: ListView.builder(
         controller: _scrollController,
         scrollDirection: Axis.horizontal,
-        itemCount: monthNames.length,
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
+        itemCount: 12,
         itemBuilder: (context, index) {
-          final isSelected = _selectedDate.month == index + 1;
+          final isSelected = index == _selectedDate.month - 1;
           return GestureDetector(
             onTap: () {
               _pageController.animateToPage(
@@ -210,26 +314,32 @@ class _TransactionListState extends State<TransactionList> {
                 curve: Curves.easeInOut,
               );
             },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    monthNames[index],
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: isSelected ? Colors.white : Colors.grey,
-                    ),
+            child: Container(
+              width: 80,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.primary.withOpacity(0.1)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(AppDimensions.radiusSmall),
+                border: isSelected
+                    ? Border.all(
+                        color: AppColors.primary,
+                        width: 1,
+                      )
+                    : null,
+              ),
+              child: Center(
+                child: Text(
+                  monthNames[index],
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: isSelected
+                        ? AppColors.primary
+                        : AppColors.textSecondary,
+                    fontWeight:
+                        isSelected ? FontWeight.bold : FontWeight.normal,
                   ),
-                  if (isSelected)
-                    Container(
-                      margin: const EdgeInsets.only(top: 4.0),
-                      height: 2,
-                      width: 20,
-                      color: Theme.of(context).primaryColor,
-                    ),
-                ],
+                ),
               ),
             ),
           );
