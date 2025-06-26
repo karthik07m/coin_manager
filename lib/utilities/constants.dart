@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 String appName = "Coin Manager";
 
 int defaultExpenseCat = 1;
-int defaultIncomeCat = 7;
+int defaultIncomeCat = 9;
 
 // Color Constants
 class AppColors {

@@ -1,5 +1,6 @@
 import 'package:coin_manager/utilities/constants.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' show CardThemeData;
 import 'package:provider/provider.dart';
 
 import 'providers/category_provider.dart';
@@ -51,7 +52,8 @@ class MyApp extends StatelessWidget {
             color: AppColors.surface,
             elevation: AppDimensions.elevationMedium,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+              borderRadius:
+                  BorderRadius.all(Radius.circular(AppDimensions.radiusMedium)),
             ),
           ),
           appBarTheme: AppBarTheme(
@@ -59,6 +61,14 @@ class MyApp extends StatelessWidget {
             elevation: 0,
             centerTitle: true,
             titleTextStyle: AppTextStyles.h2,
+            iconTheme: IconThemeData(
+              color: AppColors.textPrimary,
+              size: AppDimensions.iconMedium,
+            ),
+          ),
+          iconTheme: IconThemeData(
+            color: AppColors.textPrimary,
+            size: AppDimensions.iconMedium,
           ),
           textTheme: TextTheme(
             displayLarge: AppTextStyles.h1,

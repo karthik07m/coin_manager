@@ -111,8 +111,7 @@ class BottomNavBarState extends State<MenuScrn>
 
     return GestureDetector(
       onTap: () => _onItemTapped(index),
-      child: AnimatedContainer(
-        duration: AppDurations.fast,
+      child: Container(
         padding: const EdgeInsets.symmetric(
           horizontal: AppDimensions.spacing12,
           vertical: AppDimensions.spacing8,
@@ -123,27 +122,22 @@ class BottomNavBarState extends State<MenuScrn>
               : Colors.transparent,
           borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
         ),
-        child: Row(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ScaleTransition(
-              scale: _animation,
-              child: Icon(
-                isSelected ? filledIcon : outlinedIcon,
+            Icon(
+              isSelected ? filledIcon : outlinedIcon,
+              color: isSelected ? AppColors.primary : AppColors.textSecondary,
+              size: AppDimensions.iconMedium,
+            ),
+            const SizedBox(height: AppDimensions.spacing4),
+            Text(
+              label,
+              style: AppTextStyles.bodySmall.copyWith(
                 color: isSelected ? AppColors.primary : AppColors.textSecondary,
-                size: AppDimensions.iconMedium,
+                fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
               ),
             ),
-            if (isSelected) ...[
-              const SizedBox(width: AppDimensions.spacing8),
-              Text(
-                label,
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
           ],
         ),
       ),

@@ -13,16 +13,16 @@ class CategoryProvider with ChangeNotifier {
   /// Fetch categories by `isExpense` type and update local cache
   Future<void> fetchCategories(bool isExpense) async {
     final data = await DBHelper().getCategories(isExpense);
+    _categories.clear();
+    _categoryMap.clear();
 
-    _categories
-      ..clear()
-      ..addAll(data.map((map) => Category.fromMap(map)));
-
-    // Update the map for quick lookups
-    _categoryMap
-      ..clear()
-      ..addEntries(
-          _categories.map((category) => MapEntry(category.id!, category)));
+    for (var map in data) {
+      final category = Category.fromMap(map);
+      _categories.add(category);
+      if (category.id != null) {
+        _categoryMap[category.id!] = category;
+      }
+    }
 
     notifyListeners();
   }

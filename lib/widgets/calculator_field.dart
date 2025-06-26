@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:math_expressions/math_expressions.dart';
 import 'calculator_keyboard.dart';
+import '../utilities/constants.dart';
 
 class CalculatorTextFormField extends StatefulWidget {
   final TextEditingController controller;
@@ -40,12 +41,16 @@ class CalculatorTextFormFieldState extends State<CalculatorTextFormField> {
         bottom: 0,
         left: 0,
         right: 0,
-        child: CalculatorKeyboard(
-          onKeyTap: _onKeyTap,
-          onBackspace: _onBackspace,
-          onClear: _onClear,
-          onEvaluate: _onEvaluate,
-          onDone: _onDone,
+        child: Material(
+          color: AppColors.surface,
+          elevation: AppDimensions.elevationMedium,
+          child: CalculatorKeyboard(
+            onKeyTap: _onKeyTap,
+            onBackspace: _onBackspace,
+            onClear: _onClear,
+            onEvaluate: _onEvaluate,
+            onDone: _onDone,
+          ),
         ),
       ),
     );
@@ -100,12 +105,16 @@ class CalculatorTextFormFieldState extends State<CalculatorTextFormField> {
   }
 
   String _evaluateExpression(String expression) {
-    // Parse and evaluate the expression using math_expressions
-    final parser = Parser();
-    final exp = parser.parse(expression);
-    final contextModel = ContextModel();
-    final result = exp.evaluate(EvaluationType.REAL, contextModel);
-    return result.toString();
+    if (expression.isEmpty) return "0.0";
+    try {
+      final parser = Parser();
+      final exp = parser.parse(expression);
+      final contextModel = ContextModel();
+      final result = exp.evaluate(EvaluationType.REAL, contextModel);
+      return result.toString();
+    } catch (e) {
+      return "0.0";
+    }
   }
 
   void _onDone() {
@@ -123,16 +132,46 @@ class CalculatorTextFormFieldState extends State<CalculatorTextFormField> {
         child: TextFormField(
           controller: widget.controller,
           focusNode: _focusNode,
-          readOnly: true, // Prevents the default keyboard from appearing
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(
-              borderSide: BorderSide(color: Colors.amber),
-              borderRadius: BorderRadius.all(Radius.circular(10.0)),
-            ),
-            hintText: '0.0',
+          readOnly: true,
+          style: AppTextStyles.amount.copyWith(
+            color: AppColors.textPrimary,
+          ),
+          decoration: InputDecoration(
             labelText: 'Amount',
-            prefixText: '\$',
-            suffixStyle: TextStyle(color: Colors.green),
+            labelStyle: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
+            ),
+            hintText: '0.00',
+            hintStyle: AppTextStyles.amount.copyWith(
+              color: AppColors.textSecondary.withOpacity(0.5),
+            ),
+            prefixText: '\$ ',
+            prefixStyle: AppTextStyles.amount.copyWith(
+              color: AppColors.textPrimary,
+            ),
+            filled: true,
+            fillColor: AppColors.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+              borderSide: BorderSide(
+                color: AppColors.primary.withOpacity(0.1),
+                width: 1,
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+              borderSide: BorderSide(
+                color: AppColors.primary.withOpacity(0.1),
+                width: 1,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+              borderSide: const BorderSide(
+                color: AppColors.primary,
+                width: 1,
+              ),
+            ),
           ),
         ),
       ),
