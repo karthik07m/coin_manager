@@ -24,10 +24,10 @@ class CalculatorDialogState extends State<CalculatorDialog> {
   }
 
   void evaluate(String text) {
-    Parser p = Parser();
+    GrammarParser p = GrammarParser();
     Expression exp = p.parse(expression);
     ContextModel cm = ContextModel();
-    double eval = exp.evaluate(EvaluationType.REAL, cm);
+    final eval = RealEvaluator(cm).evaluate(exp);
     setState(() {
       expression = eval.toString();
     });

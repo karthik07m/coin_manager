@@ -48,7 +48,7 @@ class UtilityFunction {
     }
   }
 
-  static List<Map<String, String>> getCategories(isExpense) {
+  static List<Map<String, String>> getCategories(bool isExpense) {
     final List<Map<String, String>> categories = isExpense
         ? [
             {'name': 'Food', 'icon': 'assets/categories/food.png'},

@@ -46,6 +46,17 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
   }
 
   List<PieChartSectionData> buildPieChartSections() {
+    if (sortedCategories.isEmpty) {
+      return [
+        PieChartSectionData(
+          color: Theme.of(context).colorScheme.surface,
+          value: 100,
+          radius: 40,
+          showTitle: false,
+        )
+      ];
+    }
+
     return sortedCategories.asMap().entries.map((entry) {
       int index = entry.key;
       CategoryAmount category = entry.value;
@@ -54,17 +65,26 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
           ? (category.amount / widget.totalExpenses).clamp(0.0, 1.0)
           : 0.0;
 
+      if (percentage.isNaN || percentage <= 0) {
+        return PieChartSectionData(
+          color: Colors.grey.withValues(alpha: 0.1),
+          value: 0,
+          radius: 40,
+          showTitle: false,
+        );
+      }
+
       double radius = _touchedIndex == index ? 50 : 40;
 
       return PieChartSectionData(
-        color:
-            Colors.primaries[index % Colors.primaries.length].withOpacity(0.8),
+        color: Colors.primaries[index % Colors.primaries.length]
+            .withValues(alpha: 0.8),
         value: percentage * 100,
         radius: radius,
         showTitle: true,
         title: '${(percentage * 100).toStringAsFixed(1)}%',
         titleStyle: AppTextStyles.caption.copyWith(
-          color: AppColors.textPrimary,
+          color: Theme.of(context).colorScheme.onSurface,
           fontWeight: FontWeight.bold,
         ),
         badgeWidget: GestureDetector(
@@ -77,7 +97,7 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
           },
           child: CircleAvatar(
             backgroundColor: Colors.primaries[index % Colors.primaries.length]
-                .withOpacity(0.2),
+                .withValues(alpha: 0.2),
             child: Image.asset(
               category.icon,
               width: AppDimensions.iconMedium,
@@ -97,9 +117,12 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
     final visibleCategories =
         _showAll ? sortedCategories : sortedCategories.take(4).toList();
 
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Card(
       elevation: AppDimensions.elevationMedium,
-      color: AppColors.surface,
+      color: colorScheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
       ),
@@ -145,7 +168,7 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
                           },
                         ),
                       ),
-                      swapAnimationDuration: AppDurations.medium,
+                      duration: AppDurations.medium,
                     ),
                   ),
                   Align(
@@ -155,13 +178,14 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
                       children: [
                         Text(
                           _selectedCategoryName ?? 'Total',
-                          style: AppTextStyles.h3,
+                          style: textTheme.displaySmall?.copyWith(
+                              fontSize: 20, fontWeight: FontWeight.w600),
                         ),
                         SizedBox(height: AppDimensions.spacing4),
                         Text(
                           '\$${(_selectedCategoryAmount ?? widget.totalExpenses).toStringAsFixed(2)}',
                           style: AppTextStyles.amount.copyWith(
-                            color: AppColors.primary,
+                            color: colorScheme.primary,
                           ),
                         ),
                       ],
@@ -189,7 +213,7 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
                     vertical: AppDimensions.spacing4,
                   ),
                   leading: CircleAvatar(
-                    backgroundColor: bgColor.withOpacity(0.2),
+                    backgroundColor: bgColor.withValues(alpha: 0.2),
                     child: Image.asset(
                       category.icon,
                       width: AppDimensions.iconMedium,
@@ -198,7 +222,7 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
                   ),
                   title: Text(
                     category.name,
-                    style: AppTextStyles.bodyMedium,
+                    style: textTheme.bodyMedium,
                   ),
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -206,11 +230,14 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
                     children: [
                       Text(
                         '\$${category.amount.toStringAsFixed(2)}',
-                        style: AppTextStyles.amount,
+                        style: AppTextStyles.amount
+                            .copyWith(color: colorScheme.onSurface),
                       ),
                       Text(
                         '${percentage.toStringAsFixed(1)}%',
-                        style: AppTextStyles.caption,
+                        style: AppTextStyles.caption.copyWith(
+                            color:
+                                colorScheme.onSurface.withValues(alpha: 0.6)),
                       ),
                     ],
                   ),
@@ -236,7 +263,7 @@ class CategoriesPieChartState extends State<CategoriesPieChart> {
                       ? Icons.keyboard_arrow_up
                       : Icons.keyboard_arrow_down,
                   size: AppDimensions.iconMedium,
-                  color: AppColors.primary,
+                  color: colorScheme.primary,
                 ),
               ),
           ],

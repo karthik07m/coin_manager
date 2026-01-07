@@ -1,13 +1,19 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/category.dart';
 import '../models/transaction.dart';
+import '../models/receipt.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/category_provider.dart';
 import '../utilities/constants.dart';
 import '../widgets/calculator_field.dart';
+import '../db/receipt_db_helper.dart';
 import 'create_category.dart';
+import 'receipt_scan_screen.dart';
+import 'receipt_viewer_screen.dart';
 
 class TransactionForm extends StatefulWidget {
   static const routeName = "/addTransaction";
@@ -25,7 +31,13 @@ class TransactionFormState extends State<TransactionForm> {
   DateTime _selectedDate = DateTime.now();
   Transaction? _transaction;
   bool _isExpense = true;
+  bool _isRecurring = false;
   Map<int, Category> categoryMap = {};
+
+  // Receipt data
+  String? _receiptImagePath;
+  String? _receiptRawText;
+  String? _receiptId;
 
   @override
   void initState() {
@@ -33,19 +45,22 @@ class TransactionFormState extends State<TransactionForm> {
     _titleController = TextEditingController();
     _amountController = TextEditingController();
 
+    final categoryProvider =
+        Provider.of<CategoryProvider>(context, listen: false);
+
     Future.delayed(Duration.zero, () async {
+      if (!mounted) return;
       final transactionId =
           ModalRoute.of(context)?.settings.arguments as String?;
       if (transactionId != null) {
         await loadTransactionDetails(transactionId);
       }
-      await _fetchAndMapCategories();
+      if (!mounted) return;
+      await _fetchAndMapCategories(categoryProvider);
     });
   }
 
-  Future<void> _fetchAndMapCategories() async {
-    final categoryProvider =
-        Provider.of<CategoryProvider>(context, listen: false);
+  Future<void> _fetchAndMapCategories(CategoryProvider categoryProvider) async {
     await categoryProvider.fetchCategories(_isExpense);
     setState(() {
       categoryMap = categoryProvider.categoryMap;
@@ -67,9 +82,72 @@ class TransactionFormState extends State<TransactionForm> {
         selectedCategory = _transaction!.categoryId;
         _selectedDate = _transaction!.date;
         _isExpense = _transaction!.isExpense;
-        _fetchAndMapCategories();
+        _isRecurring = _transaction!.isRecurring;
+        _receiptId = _transaction!.receiptId;
+        final categoryProvider =
+            Provider.of<CategoryProvider>(context, listen: false);
+        _fetchAndMapCategories(categoryProvider);
+      });
+      // Load receipt if exists
+      if (_transaction!.receiptId != null) {
+        _loadReceipt(_transaction!.receiptId!);
+      }
+    }
+  }
+
+  Future<void> _loadReceipt(String receiptId) async {
+    final receiptDbHelper = ReceiptDBHelper();
+    final receipt = await receiptDbHelper.getReceiptById(receiptId);
+    if (receipt != null) {
+      setState(() {
+        _receiptImagePath = receipt.imagePath;
+        _receiptRawText = receipt.extractedText;
+        _receiptId = receipt.id;
       });
     }
+  }
+
+  Future<void> _scanReceipt() async {
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(builder: (context) => const ReceiptScanScreen()),
+    );
+
+    if (result != null) {
+      setState(() {
+        _receiptImagePath = result['imagePath'] as String?;
+        _receiptRawText = result['rawText'] as String?;
+        if (result['title'] != null && _titleController.text.isEmpty) {
+          _titleController.text = result['title'] as String;
+        }
+        if (result['amount'] != null && _amountController.text.isEmpty) {
+          _amountController.text =
+              (result['amount'] as double).toStringAsFixed(2);
+        }
+      });
+    }
+  }
+
+  void _viewReceipt() {
+    if (_receiptImagePath != null) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => ReceiptViewerScreen(
+            imagePath: _receiptImagePath!,
+            title: _titleController.text.isNotEmpty
+                ? _titleController.text
+                : 'Receipt',
+          ),
+        ),
+      );
+    }
+  }
+
+  void _removeReceipt() {
+    setState(() {
+      _receiptImagePath = null;
+      _receiptRawText = null;
+      _receiptId = null;
+    });
   }
 
   String getCategoryName(int categoryId) {
@@ -100,11 +178,7 @@ class TransactionFormState extends State<TransactionForm> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.dark(
-              primary: AppColors.primary,
-              surface: AppColors.surface,
-              onSurface: AppColors.textPrimary,
-            ),
+            colorScheme: Theme.of(context).colorScheme,
           ),
           child: child!,
         );
@@ -121,7 +195,7 @@ class TransactionFormState extends State<TransactionForm> {
     FocusScope.of(context).unfocus();
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -134,7 +208,10 @@ class TransactionFormState extends State<TransactionForm> {
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .outline
+                        .withValues(alpha: 0.1),
                     width: 1,
                   ),
                 ),
@@ -144,9 +221,10 @@ class TransactionFormState extends State<TransactionForm> {
                 children: [
                   Text(
                     'Select Category',
-                    style: AppTextStyles.h3.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.add_circle_outline),
@@ -185,14 +263,20 @@ class TransactionFormState extends State<TransactionForm> {
                         child: Container(
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? AppColors.primary.withOpacity(0.1)
-                                : AppColors.surface,
+                                ? Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withValues(alpha: 0.1)
+                                : Theme.of(context).colorScheme.surface,
                             borderRadius: BorderRadius.circular(
                                 AppDimensions.radiusMedium),
                             border: Border.all(
                               color: isSelected
-                                  ? AppColors.primary
-                                  : AppColors.primary.withOpacity(0.1),
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .outline
+                                      .withValues(alpha: 0.1),
                               width: 1,
                             ),
                           ),
@@ -204,20 +288,31 @@ class TransactionFormState extends State<TransactionForm> {
                                 width: 32,
                                 height: 32,
                                 errorBuilder: (context, error, stackTrace) =>
-                                    const Icon(
+                                    Icon(
                                   Icons.category,
                                   size: 32,
-                                  color: AppColors.textSecondary,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.6),
                                 ),
                               ),
                               const SizedBox(height: AppDimensions.spacing8),
                               Text(
                                 category.name,
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: isSelected
-                                      ? AppColors.primary
-                                      : AppColors.textSecondary,
-                                ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: isSelected
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.6),
+                                    ),
                                 textAlign: TextAlign.center,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -237,9 +332,24 @@ class TransactionFormState extends State<TransactionForm> {
     );
   }
 
-  void _saveData(BuildContext context) {
+  Future<void> _saveData(BuildContext context) async {
     if (_formKey.currentState!.validate()) {
       String id = _transaction?.id ?? UniqueKey().toString();
+
+      // Save receipt if we have a new one
+      String? receiptIdToSave = _receiptId;
+      if (_receiptImagePath != null && _receiptId == null) {
+        final receiptDbHelper = ReceiptDBHelper();
+        final newReceipt = Receipt(
+          id: UniqueKey().toString(),
+          transactionId: id,
+          imagePath: _receiptImagePath!,
+          extractedText: _receiptRawText,
+          createdOn: DateTime.now(),
+        );
+        await receiptDbHelper.insertReceipt(newReceipt);
+        receiptIdToSave = newReceipt.id;
+      }
 
       Transaction newTransaction = Transaction.createNew(
         id: id,
@@ -248,7 +358,11 @@ class TransactionFormState extends State<TransactionForm> {
         categoryId: selectedCategory,
         date: _selectedDate,
         isExpense: _isExpense,
+        isRecurring: _isRecurring,
+        receiptId: receiptIdToSave,
       );
+
+      if (!context.mounted) return;
 
       if (_transaction?.id != null) {
         Provider.of<TransactionProvider>(context, listen: false)
@@ -271,6 +385,12 @@ class TransactionFormState extends State<TransactionForm> {
           style: AppTextStyles.h2,
         ),
         actions: [
+          // Scan receipt button
+          IconButton(
+            onPressed: _scanReceipt,
+            icon: const Icon(Icons.document_scanner),
+            tooltip: 'Scan Receipt',
+          ),
           if (_transaction?.id != null)
             IconButton(
               onPressed: () {
@@ -340,11 +460,14 @@ class TransactionFormState extends State<TransactionForm> {
                 children: <Widget>[
                   Container(
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius:
                           BorderRadius.circular(AppDimensions.radiusMedium),
                       border: Border.all(
-                        color: AppColors.primary.withOpacity(0.1),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .outline
+                            .withValues(alpha: 0.3),
                         width: 1,
                       ),
                     ),
@@ -356,7 +479,9 @@ class TransactionFormState extends State<TransactionForm> {
                               setState(() {
                                 _isExpense = true;
                                 selectedCategory = defaultExpenseCat;
-                                _fetchAndMapCategories();
+                                _fetchAndMapCategories(
+                                    Provider.of<CategoryProvider>(context,
+                                        listen: false));
                               });
                             },
                             child: Container(
@@ -365,19 +490,27 @@ class TransactionFormState extends State<TransactionForm> {
                               ),
                               decoration: BoxDecoration(
                                 color: _isExpense
-                                    ? AppColors.primary
+                                    ? Theme.of(context).colorScheme.primary
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(
                                     AppDimensions.radiusMedium),
                               ),
                               child: Text(
                                 "Expense",
-                                style: AppTextStyles.bodyMedium.copyWith(
-                                  color: _isExpense
-                                      ? Colors.white
-                                      : AppColors.textSecondary,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: _isExpense
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .onPrimary
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.6),
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                 textAlign: TextAlign.center,
                               ),
                             ),
@@ -389,7 +522,9 @@ class TransactionFormState extends State<TransactionForm> {
                               setState(() {
                                 _isExpense = false;
                                 selectedCategory = defaultIncomeCat;
-                                _fetchAndMapCategories();
+                                _fetchAndMapCategories(
+                                    Provider.of<CategoryProvider>(context,
+                                        listen: false));
                               });
                             },
                             child: Container(
@@ -398,19 +533,27 @@ class TransactionFormState extends State<TransactionForm> {
                               ),
                               decoration: BoxDecoration(
                                 color: !_isExpense
-                                    ? AppColors.primary
+                                    ? Theme.of(context).colorScheme.primary
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(
                                     AppDimensions.radiusMedium),
                               ),
                               child: Text(
                                 "Income",
-                                style: AppTextStyles.bodyMedium.copyWith(
-                                  color: !_isExpense
-                                      ? Colors.white
-                                      : AppColors.textSecondary,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: !_isExpense
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .onPrimary
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.6),
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                 textAlign: TextAlign.center,
                               ),
                             ),
@@ -427,11 +570,14 @@ class TransactionFormState extends State<TransactionForm> {
                     child: Container(
                       padding: const EdgeInsets.all(AppDimensions.spacing12),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: Theme.of(context).colorScheme.surface,
                         borderRadius:
                             BorderRadius.circular(AppDimensions.radiusMedium),
                         border: Border.all(
-                          color: AppColors.primary.withOpacity(0.1),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .outline
+                              .withValues(alpha: 0.3),
                           width: 1,
                         ),
                       ),
@@ -441,25 +587,34 @@ class TransactionFormState extends State<TransactionForm> {
                             getCategoryIcon(selectedCategory),
                             width: 32,
                             height: 32,
-                            errorBuilder: (context, error, stackTrace) =>
-                                const Icon(
+                            errorBuilder: (context, error, stackTrace) => Icon(
                               Icons.category,
                               size: 32,
-                              color: AppColors.textSecondary,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.6),
                             ),
                           ),
                           const SizedBox(width: AppDimensions.spacing12),
                           Text(
                             getCategoryName(selectedCategory),
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.textPrimary,
-                            ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color:
+                                      Theme.of(context).colorScheme.onSurface,
+                                ),
                           ),
                           const Spacer(),
-                          const Icon(
+                          Icon(
                             Icons.arrow_forward_ios,
                             size: 16,
-                            color: AppColors.textSecondary,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.6),
                           ),
                         ],
                       ),
@@ -471,60 +626,159 @@ class TransactionFormState extends State<TransactionForm> {
                     child: Container(
                       padding: const EdgeInsets.all(AppDimensions.spacing12),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: Theme.of(context).colorScheme.surface,
                         borderRadius:
                             BorderRadius.circular(AppDimensions.radiusMedium),
                         border: Border.all(
-                          color: AppColors.primary.withOpacity(0.1),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .outline
+                              .withValues(alpha: 0.3),
                           width: 1,
                         ),
                       ),
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.calendar_today,
                             size: 24,
-                            color: AppColors.primary,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                           const SizedBox(width: AppDimensions.spacing12),
                           Text(
                             DateFormat.yMMMd().format(_selectedDate),
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.textPrimary,
-                            ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color:
+                                      Theme.of(context).colorScheme.onSurface,
+                                ),
                           ),
                           const Spacer(),
-                          const Icon(
+                          Icon(
                             Icons.arrow_forward_ios,
                             size: 16,
-                            color: AppColors.textSecondary,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.6),
                           ),
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(height: AppDimensions.spacing16),
+                  Container(
+                    margin:
+                        const EdgeInsets.only(bottom: AppDimensions.spacing16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.radiusMedium),
+                      border: Border.all(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .outline
+                            .withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: SwitchListTile(
+                      title: Text(
+                        'Recur every month',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                      ),
+                      subtitle: Text(
+                        'On day ${_selectedDate.day}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.6),
+                            ),
+                      ),
+                      value: _isRecurring,
+                      activeColor: Theme.of(context).colorScheme.primary,
+                      onChanged: (bool value) {
+                        setState(() {
+                          _isRecurring = value;
+                        });
+                      },
+                    ),
+                  ),
+                  // Receipt preview
+                  if (_receiptImagePath != null)
+                    Container(
+                      margin: const EdgeInsets.only(
+                          bottom: AppDimensions.spacing16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius:
+                            BorderRadius.circular(AppDimensions.radiusMedium),
+                        border: Border.all(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .outline
+                              .withValues(alpha: 0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: ListTile(
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(
+                            File(_receiptImagePath!),
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const Icon(Icons.receipt, size: 48),
+                          ),
+                        ),
+                        title: const Text('Receipt Attached'),
+                        subtitle: const Text('Tap to view'),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.close, color: Colors.red),
+                          onPressed: _removeReceipt,
+                        ),
+                        onTap: _viewReceipt,
+                      ),
+                    ),
                   TextFormField(
                     controller: _titleController,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
                     decoration: InputDecoration(
                       labelText: 'Notes',
-                      labelStyle: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                      labelStyle:
+                          Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.6),
+                              ),
                       hintText: 'Add notes about this transaction...',
-                      hintStyle: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.textSecondary.withOpacity(0.5),
-                      ),
+                      hintStyle:
+                          Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.3),
+                              ),
                       filled: true,
-                      fillColor: AppColors.surface,
+                      fillColor: Theme.of(context).colorScheme.surface,
                       border: OutlineInputBorder(
                         borderRadius:
                             BorderRadius.circular(AppDimensions.radiusMedium),
                         borderSide: BorderSide(
-                          color: AppColors.primary.withOpacity(0.1),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .outline
+                              .withValues(alpha: 0.3),
                           width: 1,
                         ),
                       ),
@@ -532,15 +786,18 @@ class TransactionFormState extends State<TransactionForm> {
                         borderRadius:
                             BorderRadius.circular(AppDimensions.radiusMedium),
                         borderSide: BorderSide(
-                          color: AppColors.primary.withOpacity(0.1),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .outline
+                              .withValues(alpha: 0.3),
                           width: 1,
                         ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius:
                             BorderRadius.circular(AppDimensions.radiusMedium),
-                        borderSide: const BorderSide(
-                          color: AppColors.primary,
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
                           width: 1,
                         ),
                       ),

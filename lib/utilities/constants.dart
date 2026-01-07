@@ -7,94 +7,111 @@ int defaultIncomeCat = 9;
 
 // Color Constants
 class AppColors {
-  // Base Colors
-  static const Color background = Color(0xFF121212); // Charcoal
-  static const Color surface = Color(0xFF1E1E1E); // Dark Gray
-  static const Color divider = Color(0xFF424242); // Gray 700
+  // Base Colors - Deeper, richer dark theme
+  static const Color background =
+      Color(0xFF0F1115); // Almost black, slightly cool
+  static const Color surface = Color(0xFF181B21); // Dark steel
+  static const Color surfaceLight =
+      Color(0xFF232830); // Lighter surface for cards
 
-  // Accent Colors
-  static const Color primary = Color(0xFF43A047); // Deep Green
-  static const Color secondary = Color(0xFFFFC107); // Amber
+  // Accent Colors - Vibrant and Neon-ish
+  static const Color primary = Color(0xFF2ECC71); // Vibrant Emerald
+  static const Color secondary = Color(0xFFFFD700); // Electric Gold
+  static const Color accentPurple = Color(0xFF9B59B6); // Amethyst
+  static const Color accentBlue = Color(0xFF3498DB); // Bright Blue
 
   // Text Colors
-  static const Color textPrimary = Color(0xFFFFFFFF); // White
-  static const Color textSecondary = Color(0xFFBDBDBD); // Gray 300
+  static const Color textPrimary = Color(0xFFFFFFFF); // Pure White
+  static const Color textSecondary = Color(0xFFA1A1AA); // Cool Gray
+  static const Color textTertiary = Color(0xFF52525B); // Darker Gray
 
   // Status Colors
-  static const Color positive = Color(0xFF4CAF50); // Green
-  static const Color negative = Color(0xFFF44336); // Red
+  static const Color positive = Color(0xFF2ECC71); // Green
+  static const Color negative = Color(0xFFFF5252); // Bright Red
+  static const Color warning = Color(0xFFFFA726); // Orange
 
-  // Overlay Colors
-  static const Color overlay = Color(0x1A000000); // 10% Black
-  static const Color cardShadow = Color(0x0D000000); // 5% Black
+  // UI Elements
+  static const Color divider = Color(0xFF27272A);
+  static const Color border = Color(0xFF27272A);
+}
+
+// Dropshadows for depth
+class AppShadows {
+  static List<BoxShadow> get card => [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.2),
+          blurRadius: 12,
+          offset: const Offset(0, 4),
+        ),
+      ];
+
+  static List<BoxShadow> get floating => [
+        BoxShadow(
+          color: AppColors.primary.withValues(alpha: 0.3),
+          blurRadius: 16,
+          offset: const Offset(0, 8),
+        ),
+      ];
 }
 
 // Typography
 class AppTextStyles {
   // Headings
   static const TextStyle h1 = TextStyle(
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: FontWeight.bold,
-    color: AppColors.textPrimary,
-    letterSpacing: -0.5,
+    letterSpacing: -1.0,
     height: 1.2,
   );
 
   static const TextStyle h2 = TextStyle(
     fontSize: 24,
-    fontWeight: FontWeight.w600,
-    color: AppColors.textPrimary,
-    letterSpacing: -0.25,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.5,
     height: 1.3,
   );
 
   static const TextStyle h3 = TextStyle(
     fontSize: 20,
     fontWeight: FontWeight.w600,
-    color: AppColors.textPrimary,
-    letterSpacing: 0,
+    letterSpacing: -0.25,
     height: 1.4,
   );
 
   // Body Text
   static const TextStyle bodyLarge = TextStyle(
     fontSize: 16,
-    fontWeight: FontWeight.normal,
-    color: AppColors.textPrimary,
-    letterSpacing: 0.15,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.1,
     height: 1.5,
   );
 
   static const TextStyle bodyMedium = TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.normal,
-    color: AppColors.textPrimary,
-    letterSpacing: 0.25,
-    height: 1.4,
+    letterSpacing: 0.2,
+    height: 1.5,
   );
 
   static const TextStyle bodySmall = TextStyle(
     fontSize: 12,
-    fontWeight: FontWeight.normal,
-    color: AppColors.textSecondary,
-    letterSpacing: 0.4,
-    height: 1.3,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.5,
+    height: 1.4,
   );
 
   // Special Text
   static const TextStyle amount = TextStyle(
     fontSize: 18,
-    fontWeight: FontWeight.w600,
-    color: AppColors.textPrimary,
-    letterSpacing: 0.15,
-    height: 1.4,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.5,
+    fontFamily: 'Monospace', // Or system monospace if font not available
   );
 
   static const TextStyle caption = TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.normal,
-    color: AppColors.textSecondary,
-    letterSpacing: 0.4,
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 1.0,
     height: 1.3,
   );
 }
@@ -106,35 +123,39 @@ class AppDimensions {
   static const double spacing8 = 8.0;
   static const double spacing12 = 12.0;
   static const double spacing16 = 16.0;
+  static const double spacing20 = 20.0;
   static const double spacing24 = 24.0;
   static const double spacing32 = 32.0;
+  static const double spacing48 = 48.0;
 
   // Border Radius
   static const double radiusSmall = 8.0;
-  static const double radiusMedium = 12.0;
-  static const double radiusLarge = 16.0;
+  static const double radiusMedium = 16.0;
+  static const double radiusLarge = 24.0;
+  static const double radiusExtraLarge = 32.0;
 
   // Elevation
   static const double elevationSmall = 2.0;
-  static const double elevationMedium = 4.0;
-  static const double elevationLarge = 8.0;
+  static const double elevationMedium = 8.0;
+  static const double elevationLarge = 16.0;
 
   // Icon Sizes
-  static const double iconSmall = 16.0;
+  static const double iconSmall = 18.0;
   static const double iconMedium = 24.0;
   static const double iconLarge = 32.0;
 
   // Component Sizes
-  static const double avatarSize = 40.0;
-  static const double buttonHeight = 48.0;
-  static const double inputHeight = 56.0;
+  static const double avatarSize = 48.0;
+  static const double buttonHeight =
+      48.0; // Reduced from 56 for better proportions
+  static const double inputHeight = 60.0;
 }
 
 // Animation Durations
 class AppDurations {
   static const Duration fastest = Duration(milliseconds: 150);
   static const Duration fast = Duration(milliseconds: 250);
-  static const Duration medium = Duration(milliseconds: 350);
+  static const Duration medium = Duration(milliseconds: 400);
   static const Duration slow = Duration(milliseconds: 700);
   static const Duration slowest = Duration(milliseconds: 1000);
 }
@@ -155,3 +176,11 @@ final List<String> categoryIcons = [
   'assets/categories/budget.png',
   'assets/categories/diet.png',
 ];
+
+extension TextStyleExtensions on TextStyle {
+  TextStyle get uppercase => copyWith(
+        fontFeatures: [
+          const FontFeature.enable('smcp')
+        ], // Small caps if supported
+      );
+}

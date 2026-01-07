@@ -118,7 +118,7 @@ class CalculatorKeyboard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(AppDimensions.spacing4),
         child: Material(
-          color: AppColors.primary.withOpacity(0.1),
+          color: AppColors.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
           child: InkWell(
             onTap: () => onKeyTap(value),
@@ -154,7 +154,7 @@ class CalculatorKeyboard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(AppDimensions.spacing4),
         child: Material(
-          color: color?.withOpacity(0.1) ?? AppColors.surface,
+          color: color?.withValues(alpha: 0.1) ?? AppColors.surface,
           borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
           child: InkWell(
             onTap: onPressed,

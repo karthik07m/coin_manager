@@ -14,73 +14,99 @@ class TransactionItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppDimensions.spacing16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+        boxShadow: AppShadows.card,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
+          width: 0.5,
+        ),
       ),
-      child: !enableDel
-          ? InkWell(
-              onTap: () {
-                Navigator.pushNamed(context, TransactionForm.routeName,
-                    arguments: transaction.id);
-              },
-              borderRadius: BorderRadius.circular(12),
-              child: _buildListTile(),
-            )
-          : Dismissible(
-              key: Key(transaction.id),
-              direction: DismissDirection.endToStart,
-              confirmDismiss: (direction) => _showConfirmDialog(context),
-              onDismissed: (_) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      "Transaction '${transaction.title}' removed",
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+        child: !enableDel
+            ? Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    Navigator.pushNamed(context, TransactionForm.routeName,
+                        arguments: transaction.id);
+                  },
+                  child: _buildListTile(context),
+                ),
+              )
+            : Dismissible(
+                key: Key(transaction.id),
+                direction: DismissDirection.endToStart,
+                confirmDismiss: (direction) => _showConfirmDialog(context),
+                onDismissed: (_) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: AppColors.surface,
+                      content: Text(
+                        "Transaction '${transaction.title}' removed",
+                        style: AppTextStyles.bodyMedium,
+                      ),
                     ),
-                  ),
-                );
-              },
-              background: Container(
-                color: Theme.of(context).colorScheme.error,
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 20),
-                child: const Icon(Icons.delete, color: Colors.white, size: 40),
+                  );
+                },
+                background: Container(
+                  color: AppColors.negative,
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 20),
+                  child:
+                      const Icon(Icons.delete, color: Colors.white, size: 28),
+                ),
+                child: _buildListTile(context),
               ),
-              child: _buildListTile(),
-            ),
+      ),
     );
   }
 
-  Widget _buildListTile() {
+  Widget _buildListTile(BuildContext context) {
     final isExpense = category?.isExpense == true;
-    final amountColor =
-        isExpense ? const Color(0xFFE53935) : const Color(0xFF43A047);
-    final bgColor =
-        isExpense ? const Color(0xFFFBE9E7) : const Color(0xFFE8F5E9);
+    final amountColor = isExpense ? AppColors.negative : AppColors.positive;
+    final iconBgColor =
+        (isExpense ? AppColors.negative : AppColors.positive).withValues(alpha: 0.1);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.all(AppDimensions.spacing16),
       child: Row(
         children: [
-          category != null
-              ? Image.asset(
-                  category!.icon,
-                  width: 28,
-                  height: 28,
-                  errorBuilder: (context, error, stackTrace) => Icon(
-                    Icons.category,
-                    size: 28,
-                    color: Colors.grey.shade600,
+          Container(
+            padding: const EdgeInsets.all(AppDimensions.spacing12),
+            decoration: BoxDecoration(
+              color: iconBgColor,
+              shape: BoxShape.circle,
+            ),
+            child: category != null
+                ? Image.asset(
+                    category!.icon,
+                    width: 24,
+                    height: 24,
+                    // Colors removed to show original icon
+                    errorBuilder: (context, error, stackTrace) => Icon(
+                      Icons.category_outlined,
+                      size: 24,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.6),
+                    ),
+                  )
+                : Icon(
+                    Icons.help_outline,
+                    size: 24,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6),
                   ),
-                )
-              : Icon(
-                  Icons.help_outline,
-                  size: 28,
-                  color: Colors.grey.shade400,
-                ),
-          const SizedBox(width: 12),
+          ),
+          const SizedBox(width: AppDimensions.spacing16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -89,24 +115,17 @@ class TransactionItem extends StatelessWidget {
                   transaction.title.isEmpty
                       ? category?.name ?? 'Unknown Category'
                       : transaction.title,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white,
-                    letterSpacing: 0.1,
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (transaction.title.isNotEmpty) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Text(
                     category?.name ?? 'Unknown Category',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade400,
-                      letterSpacing: 0.1,
-                    ),
+                    style: AppTextStyles.bodySmall,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -114,36 +133,22 @@ class TransactionItem extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppDimensions.spacing12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: bgColor,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '\$${transaction.amount.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: amountColor,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.1,
-                  ),
+              Text(
+                '${isExpense ? '-' : '+'} \$${transaction.amount.toStringAsFixed(2)}',
+                style: AppTextStyles.amount.copyWith(
+                  color: amountColor,
+                  fontSize: 16,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 _formatTime(transaction.date),
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade500,
-                  letterSpacing: 0.1,
+                style: AppTextStyles.caption.copyWith(
+                  fontSize: 10,
                 ),
               ),
             ],
@@ -163,22 +168,31 @@ class TransactionItem extends StatelessWidget {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        backgroundColor: AppColors.surface,
+        title: Row(
           children: [
-            Icon(Icons.warning, color: Colors.orange, size: 22),
-            SizedBox(width: 4),
-            Text('Are you sure?'),
+            const Icon(Icons.warning_amber_rounded,
+                color: AppColors.warning, size: 24),
+            const SizedBox(width: 8),
+            Text('Delete Transaction?', style: AppTextStyles.h3),
           ],
         ),
-        content: const Text('Do you want to remove this transaction?'),
+        content: Text(
+          'This action cannot be undone.',
+          style: AppTextStyles.bodyMedium,
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text("Yes"),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text("Cancel",
+                style: AppTextStyles.bodyMedium
+                    .copyWith(color: AppColors.textSecondary)),
           ),
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text("No"),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text("Delete",
+                style: AppTextStyles.bodyMedium
+                    .copyWith(color: AppColors.negative)),
           ),
         ],
       ),

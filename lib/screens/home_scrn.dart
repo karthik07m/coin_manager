@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/transaction_provider.dart';
+import '../providers/category_provider.dart';
+import '../providers/monthly_budget_provider.dart';
 import '../widgets/charts/categories_pie_chart.dart';
+import '../widgets/recent_transactions_widget.dart';
+import '../utilities/constants.dart';
 import 'balance_card.dart';
 
 class HomePage extends StatefulWidget {
@@ -17,11 +21,22 @@ class HomePageState extends State<HomePage> {
   Future<void> _fetchData(BuildContext context, DateTime selectedMonth) async {
     final transactionProvider =
         Provider.of<TransactionProvider>(context, listen: false);
+    final categoryProvider =
+        Provider.of<CategoryProvider>(context, listen: false);
+    final budgetProvider =
+        Provider.of<MonthlyBudgetProvider>(context, listen: false);
+
     DateTime startDate = DateTime(selectedMonth.year, selectedMonth.month, 1);
     DateTime endDate = DateTime(selectedMonth.year, selectedMonth.month + 1, 1)
         .subtract(const Duration(days: 1));
-    await transactionProvider.loadTransactionsFromDB(
-        startDate: startDate, endDate: endDate);
+
+    // Load all necessary data
+    await Future.wait([
+      transactionProvider.loadTransactionsFromDB(
+          startDate: startDate, endDate: endDate),
+      categoryProvider.fetchAllCategories(),
+      budgetProvider.loadMonthlyData(selectedMonth.month.toString()),
+    ]);
   }
 
   @override
@@ -63,6 +78,17 @@ class HomePageState extends State<HomePage> {
                           _fetchData(context, newMonth);
                         },
                       ),
+
+                      const SizedBox(height: AppDimensions.spacing24),
+
+                      // Recent Transactions
+                      const Padding(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: AppDimensions.spacing16),
+                        child: RecentTransactionsWidget(),
+                      ),
+
+                      const SizedBox(height: AppDimensions.spacing20),
 
                       // Categories Pie Chart
                       Card(

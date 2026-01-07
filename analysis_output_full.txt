@@ -1,0 +1,20 @@
+Analyzing '...                                                  
+
+   info • Empty catch block • lib/db/receipt_db_helper.dart:72:17 • empty_catches
+   info • Empty catch block • lib/db/receipt_db_helper.dart:87:17 • empty_catches
+   info • Empty catch block • lib/db/receipt_db_helper.dart:143:17 • empty_catches
+   info • Empty catch block • lib/db/transaction_db_helper.dart:108:17 • empty_catches
+   info • Empty catch block • lib/db/transaction_db_helper.dart:250:17 • empty_catches
+   info • 'background' is deprecated and shouldn't be used. Use surface instead. This feature was deprecated after v3.18.0-0.1.pre • lib/main.dart:53:17 • deprecated_member_use
+   info • 'onBackground' is deprecated and shouldn't be used. Use onSurface instead. This feature was deprecated after v3.18.0-0.1.pre • lib/main.dart:57:17 • deprecated_member_use
+   info • 'background' is deprecated and shouldn't be used. Use surface instead. This feature was deprecated after v3.18.0-0.1.pre • lib/main.dart:102:17 • deprecated_member_use
+   info • 'onBackground' is deprecated and shouldn't be used. Use onSurface instead. This feature was deprecated after v3.18.0-0.1.pre • lib/main.dart:106:17 • deprecated_member_use
+   info • The private field _totalBudgets could be 'final' • lib/providers/monthly_budget_provider.dart:12:23 • prefer_final_fields
+   info • Don't use 'BuildContext's across async gaps • lib/screens/category_manger.dart:168:37 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/category_manger.dart:203:43 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/menu_scrn.dart:47:52 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/menu_scrn.dart:61:42 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/transaction_form.dart:49:25 • use_build_context_synchronously
+   info • 'swapAnimationDuration' is deprecated and shouldn't be used. Please use [duration] instead • lib/widgets/charts/categories_pie_chart.dart:171:23 • deprecated_member_use
+
+16 issues found. (ran in 2.0s)

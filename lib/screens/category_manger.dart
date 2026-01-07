@@ -88,13 +88,30 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                             },
                             child: Card(
                               color: categoryIconController.text == icon
-                                  ? Colors.blueAccent
-                                  : Colors.black,
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.surface,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                  color: categoryIconController.text == icon
+                                      ? Colors.transparent
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .outline
+                                          .withValues(alpha: 0.2),
+                                ),
+                              ),
                               child: Center(
                                 child: Image.asset(
                                   icon,
                                   width: 40,
                                   height: 40,
+                                  color: categoryIconController.text == icon
+                                      ? Colors.white
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.8),
                                 ),
                               ),
                             ),
@@ -148,6 +165,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                                 listen: false)
                             .updateCategory(newCategory);
                       }
+                      if (!context.mounted) return;
                       Navigator.pop(context);
                     }
                   },
@@ -183,6 +201,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     );
 
     if (confirmed == true) {
+      if (!mounted) return;
       await Provider.of<CategoryProvider>(context, listen: false)
           .deleteCategory(category.id ?? 0); // Ensure valid ID
     }

@@ -39,7 +39,20 @@ class DBHelper {
         ''');
         await _insertDefaultCategories(db);
       },
-      version: 1,
+      version: 2,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // Add Subscriptions category if upgrading from version 1
+          await db.insert('categories', {
+            'name': 'Subscriptions',
+            'icon': 'assets/categories/bill.png',
+            'isExpense': 1,
+            'budget': null,
+            'created_on': null,
+            'modified_on': null,
+          });
+        }
+      },
     );
   }
 
@@ -106,6 +119,11 @@ class DBHelper {
         'name': 'Miscellaneous',
         'icon': 'assets/categories/other.png',
         'isExpense': 0,
+      },
+      {
+        'name': 'Subscriptions',
+        'icon': 'assets/categories/bill.png',
+        'isExpense': 1,
       },
     ];
 

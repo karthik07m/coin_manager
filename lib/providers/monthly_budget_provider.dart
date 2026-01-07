@@ -1,17 +1,43 @@
 import 'package:flutter/material.dart';
 import '../models/monthly_budget.dart';
+import '../db/monthly_budget_db_helper.dart';
 
 class MonthlyBudgetProvider with ChangeNotifier {
-  final List<MonthlyBudget> _monthlyBudgets = []; // List to store monthly budgets
+  final List<MonthlyBudget> _monthlyBudgets =
+      []; // List to store monthly budgets
+  final MonthlyBudgetDBHelper _dbHelper = MonthlyBudgetDBHelper();
 
   List<MonthlyBudget> get monthlyBudgets => _monthlyBudgets;
 
-  Map<String, double> _totalBudgets = {};
+  final Map<String, double> _totalBudgets = {};
 
-double getTotalBudget(String month) => _totalBudgets[month] ?? 0.0;
+  double getTotalBudget(String month) => _totalBudgets[month] ?? 0.0;
+
+  // Initialize and load data for the current month
+  Future<void> loadMonthlyData(String month) async {
+    // Load Total Budget
+    final total = await _dbHelper.getTotalBudget(month);
+    _totalBudgets[month] = total;
+
+    // Load Category Budgets
+    final budgets = await _dbHelper.getAllBudgetsForMonth(month);
+    budgets.forEach((categoryName, amount) {
+      MonthlyBudget? monthlyBudget = _monthlyBudgets.firstWhere(
+        (budget) => budget.categoryName == categoryName,
+        orElse: () => MonthlyBudget(categoryName: categoryName),
+      );
+      monthlyBudget.setBudget(month, amount);
+      if (!_monthlyBudgets.contains(monthlyBudget)) {
+        _monthlyBudgets.add(monthlyBudget);
+      }
+    });
+
+    notifyListeners();
+  }
 
   // Method to set budget for a specific category and month
-  void setBudget(String categoryName, String month, double budget) {
+  Future<void> setBudget(
+      String categoryName, String month, double budget) async {
     MonthlyBudget? monthlyBudget = _monthlyBudgets.firstWhere(
       (budget) => budget.categoryName == categoryName,
       orElse: () => MonthlyBudget(categoryName: categoryName),
@@ -25,6 +51,8 @@ double getTotalBudget(String month) => _totalBudgets[month] ?? 0.0;
     }
 
     notifyListeners(); // Notify listeners about the changes
+
+    await _dbHelper.setBudget(categoryName, month, budget);
   }
 
   // Method to get budget for a specific category and month
@@ -37,10 +65,9 @@ double getTotalBudget(String month) => _totalBudgets[month] ?? 0.0;
     return monthlyBudget.getBudget(month);
   }
 
-
-void setTotalBudget(String month, double amount) {
-  _totalBudgets[month] = amount;
-  notifyListeners();
-}
-
+  Future<void> setTotalBudget(String month, double amount) async {
+    _totalBudgets[month] = amount;
+    notifyListeners();
+    await _dbHelper.setTotalBudget(month, amount);
+  }
 }

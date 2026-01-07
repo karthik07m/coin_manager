@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 class NoData extends StatelessWidget {
-  final title;
-  final imagePath;
+  final String title;
+  final String imagePath;
   final double textFontSize;
   const NoData(
       {super.key,

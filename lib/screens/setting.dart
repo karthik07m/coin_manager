@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/settings_provider.dart';
+import '../services/backup_service.dart';
 import 'category_manger.dart';
 import 'manage_budget.dart';
+import 'privacy_policy.dart';
 import '../utilities/constants.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -58,29 +61,25 @@ class SettingsScreen extends StatelessWidget {
                 title: 'Currency',
                 subtitle: 'Change your preferred currency',
                 onTap: () {
-                  // TODO: Implement currency selection
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Currency selection coming soon!')),
-                  );
+                  _showCurrencySelectionDialog(context);
                 },
               ),
-              _buildSettingTile(
-                context,
-                icon: Icons.dark_mode_outlined,
-                activeIcon: Icons.dark_mode,
-                title: 'Dark Mode',
-                subtitle: 'Toggle dark/light theme',
-                trailing: Switch(
-                  value: Theme.of(context).brightness == Brightness.dark,
-                  onChanged: (value) {
-                    // TODO: Implement theme switching
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Theme switching coming soon!')),
-                    );
-                  },
-                ),
+              Consumer<SettingsProvider>(
+                builder: (context, settings, child) {
+                  return _buildSettingTile(
+                    context,
+                    icon: Icons.dark_mode_outlined,
+                    activeIcon: Icons.dark_mode,
+                    title: 'Dark Mode',
+                    subtitle: 'Toggle dark/light theme',
+                    trailing: Switch(
+                      value: settings.themeMode == ThemeMode.dark,
+                      onChanged: (value) {
+                        settings.toggleTheme(value);
+                      },
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -93,14 +92,20 @@ class SettingsScreen extends StatelessWidget {
                 context,
                 icon: Icons.backup_outlined,
                 activeIcon: Icons.backup,
-                title: 'Backup & Restore',
-                subtitle: 'Export or import your data',
-                onTap: () {
-                  // TODO: Implement backup/restore
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Backup feature coming soon!')),
-                  );
+                title: 'Backup Data',
+                subtitle: 'Export your data to a file',
+                onTap: () async {
+                  await BackupService().createBackup(context);
+                },
+              ),
+              _buildSettingTile(
+                context,
+                icon: Icons.restore_page_outlined,
+                activeIcon: Icons.restore_page,
+                title: 'Restore Data',
+                subtitle: 'Import data from a backup file',
+                onTap: () async {
+                  await BackupService().restoreBackup(context);
                 },
               ),
               _buildSettingTile(
@@ -110,11 +115,7 @@ class SettingsScreen extends StatelessWidget {
                 title: 'Privacy Policy',
                 subtitle: 'Read our privacy policy',
                 onTap: () {
-                  // TODO: Implement privacy policy
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Privacy policy coming soon!')),
-                  );
+                  Navigator.pushNamed(context, PrivacyPolicyScreen.routeName);
                 },
               ),
             ],
@@ -139,6 +140,53 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  void _showCurrencySelectionDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Select Currency'),
+          content: SingleChildScrollView(
+            child: Consumer<SettingsProvider>(
+              builder: (context, settings, child) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildCurrencyOption(context, 'USD', '\$', settings),
+                    _buildCurrencyOption(context, 'EUR', '€', settings),
+                    _buildCurrencyOption(context, 'INR', '₹', settings),
+                    _buildCurrencyOption(context, 'GBP', '£', settings),
+                    _buildCurrencyOption(context, 'JPY', '¥', settings),
+                  ],
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCurrencyOption(BuildContext context, String code, String symbol,
+      SettingsProvider settings) {
+    final isSelected = settings.currencyCode == code;
+    return ListTile(
+      title: Text('$code ($symbol)'),
+      trailing:
+          isSelected ? const Icon(Icons.check, color: AppColors.primary) : null,
+      onTap: () {
+        settings.setCurrency(code, symbol);
+        Navigator.of(context).pop();
+      },
+    );
+  }
+
   Widget _buildSection(
     BuildContext context, {
     required String title,
@@ -154,10 +202,11 @@ class SettingsScreen extends StatelessWidget {
           ),
           child: Text(
             title,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
           ),
         ),
         Card(
@@ -179,28 +228,31 @@ class SettingsScreen extends StatelessWidget {
     Widget? trailing,
     VoidCallback? onTap,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return ListTile(
       leading: Container(
         padding: const EdgeInsets.all(AppDimensions.spacing8),
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.1),
+          color: colorScheme.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(AppDimensions.radiusSmall),
         ),
         child: Icon(
           onTap != null ? activeIcon : icon,
-          color: AppColors.primary,
+          color: colorScheme.primary,
           size: AppDimensions.iconMedium,
         ),
       ),
       title: Text(
         title,
-        style: AppTextStyles.bodyLarge.copyWith(
+        style: textTheme.bodyLarge?.copyWith(
           fontWeight: FontWeight.w500,
         ),
       ),
       subtitle: Text(
         subtitle,
-        style: AppTextStyles.bodySmall,
+        style: textTheme.bodySmall,
       ),
       trailing:
           trailing ?? (onTap != null ? const Icon(Icons.chevron_right) : null),

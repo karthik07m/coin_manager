@@ -22,6 +22,9 @@ class TransactionDBHelper {
   final String columnModifiedOn = 'modified_on';
   final String columnIsExpense = 'is_expense';
 
+  final String columnIsRecurring = 'is_recurring';
+  final String columnReceiptId = 'receipt_id';
+
   Future<Database> get database async {
     if (_db != null) {
       return _db!;
@@ -33,7 +36,12 @@ class TransactionDBHelper {
   Future<Database> _initDB() async {
     Directory documentsDirectory = await getApplicationDocumentsDirectory();
     String path = join(documentsDirectory.path, 'transactions.db');
-    return await openDatabase(path, version: 1, onCreate: _onCreate);
+    return await openDatabase(
+      path,
+      version: 3,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
   }
 
   void _onCreate(Database db, int version) async {
@@ -46,9 +54,22 @@ class TransactionDBHelper {
         $columnDate TEXT,
         $columnCreatedOn TEXT,
         $columnModifiedOn TEXT,
-        $columnIsExpense INTEGER
+        $columnIsExpense INTEGER,
+        $columnIsRecurring INTEGER,
+        $columnReceiptId TEXT
       )
     ''');
+  }
+
+  void _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute(
+          'ALTER TABLE $tableName ADD COLUMN $columnIsRecurring INTEGER DEFAULT 0');
+    }
+    if (oldVersion < 3) {
+      await db
+          .execute('ALTER TABLE $tableName ADD COLUMN $columnReceiptId TEXT');
+    }
   }
 
   Future<int> insertTransaction(trans_model.Transaction transaction) async {
@@ -84,7 +105,9 @@ class TransactionDBHelper {
       if (maps.isNotEmpty) {
         return trans_model.Transaction.fromMap(maps.first);
       }
-    } catch (e) {}
+    } catch (e) {
+      // Return null if something goes wrong
+    }
     return null;
   }
 
@@ -207,10 +230,27 @@ class TransactionDBHelper {
     }
   }
 
+  Future<List<trans_model.Transaction>> getRecurringTransactions() async {
+    var dbClient = await database;
+    try {
+      final List<Map<String, dynamic>> transactions = await dbClient.query(
+        tableName,
+        where: '$columnIsRecurring = 1',
+      );
+      return transactions
+          .map((map) => trans_model.Transaction.fromMap(map))
+          .toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
   Future<void> close() async {
     var dbClient = await database;
     try {
       await dbClient.close();
-    } catch (e) {}
+    } catch (e) {
+      // Ignore errors on close
+    }
   }
 }

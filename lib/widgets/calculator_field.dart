@@ -42,7 +42,7 @@ class CalculatorTextFormFieldState extends State<CalculatorTextFormField> {
         left: 0,
         right: 0,
         child: Material(
-          color: AppColors.surface,
+          color: Theme.of(context).colorScheme.surface,
           elevation: AppDimensions.elevationMedium,
           child: CalculatorKeyboard(
             onKeyTap: _onKeyTap,
@@ -107,10 +107,10 @@ class CalculatorTextFormFieldState extends State<CalculatorTextFormField> {
   String _evaluateExpression(String expression) {
     if (expression.isEmpty) return "0.0";
     try {
-      final parser = Parser();
+      final parser = GrammarParser();
       final exp = parser.parse(expression);
       final contextModel = ContextModel();
-      final result = exp.evaluate(EvaluationType.REAL, contextModel);
+      final result = RealEvaluator(contextModel).evaluate(exp);
       return result.toString();
     } catch (e) {
       return "0.0";
@@ -134,41 +134,53 @@ class CalculatorTextFormFieldState extends State<CalculatorTextFormField> {
           focusNode: _focusNode,
           readOnly: true,
           style: AppTextStyles.amount.copyWith(
-            color: AppColors.textPrimary,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
           decoration: InputDecoration(
             labelText: 'Amount',
-            labelStyle: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.textSecondary,
-            ),
+            labelStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
+                ),
             hintText: '0.00',
             hintStyle: AppTextStyles.amount.copyWith(
-              color: AppColors.textSecondary.withOpacity(0.5),
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.3),
             ),
             prefixText: '\$ ',
             prefixStyle: AppTextStyles.amount.copyWith(
-              color: AppColors.textPrimary,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
             filled: true,
-            fillColor: AppColors.surface,
+            fillColor: Theme.of(context).colorScheme.surface,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
               borderSide: BorderSide(
-                color: AppColors.primary.withOpacity(0.1),
+                color: Theme.of(context)
+                    .colorScheme
+                    .outline
+                    .withValues(alpha: 0.3),
                 width: 1,
               ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
               borderSide: BorderSide(
-                color: AppColors.primary.withOpacity(0.1),
+                color: Theme.of(context)
+                    .colorScheme
+                    .outline
+                    .withValues(alpha: 0.3),
                 width: 1,
               ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-              borderSide: const BorderSide(
-                color: AppColors.primary,
+              borderSide: BorderSide(
+                color: Theme.of(context).colorScheme.primary,
                 width: 1,
               ),
             ),

@@ -74,12 +74,32 @@ class CreateCategoryScreenState extends State<CreateCategoryScreen> {
                   return GestureDetector(
                     onTap: () => _selectIcon(icon),
                     child: Card(
-                      color: _icon == icon ? Colors.blueAccent : Colors.black,
+                      color: _icon == icon
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.surface,
+                      elevation: _icon == icon ? 4 : 1,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: _icon == icon
+                              ? Colors.transparent
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .outline
+                                  .withValues(alpha: 0.2),
+                        ),
+                      ),
                       child: Center(
                         child: Image.asset(
                           icon,
                           width: 40,
                           height: 40,
+                          color: _icon == icon
+                              ? Colors.white
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.8),
                         ),
                       ),
                     ),
