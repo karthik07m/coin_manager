@@ -81,15 +81,6 @@ class HomePageState extends State<HomePage> {
 
                       const SizedBox(height: AppDimensions.spacing24),
 
-                      // Recent Transactions
-                      const Padding(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: AppDimensions.spacing16),
-                        child: RecentTransactionsWidget(),
-                      ),
-
-                      const SizedBox(height: AppDimensions.spacing20),
-
                       // Categories Pie Chart
                       Card(
                         elevation: 4,
@@ -106,6 +97,17 @@ class HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
+
+                      const SizedBox(height: AppDimensions.spacing20),
+
+                      // Recent Transactions
+                      const Padding(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: AppDimensions.spacing16),
+                        child: RecentTransactionsWidget(),
+                      ),
+
+                      const SizedBox(height: 80),
 
                       // Placeholder for additional features
                     ],

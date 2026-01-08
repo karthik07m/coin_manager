@@ -26,18 +26,19 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   int _currentPage = 0;
   bool _recurIncome = false;
+  int _selectedIncomeDay = 1; // Day of month for recurring income
   double _savingsPercentage = 20.0; // Default 20% savings
   Map<String, double> _budgetAllocation = {};
 
-  String _selectedCurrency = 'USD';
-  String _selectedCurrencySymbol = '\$';
+  String _selectedCurrency = 'INR';
+  String _selectedCurrencySymbol = '₹';
 
   final List<Map<String, String>> _currencies = [
+    {'code': 'INR', 'symbol': '₹', 'name': 'Indian Rupee'},
     {'code': 'USD', 'symbol': '\$', 'name': 'US Dollar'},
     {'code': 'EUR', 'symbol': '€', 'name': 'Euro'},
     {'code': 'GBP', 'symbol': '£', 'name': 'British Pound'},
     {'code': 'JPY', 'symbol': '¥', 'name': 'Japanese Yen'},
-    {'code': 'INR', 'symbol': '₹', 'name': 'Indian Rupee'},
     {'code': 'AUD', 'symbol': 'A\$', 'name': 'Australian Dollar'},
     {'code': 'CAD', 'symbol': 'C\$', 'name': 'Canadian Dollar'},
     {'code': 'CNY', 'symbol': '¥', 'name': 'Chinese Yuan'},
@@ -164,6 +165,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       budgetRule: budgetRules[0].name,
       recurIncome: _recurIncome,
       recurBudget: true, // Always apply budget monthly
+      incomeDay: _selectedIncomeDay,
     );
 
     // Create Income transaction
@@ -697,6 +699,98 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 ],
               ),
             ),
+
+            // Income Day Selector (shown when recurring is enabled)
+            if (_recurIncome) ...[
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.calendar_today,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Income Day',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.9),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Day of month to receive income',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: DropdownButton<int>(
+                        value: _selectedIncomeDay,
+                        underline: const SizedBox(),
+                        dropdownColor: Theme.of(context).colorScheme.surface,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        items: List.generate(28, (index) {
+                          final day = index + 1;
+                          return DropdownMenuItem(
+                            value: day,
+                            child: Text('Day $day'),
+                          );
+                        }),
+                        onChanged: (day) {
+                          setState(() {
+                            _selectedIncomeDay = day!;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             const SizedBox(height: 40),
           ],
         ),

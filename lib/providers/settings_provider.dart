@@ -12,6 +12,7 @@ class SettingsProvider extends ChangeNotifier {
   String _budgetRule = '50/30/20';
   bool _recurIncome = false;
   bool _recurBudget = false;
+  int _incomeDay = 1; // Day of month for recurring income (1-28)
 
   ThemeMode get themeMode => _themeMode;
   String get currencyCode => _currencyCode;
@@ -23,6 +24,7 @@ class SettingsProvider extends ChangeNotifier {
   String get budgetRule => _budgetRule;
   bool get recurIncome => _recurIncome;
   bool get recurBudget => _recurBudget;
+  int get incomeDay => _incomeDay;
 
   SettingsProvider() {
     _loadSettings();
@@ -43,6 +45,7 @@ class SettingsProvider extends ChangeNotifier {
     _budgetRule = prefs.getString('budgetRule') ?? '50/30/20';
     _recurIncome = prefs.getBool('recurIncome') ?? false;
     _recurBudget = prefs.getBool('recurBudget') ?? false;
+    _incomeDay = prefs.getInt('incomeDay') ?? 1;
     notifyListeners();
   }
 
@@ -69,6 +72,7 @@ class SettingsProvider extends ChangeNotifier {
     required String budgetRule,
     required bool recurIncome,
     required bool recurBudget,
+    int incomeDay = 1,
   }) async {
     _isFirstLaunch = false;
     _monthlyIncome = income;
@@ -77,6 +81,7 @@ class SettingsProvider extends ChangeNotifier {
     _defaultIncome = budget; // This is actually the recurring budget amount
     _recurIncome = recurIncome;
     _recurBudget = recurBudget;
+    _incomeDay = incomeDay;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isFirstLaunch', false);
@@ -86,6 +91,7 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setDouble('defaultIncome', budget);
     await prefs.setBool('recurIncome', recurIncome);
     await prefs.setBool('recurBudget', recurBudget);
+    await prefs.setInt('incomeDay', incomeDay);
     notifyListeners();
   }
 }
