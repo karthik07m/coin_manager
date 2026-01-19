@@ -3,6 +3,8 @@ import '../models/transaction.dart';
 import '../models/category.dart';
 import '../screens/transaction_form.dart';
 import '../utilities/constants.dart';
+import '../utilities/theme_helper.dart';
+import '../utilities/functions.dart';
 
 class TransactionItem extends StatelessWidget {
   final Transaction transaction;
@@ -45,7 +47,7 @@ class TransactionItem extends StatelessWidget {
                 onDismissed: (_) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      backgroundColor: AppColors.surface,
+                      backgroundColor: context.appSurface,
                       content: Text(
                         "Transaction '${transaction.title}' removed",
                         style: AppTextStyles.bodyMedium,
@@ -69,8 +71,8 @@ class TransactionItem extends StatelessWidget {
   Widget _buildListTile(BuildContext context) {
     final isExpense = category?.isExpense == true;
     final amountColor = isExpense ? AppColors.negative : AppColors.positive;
-    final iconBgColor =
-        (isExpense ? AppColors.negative : AppColors.positive).withValues(alpha: 0.1);
+    final iconBgColor = (isExpense ? AppColors.negative : AppColors.positive)
+        .withValues(alpha: 0.1);
 
     return Padding(
       padding: const EdgeInsets.all(AppDimensions.spacing16),
@@ -138,7 +140,7 @@ class TransactionItem extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${isExpense ? '-' : '+'} \$${transaction.amount.toStringAsFixed(2)}',
+                '${isExpense ? '-' : '+'}${UtilityFunction.addCommaWithSign(transaction.amount).substring(1)}',
                 style: AppTextStyles.amount.copyWith(
                   color: amountColor,
                   fontSize: 16,
@@ -168,7 +170,7 @@ class TransactionItem extends StatelessWidget {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.appSurface,
         title: Row(
           children: [
             const Icon(Icons.warning_amber_rounded,
@@ -186,7 +188,7 @@ class TransactionItem extends StatelessWidget {
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text("Cancel",
                 style: AppTextStyles.bodyMedium
-                    .copyWith(color: AppColors.textSecondary)),
+                    .copyWith(color: context.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),

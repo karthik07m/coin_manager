@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../services/receipt_scanner_service.dart';
 
 class ReceiptScanScreen extends StatefulWidget {
@@ -17,12 +18,15 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
+  final TextEditingController _dateController = TextEditingController();
+  DateTime? _validatedDate;
 
   @override
   void dispose() {
     _scannerService.dispose();
     _titleController.dispose();
     _amountController.dispose();
+    _dateController.dispose();
     super.dispose();
   }
 
@@ -40,6 +44,14 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
           _titleController.text = result.extractedTitle ?? '';
           _amountController.text =
               result.extractedAmount?.toStringAsFixed(2) ?? '';
+          if (result.extractedDate != null) {
+            _validatedDate = result.extractedDate;
+            _dateController.text =
+                DateFormat.yMMMd().format(result.extractedDate!);
+          } else {
+            _validatedDate = null;
+            _dateController.clear();
+          }
         });
       } else {
         setState(() {
@@ -73,7 +85,23 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
       'rawText': _scanResult!.rawText,
       'title': title.isNotEmpty ? title : null,
       'amount': amount,
+      'date': _validatedDate,
     });
+  }
+
+  Future<void> _selectDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _validatedDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) {
+      setState(() {
+        _validatedDate = picked;
+        _dateController.text = DateFormat.yMMMd().format(picked);
+      });
+    }
   }
 
   @override
@@ -199,6 +227,19 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                   labelText: 'Amount',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.attach_money),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Date field
+              TextField(
+                controller: _dateController,
+                readOnly: true,
+                onTap: _selectDate,
+                decoration: const InputDecoration(
+                  labelText: 'Date',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.calendar_today),
                 ),
               ),
               const SizedBox(height: 16),

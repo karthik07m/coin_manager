@@ -5,6 +5,7 @@ import '../providers/monthly_budget_provider.dart';
 import '../widgets/budget_overview_widget.dart';
 import '../widgets/quick_stats_widget.dart';
 import '../utilities/constants.dart';
+import '../utilities/theme_helper.dart';
 import 'package:intl/intl.dart';
 
 class MonthlyBudgetScreen extends StatefulWidget {
@@ -86,7 +87,7 @@ class _MonthlyBudgetScreenState extends State<MonthlyBudgetScreen> {
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? AppColors.primary
-                                : AppColors.surfaceLight,
+                                : context.appSurfaceLight,
                             borderRadius: BorderRadius.circular(
                                 AppDimensions.radiusSmall),
                             border: Border.all(
@@ -101,7 +102,7 @@ class _MonthlyBudgetScreenState extends State<MonthlyBudgetScreen> {
                               style: TextStyle(
                                 color: isSelected
                                     ? Colors.white
-                                    : AppColors.textPrimary,
+                                    : context.textPrimary,
                                 fontWeight: isSelected
                                     ? FontWeight.w600
                                     : FontWeight.normal,
@@ -125,9 +126,9 @@ class _MonthlyBudgetScreenState extends State<MonthlyBudgetScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.appBackground,
         title: const Text('Monthly Budget', style: AppTextStyles.h3),
         centerTitle: true,
         elevation: 0,
@@ -137,10 +138,10 @@ class _MonthlyBudgetScreenState extends State<MonthlyBudgetScreen> {
             onTap: () => _showMonthPicker(context),
             borderRadius: BorderRadius.circular(AppDimensions.radiusSmall),
             child: Container(
-              margin: const EdgeInsets.only(right: 8),
+              margin: const EdgeInsets.only(right: 16),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.surfaceLight,
+                color: context.appSurfaceLight,
                 borderRadius: BorderRadius.circular(AppDimensions.radiusSmall),
                 border: Border.all(color: AppColors.divider),
               ),
@@ -188,45 +189,9 @@ class _MonthlyBudgetScreenState extends State<MonthlyBudgetScreen> {
                   // Quick Stats
                   const QuickStatsWidget(),
 
-                  const SizedBox(height: AppDimensions.spacing20),
+                  const SizedBox(height: AppDimensions.spacing24),
 
-                  // Section Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'CATEGORY BUDGETS',
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.textSecondary,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      // Compact manage button
-                      TextButton.icon(
-                        onPressed: () {
-                          Navigator.pushNamed(context, '/manageBudget');
-                        },
-                        icon: const Icon(Icons.edit, size: 16),
-                        label: const Text(
-                          'Manage',
-                          style: TextStyle(fontSize: 13),
-                        ),
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppColors.primary,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: AppDimensions.spacing12),
-
-                  // Budget Overview
+                  // Budget Overview with all categories
                   const BudgetOverviewWidget(),
 
                   const SizedBox(height: 80),

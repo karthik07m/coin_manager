@@ -2,122 +2,179 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/category_provider.dart';
-import '../providers/monthly_budget_provider.dart';
-import '../widgets/charts/categories_pie_chart.dart';
+import '../providers/settings_provider.dart';
+import '../providers/debt_provider.dart';
+import '../screens/balance_card.dart';
 import '../widgets/recent_transactions_widget.dart';
+import '../widgets/quick_stats_widget.dart';
+import '../widgets/budget_expenses_chart_widget.dart';
+import '../widgets/debt_summary_widget.dart';
 import '../utilities/constants.dart';
-import 'balance_card.dart';
+import '../utilities/theme_helper.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final Function(int)? onTabSelected;
+
+  const HomePage({super.key, this.onTabSelected});
 
   @override
-  HomePageState createState() => HomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class HomePageState extends State<HomePage> {
-  DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
+class _HomePageState extends State<HomePage> {
+  DateTime _selectedMonth = DateTime.now();
 
-  Future<void> _fetchData(BuildContext context, DateTime selectedMonth) async {
+  @override
+  void initState() {
+    super.initState();
+    // Load categories, transactions, and debts on init
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final categoryProvider =
+          Provider.of<CategoryProvider>(context, listen: false);
+      categoryProvider.fetchAllCategories();
+      final debtProvider = Provider.of<DebtProvider>(context, listen: false);
+      debtProvider.loadDebtsFromDB();
+      _fetchData(context, _selectedMonth);
+    });
+  }
+
+  Future<void> _fetchData(BuildContext context, DateTime month) async {
     final transactionProvider =
         Provider.of<TransactionProvider>(context, listen: false);
-    final categoryProvider =
-        Provider.of<CategoryProvider>(context, listen: false);
-    final budgetProvider =
-        Provider.of<MonthlyBudgetProvider>(context, listen: false);
 
-    DateTime startDate = DateTime(selectedMonth.year, selectedMonth.month, 1);
-    DateTime endDate = DateTime(selectedMonth.year, selectedMonth.month + 1, 1)
-        .subtract(const Duration(days: 1));
+    final startDate = DateTime(month.year, month.month, 1);
+    final endDate = DateTime(month.year, month.month + 1, 0);
 
-    // Load all necessary data
-    await Future.wait([
-      transactionProvider.loadTransactionsFromDB(
-          startDate: startDate, endDate: endDate),
-      categoryProvider.fetchAllCategories(),
-      budgetProvider.loadMonthlyData(selectedMonth.month.toString()),
-    ]);
+    await transactionProvider.loadTransactionsFromDB(
+      startDate: startDate,
+      endDate: endDate,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
+    return Scaffold(
+      backgroundColor: context.appBackground,
+      body: Consumer2<TransactionProvider, SettingsProvider>(
+        builder: (context, transactionProvider, settingsProvider, child) {
+          final transactions = transactionProvider.transactions;
 
-    return FutureBuilder(
-      future: _fetchData(context, _selectedMonth),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        } else if (snapshot.hasError) {
-          return const Center(child: Text('Error loading data'));
-        } else {
-          return Consumer<TransactionProvider>(
-            builder: (context, transactionProvider, child) {
-              final totalIncome = transactionProvider.totalIncome;
-              final totalExpenses = transactionProvider.totalExpenses;
+          // Calculate totals
+          double totalIncome = 0.0;
+          double totalExpenses = 0.0;
 
-              return SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Balance Card with Month Picker
+          for (var transaction in transactions) {
+            if (transaction.isExpense) {
+              totalExpenses += transaction.amount;
+            } else {
+              totalIncome += transaction.amount;
+            }
+          }
 
-                      // Balance Card
+          return RefreshIndicator(
+            onRefresh: () => _fetchData(context, _selectedMonth),
+            color: AppColors.primary,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  const SizedBox(height: AppDimensions.spacing16),
 
-                      BalanceCard(
-                        screenWidth: screenWidth,
-                        totalIncome: totalIncome,
-                        totalExpenses: totalExpenses,
-                        selectedMonth: _selectedMonth,
-                        onMonthChanged: (DateTime newMonth) {
-                          setState(() {
-                            _selectedMonth = newMonth;
-                          });
-                          _fetchData(context, newMonth);
-                        },
-                      ),
-
-                      const SizedBox(height: AppDimensions.spacing24),
-
-                      // Categories Pie Chart
-                      Card(
-                        elevation: 4,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: CategoriesPieChart(
-                            screenHeight:
-                                MediaQuery.of(context).size.height * 0.8,
-                            categories: transactionProvider.categories,
-                            totalExpenses: totalExpenses,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: AppDimensions.spacing20),
-
-                      // Recent Transactions
-                      const Padding(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: AppDimensions.spacing16),
-                        child: RecentTransactionsWidget(),
-                      ),
-
-                      const SizedBox(height: 80),
-
-                      // Placeholder for additional features
-                    ],
+                  // Balance Card
+                  BalanceCard(
+                    screenWidth: MediaQuery.of(context).size.width,
+                    totalIncome: totalIncome,
+                    totalExpenses: totalExpenses,
+                    selectedMonth: _selectedMonth,
+                    onMonthChanged: (DateTime newMonth) {
+                      setState(() {
+                        _selectedMonth = newMonth;
+                      });
+                      _fetchData(context, newMonth);
+                    },
                   ),
-                ),
-              );
-            },
+
+                  const SizedBox(height: AppDimensions.spacing20),
+
+                  // Budget Quick Stats
+                  Container(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: AppDimensions.spacing16,
+                    ),
+                    padding: const EdgeInsets.all(AppDimensions.spacing16),
+                    decoration: BoxDecoration(
+                      color: context.appSurfaceLight,
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.radiusLarge),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: QuickStatsWidget(
+                      onTabSelected: widget.onTabSelected,
+                    ),
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacing20),
+
+                  // Debt Summary
+                  Container(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: AppDimensions.spacing16,
+                    ),
+                    child: const DebtSummaryWidget(),
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacing20),
+
+                  // Budget vs Expenses Chart
+                  Container(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: AppDimensions.spacing16,
+                    ),
+                    padding: const EdgeInsets.all(AppDimensions.spacing16),
+                    decoration: BoxDecoration(
+                      color: context.appSurfaceLight,
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.radiusLarge),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: const BudgetExpensesChartWidget(),
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacing20),
+
+                  // Recent Transactions
+                  Container(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: AppDimensions.spacing16,
+                    ),
+                    padding: const EdgeInsets.all(AppDimensions.spacing16),
+                    decoration: BoxDecoration(
+                      color: context.appSurfaceLight,
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.radiusLarge),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: RecentTransactionsWidget(
+                      onTabSelected: widget.onTabSelected,
+                    ),
+                  ),
+
+                  const SizedBox(height: 80),
+                ],
+              ),
+            ),
           );
-        }
-      },
+        },
+      ),
     );
   }
 }

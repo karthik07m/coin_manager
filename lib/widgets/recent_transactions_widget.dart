@@ -4,9 +4,13 @@ import 'package:intl/intl.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/category_provider.dart';
 import '../utilities/constants.dart';
+import '../utilities/theme_helper.dart';
+import '../utilities/functions.dart';
 
 class RecentTransactionsWidget extends StatelessWidget {
-  const RecentTransactionsWidget({super.key});
+  final Function(int)? onTabSelected;
+
+  const RecentTransactionsWidget({super.key, this.onTabSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -21,6 +25,13 @@ class RecentTransactionsWidget extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
+        // Check if categories are loaded
+        if (categoryProvider.categories.isEmpty) {
+          return const Center(
+            child: Text('Loading categories...'),
+          );
+        }
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -30,13 +41,14 @@ class RecentTransactionsWidget extends StatelessWidget {
                 Text(
                   'RECENT TRANSACTIONS',
                   style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textSecondary,
+                    color: context.textSecondary,
+                    letterSpacing: 1.2,
                   ),
                 ),
                 TextButton(
                   onPressed: () {
                     // Navigate to transactions tab
-                    DefaultTabController.of(context).animateTo(1);
+                    onTabSelected?.call(1);
                   },
                   child: Text(
                     'See All',
@@ -49,69 +61,74 @@ class RecentTransactionsWidget extends StatelessWidget {
               ],
             ),
             const SizedBox(height: AppDimensions.spacing8),
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surfaceLight,
-                borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: recentTransactions.length,
+              separatorBuilder: (context, index) => Divider(
+                height: 1,
+                color: AppColors.divider,
+                indent: 60,
               ),
-              child: ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: recentTransactions.length,
-                separatorBuilder: (context, index) => Divider(
-                  height: 1,
-                  color: AppColors.divider,
-                  indent: 60,
-                ),
-                itemBuilder: (context, index) {
-                  final transaction = recentTransactions[index];
-                  final category = categoryProvider.categories.firstWhere(
-                    (cat) => cat.id == transaction.categoryId,
-                    orElse: () => categoryProvider.categories.first,
-                  );
+              itemBuilder: (context, index) {
+                final transaction = recentTransactions[index];
 
-                  return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: AppDimensions.spacing12,
-                      vertical: AppDimensions.spacing4,
+                // Safely find category
+                final category = categoryProvider.categories.firstWhere(
+                  (cat) => cat.id == transaction.categoryId,
+                  orElse: () => categoryProvider.categories.first,
+                );
+
+                return ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppDimensions.spacing12,
+                    vertical: AppDimensions.spacing4,
+                  ),
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: (transaction.isExpense
+                              ? AppColors.negative
+                              : AppColors.positive)
+                          .withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
                     ),
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius:
-                            BorderRadius.circular(AppDimensions.radiusSmall),
-                      ),
-                      child: Image.asset(category.icon),
+                    child: Image.asset(
+                      category.icon,
+                      width: 24,
+                      height: 24,
                     ),
-                    title: Text(
-                      transaction.title,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  ),
+                  title: Text(
+                    transaction.title.isEmpty
+                        ? category.name
+                        : transaction.title,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: context.textPrimary,
                     ),
-                    subtitle: Text(
-                      DateFormat('MMM dd, yyyy').format(transaction.date),
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    DateFormat('MMM dd, yyyy').format(transaction.date),
+                    style: AppTextStyles.caption.copyWith(
+                      color: context.textSecondary,
                     ),
-                    trailing: Text(
-                      '${transaction.isExpense ? '-' : '+'} \$${transaction.amount.toStringAsFixed(2)}',
-                      style: AppTextStyles.bodyLarge.copyWith(
-                        color: transaction.isExpense
-                            ? AppColors.negative
-                            : AppColors.positive,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  ),
+                  trailing: Text(
+                    '${transaction.isExpense ? '-' : '+'}${UtilityFunction.addCommaWithSign(transaction.amount).substring(1)}',
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      color: transaction.isExpense
+                          ? AppColors.negative
+                          : AppColors.positive,
+                      fontWeight: FontWeight.bold,
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             ),
           ],
         );

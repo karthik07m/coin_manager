@@ -4,6 +4,8 @@ import '../providers/monthly_budget_provider.dart';
 import '../providers/category_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../utilities/constants.dart';
+import '../utilities/theme_helper.dart';
+import '../utilities/functions.dart';
 
 class ManageBudgetScreen extends StatefulWidget {
   const ManageBudgetScreen({super.key});
@@ -38,7 +40,9 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
   @override
   void dispose() {
     _totalBudgetController.dispose();
-    _categoryControllers.values.forEach((controller) => controller.dispose());
+    for (var controller in _categoryControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -54,10 +58,11 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
 
       // Calculate total allocated
       double totalAllocated = 0;
-      _categoryControllers.forEach((categoryName, controller) {
+      for (var entry in _categoryControllers.entries) {
+        final controller = entry.value;
         final budget = double.tryParse(controller.text) ?? 0;
         totalAllocated += budget;
-      });
+      }
 
       if (totalAllocated > totalBudget) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -75,10 +80,12 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
       budgetProvider.setTotalBudget(currentMonth, totalBudget);
 
       // Save category budgets
-      _categoryControllers.forEach((categoryName, controller) {
+      for (var entry in _categoryControllers.entries) {
+        final categoryName = entry.key;
+        final controller = entry.value;
         final budget = double.tryParse(controller.text) ?? 0;
         budgetProvider.setBudget(categoryName, currentMonth, budget);
-      });
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -93,9 +100,9 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.appBackground,
         title: const Text('Manage Budget', style: AppTextStyles.h3),
         centerTitle: true,
         elevation: 0,
@@ -141,111 +148,159 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Total Budget Card
+                          // Professional Budget Header Card
                           Container(
-                            padding:
-                                const EdgeInsets.all(AppDimensions.spacing20),
+                            padding: const EdgeInsets.all(24),
                             decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(
-                                  AppDimensions.radiusLarge),
-                              boxShadow: AppShadows.card,
-                              border: Border.all(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppColors.primary,
+                                  AppColors.primary.withValues(alpha: 0.8),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
                                   color:
-                                      AppColors.primary.withValues(alpha: 0.2)),
+                                      AppColors.primary.withValues(alpha: 0.3),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
                             ),
                             child: Column(
                               children: [
                                 Text(
-                                  'Monthly Budget Cap',
+                                  'Monthly Budget',
                                   style: AppTextStyles.bodyMedium.copyWith(
-                                    color: AppColors.textSecondary,
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                    fontSize: 13,
+                                    letterSpacing: 1.2,
                                   ),
                                 ),
-                                const SizedBox(height: AppDimensions.spacing12),
-                                TextFormField(
-                                  controller: _totalBudgetController,
-                                  textAlign: TextAlign.center,
-                                  style: AppTextStyles.h1.copyWith(
-                                    color: AppColors.primary,
-                                  ),
-                                  decoration: const InputDecoration(
-                                    hintText: '0',
-                                    border: InputBorder.none,
-                                    prefixIcon: Icon(
-                                      Icons.attach_money,
-                                      color: AppColors.primary,
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      '\$',
+                                      style: AppTextStyles.h2.copyWith(
+                                        color: Colors.white,
+                                        fontSize: 28,
+                                      ),
                                     ),
-                                    prefixIconConstraints: BoxConstraints(
-                                        minWidth: 0, minHeight: 0),
-                                  ),
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                          decimal: true),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Required';
-                                    }
-                                    return null;
-                                  },
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: IntrinsicWidth(
+                                        child: TextFormField(
+                                          controller: _totalBudgetController,
+                                          textAlign: TextAlign.center,
+                                          style: AppTextStyles.h1.copyWith(
+                                            color: Colors.white,
+                                            fontSize: 36,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          decoration: const InputDecoration(
+                                            hintText: '0.00',
+                                            hintStyle: TextStyle(
+                                              color: Colors.white60,
+                                            ),
+                                            border: InputBorder.none,
+                                            isDense: true,
+                                            contentPadding: EdgeInsets.zero,
+                                          ),
+                                          keyboardType: const TextInputType
+                                              .numberWithOptions(decimal: true),
+                                          validator: (value) {
+                                            if (value == null ||
+                                                value.isEmpty) {
+                                              return 'Required';
+                                            }
+                                            return null;
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: AppDimensions.spacing16),
+                                const SizedBox(height: 20),
+                                // Progress bar
                                 ClipRRect(
-                                  borderRadius: BorderRadius.circular(4),
+                                  borderRadius: BorderRadius.circular(8),
                                   child: LinearProgressIndicator(
                                     value: progress,
-                                    backgroundColor: AppColors.surfaceLight,
+                                    backgroundColor:
+                                        Colors.white.withValues(alpha: 0.3),
                                     valueColor: AlwaysStoppedAnimation<Color>(
                                       progress > 1.0
                                           ? AppColors.negative
-                                          : AppColors.secondary,
+                                          : Colors.white,
                                     ),
-                                    minHeight: 8,
+                                    minHeight: 10,
                                   ),
                                 ),
-                                const SizedBox(height: AppDimensions.spacing16),
+                                const SizedBox(height: 16),
+                                // Summary row
                                 Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    _buildSummaryItem(
-                                      'Allocated',
-                                      totalAllocated,
-                                      AppColors.textSecondary,
+                                    Expanded(
+                                      child: _buildWhiteSummaryItem(
+                                        'Allocated',
+                                        totalAllocated,
+                                      ),
                                     ),
                                     Container(
-                                      height: 30,
+                                      height: 40,
                                       width: 1,
-                                      color: AppColors.divider,
+                                      color:
+                                          Colors.white.withValues(alpha: 0.3),
                                     ),
-                                    _buildSummaryItem(
-                                      'Remaining',
-                                      remainingBudget,
-                                      remainingBudget < 0
-                                          ? AppColors.negative
-                                          : AppColors.positive,
+                                    Expanded(
+                                      child: _buildWhiteSummaryItem(
+                                        'Remaining',
+                                        remainingBudget,
+                                      ),
                                     ),
                                   ],
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: AppDimensions.spacing24),
-                          Text(
-                            'CATEGORY ALLOCATION',
-                            style: AppTextStyles.caption.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
+                          const SizedBox(height: 28),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'CATEGORY BUDGETS',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: context.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                              Text(
+                                '${categories.length} Categories',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: context.textSecondary
+                                      .withValues(alpha: 0.6),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: AppDimensions.spacing12),
+                          const SizedBox(height: 16),
 
-                          // Category List
+                          // Professional Category Cards
                           ListView.separated(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             itemCount: categories.length,
                             separatorBuilder: (ctx, i) =>
-                                const SizedBox(height: AppDimensions.spacing12),
+                                const SizedBox(height: 14),
                             itemBuilder: (context, index) {
                               final category = categories[index];
                               final budget = budgetProvider.getBudget(
@@ -273,130 +328,168 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                 progressColor = AppColors.positive;
                               }
 
-                              return Container(
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceLight,
-                                  borderRadius: BorderRadius.circular(
-                                      AppDimensions.radiusMedium),
-                                  border: budget > 0
-                                      ? Border.all(
-                                          color: progressColor.withValues(
-                                              alpha: 0.2),
-                                          width: 1,
-                                        )
-                                      : null,
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppDimensions.spacing16,
-                                  vertical: AppDimensions.spacing12,
-                                ),
-                                child: Column(
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          width: 44,
-                                          height: 44,
-                                          padding: const EdgeInsets.all(
-                                              AppDimensions.spacing8),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.background,
-                                            borderRadius: BorderRadius.circular(
-                                                AppDimensions.radiusSmall),
-                                          ),
-                                          child: Image.asset(category.icon),
-                                        ),
-                                        const SizedBox(
-                                            width: AppDimensions.spacing16),
-                                        Expanded(
-                                          flex: 2,
-                                          child: Text(
-                                            category.name,
-                                            style: AppTextStyles.bodyLarge
-                                                .copyWith(
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(
-                                            width: AppDimensions.spacing12),
-                                        Expanded(
-                                          flex: 2,
-                                          child: TextFormField(
-                                            controller: _categoryControllers[
-                                                category.name],
-                                            textAlign: TextAlign.end,
-                                            style:
-                                                AppTextStyles.amount.copyWith(
-                                              color: AppColors.textPrimary,
-                                              fontSize: 16,
-                                            ),
-                                            decoration: InputDecoration(
-                                              hintText: '0',
-                                              prefixText: '\$ ',
-                                              prefixStyle: TextStyle(
-                                                  color:
-                                                      AppColors.textSecondary),
-                                              isDense: true,
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                borderSide: BorderSide.none,
-                                              ),
-                                              filled: true,
-                                              fillColor: AppColors.background,
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 12,
-                                                vertical: 12,
-                                              ),
-                                            ),
-                                            keyboardType: const TextInputType
-                                                .numberWithOptions(
-                                                decimal: true),
-                                          ),
-                                        ),
-                                      ],
+                              return RepaintBoundary(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: context.appSurface,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: budget > 0
+                                          ? progressColor.withValues(alpha: 0.2)
+                                          : AppColors.divider
+                                              .withValues(alpha: 0.3),
+                                      width: 1,
                                     ),
-                                    if (budget > 0) ...[
-                                      const SizedBox(
-                                          height: AppDimensions.spacing12),
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(4),
-                                        child: LinearProgressIndicator(
-                                          value: percentSpent.clamp(0.0, 1.0),
-                                          backgroundColor: AppColors.background,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                  progressColor),
-                                          minHeight: 6,
-                                        ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black
+                                            .withValues(alpha: 0.05),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
                                       ),
-                                      const SizedBox(
-                                          height: AppDimensions.spacing8),
+                                    ],
+                                  ),
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    children: [
+                                      // Top row: Icon, Name, Input
                                       Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text(
-                                            'Spent: \$${spent.toStringAsFixed(2)}',
-                                            style:
-                                                AppTextStyles.caption.copyWith(
-                                              color: progressColor,
-                                              fontWeight: FontWeight.w600,
+                                          // Icon
+                                          Container(
+                                            width: 48,
+                                            height: 48,
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: progressColor.withValues(
+                                                  alpha: 0.15),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: Image.asset(
+                                              category.icon,
+                                              fit: BoxFit.contain,
                                             ),
                                           ),
-                                          Text(
-                                            '${(percentSpent * 100).toStringAsFixed(0)}%',
-                                            style:
-                                                AppTextStyles.caption.copyWith(
-                                              color: AppColors.textSecondary,
+                                          const SizedBox(width: 14),
+                                          // Category name
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  category.name,
+                                                  style: AppTextStyles.bodyLarge
+                                                      .copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 15,
+                                                  ),
+                                                ),
+                                                if (budget > 0) ...[
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    'Spent: \$${spent.toStringAsFixed(2)}',
+                                                    style: AppTextStyles.caption
+                                                        .copyWith(
+                                                      color: progressColor,
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          // Budget input
+                                          SizedBox(
+                                            width: 110,
+                                            child: TextFormField(
+                                              controller: _categoryControllers[
+                                                  category.name],
+                                              textAlign: TextAlign.end,
+                                              style: AppTextStyles.h3.copyWith(
+                                                fontSize: 17,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                              decoration: InputDecoration(
+                                                hintText: '0',
+                                                hintStyle: TextStyle(
+                                                  color: context.textSecondary
+                                                      .withValues(alpha: 0.4),
+                                                ),
+                                                prefixText: '\$ ',
+                                                prefixStyle: TextStyle(
+                                                  color: context.textSecondary,
+                                                  fontSize: 15,
+                                                ),
+                                                isDense: true,
+                                                border: OutlineInputBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  borderSide: BorderSide.none,
+                                                ),
+                                                filled: true,
+                                                fillColor:
+                                                    context.appSurfaceLight,
+                                                contentPadding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 14,
+                                                  vertical: 14,
+                                                ),
+                                              ),
+                                              keyboardType: const TextInputType
+                                                  .numberWithOptions(
+                                                  decimal: true),
                                             ),
                                           ),
                                         ],
                                       ),
+                                      // Progress bar (only if budget is set)
+                                      if (budget > 0) ...[
+                                        const SizedBox(height: 14),
+                                        ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          child: LinearProgressIndicator(
+                                            value: percentSpent.clamp(0.0, 1.0),
+                                            backgroundColor: AppColors.divider
+                                                .withValues(alpha: 0.2),
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                    progressColor),
+                                            minHeight: 8,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              '${(percentSpent * 100).toStringAsFixed(0)}% used',
+                                              style: AppTextStyles.caption
+                                                  .copyWith(
+                                                color: context.textSecondary,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                            Text(
+                                              '\$${(budget - spent).toStringAsFixed(2)} left',
+                                              style: AppTextStyles.caption
+                                                  .copyWith(
+                                                color: progressColor,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ],
-                                  ],
+                                  ),
                                 ),
                               );
                             },
@@ -412,52 +505,58 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
           },
         ),
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: AppDimensions.spacing16),
-        child: SizedBox(
-          width: MediaQuery.of(context).size.width - 32, // More compact
-          height: AppDimensions.buttonHeight,
-          child: ElevatedButton(
-            onPressed: _saveBudgets,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 4, // Reduced elevation
-              shadowColor: AppColors.primary.withValues(alpha: 0.3),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+      // Fixed bottom save button - stays at bottom even when keyboard opens
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: SizedBox(
+            height: AppDimensions.buttonHeight,
+            child: ElevatedButton(
+              onPressed: _saveBudgets,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 4,
+                shadowColor: AppColors.primary.withValues(alpha: 0.3),
+                shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(AppDimensions.radiusMedium),
+                ),
               ),
-            ),
-            child: const Text(
-              'Save Changes',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+              child: const Text(
+                'Save Changes',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
         ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      resizeToAvoidBottomInset:
+          false, // Prevents button from moving with keyboard
     );
   }
 
-  Widget _buildSummaryItem(String label, double amount, Color color) {
+  Widget _buildWhiteSummaryItem(String label, double amount) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
           style: AppTextStyles.caption.copyWith(
-            color: AppColors.textSecondary,
+            color: Colors.white.withValues(alpha: 0.8),
+            fontSize: 11,
+            letterSpacing: 0.5,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Text(
-          '\$${amount.toStringAsFixed(2)}',
-          style: AppTextStyles.bodyLarge.copyWith(
-            color: color,
+          UtilityFunction.addCommaWithSign(amount),
+          style: AppTextStyles.h3.copyWith(
+            color: Colors.white,
             fontWeight: FontWeight.bold,
+            fontSize: 18,
           ),
         ),
       ],

@@ -97,6 +97,17 @@ class UtilityFunction {
     return "$currency$finalAmount";
   }
 
+  /// Format money with commas and optional decimals
+  /// Example: 1234.56 => "$1,234" or "$1,234.56"
+  static String formatMoney(double value,
+      {bool showDecimals = false, String symbol = '\$'}) {
+    final formatter = NumberFormat.currency(
+      symbol: symbol,
+      decimalDigits: showDecimals ? 2 : 0,
+    );
+    return formatter.format(value);
+  }
+
   static String formatDate(DateTime date) {
     if (isSameDay(date, DateTime.now())) {
       return 'Today';

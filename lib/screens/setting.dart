@@ -92,20 +92,20 @@ class SettingsScreen extends StatelessWidget {
                 context,
                 icon: Icons.backup_outlined,
                 activeIcon: Icons.backup,
-                title: 'Backup Data',
-                subtitle: 'Export your data to a file',
+                title: 'Create Backup',
+                subtitle: 'Export all your data to a ZIP file',
                 onTap: () async {
-                  await BackupService().createBackup(context);
+                  await _createBackup(context);
                 },
               ),
               _buildSettingTile(
                 context,
-                icon: Icons.restore_page_outlined,
-                activeIcon: Icons.restore_page,
-                title: 'Restore Data',
-                subtitle: 'Import data from a backup file',
-                onTap: () async {
-                  await BackupService().restoreBackup(context);
+                icon: Icons.folder_open,
+                activeIcon: Icons.folder_open,
+                title: 'Manage Backups',
+                subtitle: 'View and restore previous backups',
+                onTap: () {
+                  Navigator.pushNamed(context, '/backup_management');
                 },
               ),
               _buildSettingTile(
@@ -187,6 +187,61 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _createBackup(BuildContext context) async {
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text('Creating backup...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final backupService = BackupService();
+      final backupPath = await backupService.createBackup();
+
+      if (!context.mounted) return;
+      Navigator.of(context).pop(); // Close loading dialog
+
+      // Show success dialog with share option
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Backup Created'),
+          content: const Text(
+              'Your backup has been created successfully. Would you like to share it?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                await backupService.shareBackup(backupPath);
+              },
+              child: const Text('Share'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.of(context).pop(); // Close loading dialog
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Backup failed: ${e.toString()}')),
+      );
+    }
+  }
+
   Widget _buildSection(
     BuildContext context, {
     required String title,
@@ -204,8 +259,10 @@ class SettingsScreen extends StatelessWidget {
             title,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color:
-                      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
                 ),
           ),
         ),

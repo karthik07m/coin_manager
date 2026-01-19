@@ -162,6 +162,7 @@ class AppDurations {
 
 // Sample icons list for category selection
 final List<String> categoryIcons = [
+  // Existing icons
   'assets/categories/food.png',
   'assets/categories/groceries.png',
   'assets/categories/shopping.png',
@@ -175,6 +176,32 @@ final List<String> categoryIcons = [
   'assets/categories/other.png',
   'assets/categories/budget.png',
   'assets/categories/diet.png',
+
+  // New expense categories
+  'assets/categories/health.png', // Medical/healthcare expenses
+  'assets/categories/education.png', // School, courses, books
+  'assets/categories/utilities.png', // Electricity, water, gas
+  'assets/categories/gym.png', // Fitness, sports
+  'assets/categories/coffee.png', // Coffee shops, cafes
+  'assets/categories/rent.png', // Housing, rent
+  'assets/categories/insurance.png', // All types of insurance
+  'assets/categories/phone.png', // Mobile, internet bills
+  'assets/categories/pet.png', // Pet care, vet, food
+  'assets/categories/clothing.png', // Fashion, apparel
+  'assets/categories/beauty.png', // Salon, cosmetics
+  'assets/categories/gift.png', // Gifts, donations
+  'assets/categories/subscription.png', // Netflix, Spotify, etc
+  'assets/categories/restaurant.png', // Dining out
+  'assets/categories/car.png', // Fuel, maintenance
+  'assets/categories/home.png', // Home improvement
+  'assets/categories/electronics.png', // Gadgets, tech
+
+  // New income categories
+  'assets/categories/freelance.png', // Freelance work
+  'assets/categories/investment.png', // Investment returns
+  'assets/categories/rental.png', // Rental income
+  'assets/categories/business.png', // Business income
+  'assets/categories/gift_income.png', // Gifts received
 ];
 
 extension TextStyleExtensions on TextStyle {

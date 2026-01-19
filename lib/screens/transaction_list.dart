@@ -8,6 +8,7 @@ import '../models/category.dart';
 import '../providers/category_provider.dart';
 import '../utilities/functions.dart';
 import '../utilities/constants.dart';
+import '../widgets/empty_transaction_state.dart';
 
 class TransactionList extends StatefulWidget {
   const TransactionList({super.key});
@@ -219,76 +220,89 @@ class _TransactionListState extends State<TransactionList> {
                     _loadTransactions();
                   },
                   color: AppColors.primary,
-                  child: AnimationLimiter(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppDimensions.spacing16,
-                        0,
-                        AppDimensions.spacing16,
-                        100, // Bottom padding for Nav Bar
-                      ),
-                      itemCount: filteredTransactions.length,
-                      physics: const AlwaysScrollableScrollPhysics(
-                        parent: BouncingScrollPhysics(),
-                      ),
-                      itemBuilder: (context, index) {
-                        final transaction = filteredTransactions[index];
-                        final showDate = index == 0 ||
-                            !UtilityFunction.isSameDate(transaction.date,
-                                filteredTransactions[index - 1].date);
-
-                        return AnimationConfiguration.staggeredList(
-                          position: index,
-                          duration: const Duration(milliseconds: 375),
-                          child: SlideAnimation(
-                            verticalOffset: 50.0,
-                            child: FadeInAnimation(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (showDate)
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: AppDimensions.spacing12,
-                                        horizontal: AppDimensions.spacing8,
-                                      ),
-                                      child: Text(
-                                        UtilityFunction.formatDate(
-                                            transaction.date),
-                                        style: AppTextStyles.h3.copyWith(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurface,
-                                        ),
-                                      ),
-                                    ),
-                                  FutureBuilder<Category?>(
-                                    future: Provider.of<CategoryProvider>(
-                                            context,
-                                            listen: false)
-                                        .getCategoryDetailsById(
-                                            transaction.categoryId),
-                                    builder: (context, snapshot) {
-                                      final category = snapshot.data;
-                                      if (snapshot.connectionState ==
-                                          ConnectionState.waiting) {
-                                        return const Center(
-                                          child:
-                                              SizedBox(), // Avoids flickering
-                                        );
-                                      }
-                                      return TransactionItem(
-                                          transaction, category);
-                                    },
-                                  ),
-                                ],
-                              ),
+                  child: filteredTransactions.isEmpty
+                      ? Stack(
+                          children: [
+                            ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
                             ),
+                            const Positioned.fill(
+                              child: EmptyTransactionState(),
+                            ),
+                          ],
+                        )
+                      : AnimationLimiter(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppDimensions.spacing16,
+                              0,
+                              AppDimensions.spacing16,
+                              100, // Bottom padding for Nav Bar
+                            ),
+                            itemCount: filteredTransactions.length,
+                            physics: const AlwaysScrollableScrollPhysics(
+                              parent: BouncingScrollPhysics(),
+                            ),
+                            itemBuilder: (context, index) {
+                              final transaction = filteredTransactions[index];
+                              final showDate = index == 0 ||
+                                  !UtilityFunction.isSameDate(transaction.date,
+                                      filteredTransactions[index - 1].date);
+
+                              return AnimationConfiguration.staggeredList(
+                                position: index,
+                                duration: const Duration(milliseconds: 375),
+                                child: SlideAnimation(
+                                  verticalOffset: 50.0,
+                                  child: FadeInAnimation(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        if (showDate)
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: AppDimensions.spacing12,
+                                              horizontal:
+                                                  AppDimensions.spacing8,
+                                            ),
+                                            child: Text(
+                                              UtilityFunction.formatDate(
+                                                  transaction.date),
+                                              style: AppTextStyles.h3.copyWith(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface,
+                                              ),
+                                            ),
+                                          ),
+                                        FutureBuilder<Category?>(
+                                          future: Provider.of<CategoryProvider>(
+                                                  context,
+                                                  listen: false)
+                                              .getCategoryDetailsById(
+                                                  transaction.categoryId),
+                                          builder: (context, snapshot) {
+                                            final category = snapshot.data;
+                                            if (snapshot.connectionState ==
+                                                ConnectionState.waiting) {
+                                              return const Center(
+                                                child:
+                                                    SizedBox(), // Avoids flickering
+                                              );
+                                            }
+                                            return TransactionItem(
+                                                transaction, category);
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
-                  ),
+                        ),
                 );
               },
             ),
@@ -569,7 +583,7 @@ class _TransactionListState extends State<TransactionList> {
                 visualDensity: VisualDensity.compact,
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );

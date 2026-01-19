@@ -107,7 +107,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   Future<void> _calculateAllocation() async {
-    final income = double.tryParse(_incomeController.text) ?? 0.0;
+    final income =
+        double.tryParse(_incomeController.text.replaceAll(',', '')) ?? 0.0;
     final budget = income * (1 - _savingsPercentage / 100);
     final categoryProvider =
         Provider.of<CategoryProvider>(context, listen: false);
@@ -128,7 +129,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   Future<void> _completeOnboarding() async {
-    final income = double.tryParse(_incomeController.text) ?? 0.0;
+    final income =
+        double.tryParse(_incomeController.text.replaceAll(',', '')) ?? 0.0;
 
     if (income <= 0) {
       if (!mounted) return;
@@ -799,7 +801,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   Widget _buildSavingsGoalPage() {
-    final income = double.tryParse(_incomeController.text) ?? 0.0;
+    final income =
+        double.tryParse(_incomeController.text.replaceAll(',', '')) ?? 0.0;
     final savingsAmount = income * (_savingsPercentage / 100);
     final budgetAmount = income - savingsAmount;
 

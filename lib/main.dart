@@ -7,6 +7,7 @@ import 'providers/category_provider.dart';
 import 'providers/transaction_provider.dart';
 import 'providers/monthly_budget_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/debt_provider.dart';
 
 import 'screens/category_manger.dart';
 import 'screens/create_category.dart';
@@ -14,6 +15,11 @@ import 'screens/menu_scrn.dart';
 import 'screens/transaction_form.dart';
 import 'screens/privacy_policy.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/manage_budget.dart';
+import 'screens/backup_management_screen.dart';
+import 'screens/debt_list_screen.dart';
+import 'screens/debt_form_screen.dart';
+import 'screens/debt_detail_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -38,6 +44,9 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (context) => SettingsProvider(),
         ),
+        ChangeNotifierProvider(
+          create: (context) => DebtProvider(),
+        ),
       ],
       child: Consumer<SettingsProvider>(
         builder: (context, settings, child) {
@@ -47,16 +56,17 @@ class MyApp extends StatelessWidget {
             theme: ThemeData(
               brightness: Brightness.light,
               colorScheme: ColorScheme.light(
-                primary: AppColors.primary,
-                secondary: AppColors.secondary,
-                surface: Colors.white,
+                primary: const Color(0xFF4CAF50), // Softer green for light mode
+                secondary: const Color(0xFF2196F3), // Blue instead of gold
+                surface: const Color(0xFFFEFEFE), // Off-white
                 onPrimary: Colors.white,
-                onSecondary: Colors.black,
-                onSurface: Colors.black,
+                onSecondary: Colors.white,
+                onSurface: const Color(0xFF1F2937), // Softer dark text
               ),
-              scaffoldBackgroundColor: Colors.grey[50],
+              scaffoldBackgroundColor:
+                  const Color(0xFFF6F7F9), // Warmer, softer gray
               cardTheme: CardThemeData(
-                color: Colors.white,
+                color: const Color(0xFFFEFEFE), // Off-white
                 elevation: AppDimensions.elevationMedium,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.all(
@@ -64,17 +74,19 @@ class MyApp extends StatelessWidget {
                 ),
               ),
               appBarTheme: AppBarTheme(
-                backgroundColor: Colors.white,
-                elevation: 0,
+                backgroundColor: const Color(0xFFFEFEFE), // Off-white
+                elevation: 0.5, // Subtle elevation for depth
                 centerTitle: true,
-                titleTextStyle: AppTextStyles.h2.copyWith(color: Colors.black),
-                iconTheme: IconThemeData(
-                  color: Colors.black,
+                titleTextStyle: AppTextStyles.h2.copyWith(
+                  color: const Color(0xFF1F2937), // Softer dark
+                ),
+                iconTheme: const IconThemeData(
+                  color: Color(0xFF1F2937), // Softer dark
                   size: AppDimensions.iconMedium,
                 ),
               ),
-              iconTheme: IconThemeData(
-                color: Colors.black,
+              iconTheme: const IconThemeData(
+                color: Color(0xFF1F2937), // Softer dark
                 size: AppDimensions.iconMedium,
               ),
               textTheme: TextTheme(
@@ -87,8 +99,8 @@ class MyApp extends StatelessWidget {
                 labelLarge: AppTextStyles.amount,
                 labelSmall: AppTextStyles.caption,
               ).apply(
-                bodyColor: Colors.black,
-                displayColor: Colors.black,
+                bodyColor: const Color(0xFF1F2937), // Softer dark
+                displayColor: const Color(0xFF1F2937), // Softer dark
               ),
               useMaterial3: true,
             ),
@@ -154,6 +166,13 @@ class MyApp extends StatelessWidget {
               PrivacyPolicyScreen.routeName: (ctx) =>
                   const PrivacyPolicyScreen(),
               OnboardingScreen.routeName: (ctx) => const OnboardingScreen(),
+              '/manageBudget': (ctx) => const ManageBudgetScreen(),
+              BackupManagementScreen.routeName: (ctx) =>
+                  const BackupManagementScreen(),
+              DebtListScreen.routeName: (ctx) => const DebtListScreen(),
+              DebtFormScreen.routeName: (ctx) => const DebtFormScreen(),
+              DebtDetailScreen.routeName: (ctx) =>
+                  const DebtDetailScreen(debtId: ''),
             },
           );
         },

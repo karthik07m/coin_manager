@@ -2,6 +2,7 @@ import 'package:coin_manager/widgets/custom_nav_bar.dart'; // Import CustomNavBa
 import 'package:flutter/material.dart';
 import 'home_scrn.dart';
 import 'transaction_list.dart';
+import 'charts_screen.dart';
 import 'monthly_budget_screen.dart';
 import 'setting.dart';
 import 'transaction_form.dart';
@@ -22,12 +23,13 @@ class MenuScrn extends StatefulWidget {
 class BottomNavBarState extends State<MenuScrn> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = [
-    const HomePage(),
-    const TransactionList(),
-    const MonthlyBudgetScreen(), // New dedicated budget screen
-    const SettingsScreen(),
-  ];
+  List<Widget> get _screens => [
+        HomePage(onTabSelected: _onItemTapped),
+        const TransactionList(),
+        const ChartsScreen(), // Charts screen
+        const MonthlyBudgetScreen(), // Budget tracker screen
+        const SettingsScreen(),
+      ];
 
   @override
   void initState() {

@@ -2,6 +2,7 @@ import 'package:coin_manager/utilities/functions.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utilities/constants.dart';
+import '../utilities/theme_helper.dart';
 
 class BalanceCard extends StatelessWidget {
   final double screenWidth;
@@ -23,81 +24,16 @@ class BalanceCard extends StatelessWidget {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-          ),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 300),
-            padding: const EdgeInsets.all(AppDimensions.spacing16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Select Month',
-                  style: AppTextStyles.h3.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: AppDimensions.spacing16),
-                SizedBox(
-                  height: 300,
-                  child: GridView.builder(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      childAspectRatio: 2.2,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                    ),
-                    itemCount: 12,
-                    itemBuilder: (context, index) {
-                      final date = DateTime(DateTime.now().year, index + 1);
-                      final isSelected = date.month == selectedMonth.month;
-
-                      return InkWell(
-                        onTap: () {
-                          Navigator.pop(context);
-                          onMonthChanged(DateTime(date.year, date.month));
-                        },
-                        borderRadius:
-                            BorderRadius.circular(AppDimensions.radiusSmall),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? AppColors.primary
-                                : AppColors.surfaceLight,
-                            borderRadius: BorderRadius.circular(
-                                AppDimensions.radiusSmall),
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppColors.primary
-                                  : AppColors.divider,
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              DateFormat('MMM').format(date),
-                              style: TextStyle(
-                                color: isSelected
-                                    ? Colors.white
-                                    : AppColors.textPrimary,
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return _MonthPickerDialog(
+              initialDate: selectedMonth,
+              onMonthSelected: (date) {
+                onMonthChanged(date);
+                Navigator.pop(context);
+              },
+            );
+          },
         );
       },
     );
@@ -107,6 +43,7 @@ class BalanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     double balance = totalIncome - totalExpenses;
     bool isPositive = balance >= 0;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: AppDimensions.spacing16),
@@ -114,22 +51,32 @@ class BalanceCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            AppColors.primary.withValues(alpha: 0.15),
-            AppColors.accentBlue.withValues(alpha: 0.1),
-            AppColors.surfaceLight,
-          ],
+          colors: isDark
+              ? [
+                  AppColors.primary.withValues(alpha: 0.15),
+                  AppColors.accentBlue.withValues(alpha: 0.1),
+                  AppColors.surfaceLight,
+                ]
+              : [
+                  const Color(0xFFFAFBFC), // Warmer very light gray
+                  const Color(0xFFF8F9FA), // Soft warm gray
+                  const Color(0xFFFEFEFE), // Off-white
+                ],
         ),
         borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
         border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.2),
+          color: isDark
+              ? AppColors.primary.withValues(alpha: 0.2)
+              : Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: isDark
+                ? AppColors.primary.withValues(alpha: 0.1)
+                : Colors.black.withValues(alpha: 0.05),
+            blurRadius: isDark ? 20 : 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -184,10 +131,10 @@ class BalanceCard extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.background,
+                      color: context.appSurfaceLight,
                       borderRadius:
                           BorderRadius.circular(AppDimensions.radiusSmall),
-                      border: Border.all(color: AppColors.divider),
+                      border: Border.all(color: context.appBorder),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -235,7 +182,7 @@ class BalanceCard extends StatelessWidget {
                           fontSize: 36,
                           fontWeight: FontWeight.bold,
                           color: isPositive
-                              ? AppColors.textPrimary
+                              ? context.textPrimary
                               : AppColors.negative,
                           height: 1.2,
                         ),
@@ -292,6 +239,7 @@ class BalanceCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: _buildMetricCard(
+                    context,
                     label: 'Income',
                     amount: totalIncome,
                     icon: Icons.arrow_upward_rounded,
@@ -302,6 +250,7 @@ class BalanceCard extends StatelessWidget {
                 const SizedBox(width: AppDimensions.spacing12),
                 Expanded(
                   child: _buildMetricCard(
+                    context,
                     label: 'Expenses',
                     amount: totalExpenses,
                     icon: Icons.arrow_downward_rounded,
@@ -317,7 +266,8 @@ class BalanceCard extends StatelessWidget {
     );
   }
 
-  Widget _buildMetricCard({
+  Widget _buildMetricCard(
+    BuildContext context, {
     required String label,
     required double amount,
     required IconData icon,
@@ -327,7 +277,7 @@ class BalanceCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppDimensions.spacing12),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
         border: Border.all(
           color: color.withValues(alpha: 0.2),
@@ -355,7 +305,7 @@ class BalanceCard extends StatelessWidget {
               Text(
                 label,
                 style: AppTextStyles.caption.copyWith(
-                  color: AppColors.textSecondary,
+                  color: context.textSecondary,
                   fontSize: 11,
                 ),
               ),
@@ -363,7 +313,7 @@ class BalanceCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '\$${amount.toStringAsFixed(2)}',
+            UtilityFunction.addCommaWithSign(amount),
             style: AppTextStyles.bodyLarge.copyWith(
               fontWeight: FontWeight.bold,
               fontSize: 16,
@@ -371,6 +321,155 @@ class BalanceCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Extracting to a separate widget to cleaner state management for year navigation
+class _MonthPickerDialog extends StatefulWidget {
+  final DateTime initialDate;
+  final ValueChanged<DateTime> onMonthSelected;
+
+  const _MonthPickerDialog({
+    required this.initialDate,
+    required this.onMonthSelected,
+  });
+
+  @override
+  State<_MonthPickerDialog> createState() => _MonthPickerDialogState();
+}
+
+class _MonthPickerDialogState extends State<_MonthPickerDialog> {
+  late DateTime _viewingDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _viewingDate = widget.initialDate;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final months = List.generate(12, (index) {
+      return DateTime(_viewingDate.year, index + 1);
+    });
+
+    return Dialog(
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+      ),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 340),
+        padding: const EdgeInsets.all(AppDimensions.spacing20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header with Year Navigation
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Select Month',
+                  style: AppTextStyles.h3.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _viewingDate = DateTime(
+                            _viewingDate.year - 1,
+                            _viewingDate.month,
+                          );
+                        });
+                      },
+                      icon: const Icon(Icons.chevron_left,
+                          color: AppColors.textSecondary),
+                    ),
+                    Text(
+                      '${_viewingDate.year}',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: context.textPrimary,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _viewingDate = DateTime(
+                            _viewingDate.year + 1,
+                            _viewingDate.month,
+                          );
+                        });
+                      },
+                      icon: const Icon(Icons.chevron_right,
+                          color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: AppDimensions.spacing20),
+            // Month Grid
+            SizedBox(
+              height: 240,
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  childAspectRatio: 1.8,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: months.length,
+                itemBuilder: (context, index) {
+                  final month = months[index];
+                  final isSelected = month.month == widget.initialDate.month &&
+                      month.year == widget.initialDate.year;
+
+                  return InkWell(
+                    onTap: () => widget.onMonthSelected(month),
+                    borderRadius:
+                        BorderRadius.circular(AppDimensions.radiusMedium),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.primary
+                            : context.appBackground,
+                        borderRadius:
+                            BorderRadius.circular(AppDimensions.radiusMedium),
+                        border: isSelected
+                            ? null
+                            : Border.all(
+                                color: AppColors.divider,
+                                width: 1,
+                              ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          DateFormat('MMM').format(month),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: isSelected
+                                ? context.textPrimary
+                                : context.textSecondary,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -50,6 +50,7 @@ class TransactionProvider extends ChangeNotifier {
         DateTime(transaction.date.year, transaction.date.month + 1, 0);
 
     _updateTotalsForMonth(startDate, endDate);
+    _calculateCategoryAmounts(); // Update pie chart categories
     notifyListeners();
   }
 
@@ -65,6 +66,7 @@ class TransactionProvider extends ChangeNotifier {
           DateTime(transaction.date.year, transaction.date.month + 1, 0);
 
       _updateTotalsForMonth(startDate, endDate);
+      _calculateCategoryAmounts(); // Update pie chart categories
       notifyListeners();
     }
   }
@@ -80,6 +82,7 @@ class TransactionProvider extends ChangeNotifier {
         DateTime(transaction.date.year, transaction.date.month + 1, 0);
 
     _updateTotalsForMonth(startDate, endDate);
+    _calculateCategoryAmounts(); // Update pie chart categories
     notifyListeners();
   }
 

@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/category.dart';
@@ -9,6 +9,7 @@ import '../models/receipt.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/category_provider.dart';
 import '../utilities/constants.dart';
+import '../utilities/theme_helper.dart';
 import '../widgets/calculator_field.dart';
 import '../db/receipt_db_helper.dart';
 import 'create_category.dart';
@@ -123,6 +124,9 @@ class TransactionFormState extends State<TransactionForm> {
           _amountController.text =
               (result['amount'] as double).toStringAsFixed(2);
         }
+        if (result['date'] != null) {
+          _selectedDate = result['date'] as DateTime;
+        }
       });
     }
   }
@@ -228,9 +232,16 @@ class TransactionFormState extends State<TransactionForm> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.add_circle_outline),
-                    onPressed: () {
-                      Navigator.of(context)
+                    onPressed: () async {
+                      await Navigator.of(context)
                           .pushNamed(CreateCategoryScreen.routeName);
+                      // If a category was created, refresh the list
+                      if (context.mounted) {
+                        final categoryProvider = Provider.of<CategoryProvider>(
+                            context,
+                            listen: false);
+                        await _fetchAndMapCategories(categoryProvider);
+                      }
                     },
                   ),
                 ],
@@ -244,7 +255,7 @@ class TransactionFormState extends State<TransactionForm> {
                     padding: const EdgeInsets.all(AppDimensions.spacing16),
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
+                      crossAxisCount: 3,
                       childAspectRatio: 0.8,
                       crossAxisSpacing: AppDimensions.spacing16,
                       mainAxisSpacing: AppDimensions.spacing16,
@@ -262,14 +273,27 @@ class TransactionFormState extends State<TransactionForm> {
                         },
                         child: Container(
                           decoration: BoxDecoration(
+                            gradient: isSelected
+                                ? LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Theme.of(context)
+                                          .colorScheme
+                                          .primary
+                                          .withValues(alpha: 0.2),
+                                      Theme.of(context)
+                                          .colorScheme
+                                          .primary
+                                          .withValues(alpha: 0.05),
+                                    ],
+                                  )
+                                : null,
                             color: isSelected
-                                ? Theme.of(context)
-                                    .colorScheme
-                                    .primary
-                                    .withValues(alpha: 0.1)
+                                ? null
                                 : Theme.of(context).colorScheme.surface,
                             borderRadius: BorderRadius.circular(
-                                AppDimensions.radiusMedium),
+                                AppDimensions.radiusLarge),
                             border: Border.all(
                               color: isSelected
                                   ? Theme.of(context).colorScheme.primary
@@ -277,33 +301,63 @@ class TransactionFormState extends State<TransactionForm> {
                                       .colorScheme
                                       .outline
                                       .withValues(alpha: 0.1),
-                              width: 1,
+                              width: isSelected ? 2 : 1,
                             ),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary
+                                          .withValues(alpha: 0.15),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4),
+                                    )
+                                  ]
+                                : [],
                           ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Image.asset(
-                                category.icon,
-                                width: 32,
-                                height: 32,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    Icon(
-                                  Icons.category,
-                                  size: 32,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface
-                                      .withValues(alpha: 0.6),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isSelected
+                                      ? Theme.of(context)
+                                          .colorScheme
+                                          .primary
+                                          .withValues(alpha: 0.1)
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .surfaceContainerHighest
+                                          .withValues(alpha: 0.5),
+                                ),
+                                child: Image.asset(
+                                  category.icon,
+                                  width: 36,
+                                  height: 36,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Icon(
+                                    Icons.category,
+                                    size: 36,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.6),
+                                  ),
                                 ),
                               ),
-                              const SizedBox(height: AppDimensions.spacing8),
+                              const SizedBox(height: AppDimensions.spacing12),
                               Text(
                                 category.name,
                                 style: Theme.of(context)
                                     .textTheme
-                                    .bodySmall
+                                    .bodyMedium
                                     ?.copyWith(
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.w500,
                                       color: isSelected
                                           ? Theme.of(context)
                                               .colorScheme
@@ -311,7 +365,7 @@ class TransactionFormState extends State<TransactionForm> {
                                           : Theme.of(context)
                                               .colorScheme
                                               .onSurface
-                                              .withValues(alpha: 0.6),
+                                              .withValues(alpha: 0.8),
                                     ),
                                 textAlign: TextAlign.center,
                                 maxLines: 2,
@@ -354,7 +408,7 @@ class TransactionFormState extends State<TransactionForm> {
       Transaction newTransaction = Transaction.createNew(
         id: id,
         title: _titleController.text,
-        amount: double.parse(_amountController.text),
+        amount: double.parse(_amountController.text.replaceAll(',', '')),
         categoryId: selectedCategory,
         date: _selectedDate,
         isExpense: _isExpense,
@@ -398,7 +452,7 @@ class TransactionFormState extends State<TransactionForm> {
                   context: context,
                   builder: (BuildContext context) {
                     return AlertDialog(
-                      backgroundColor: AppColors.surface,
+                      backgroundColor: context.appSurface,
                       title: Row(
                         children: [
                           const Icon(Icons.warning,
@@ -420,7 +474,7 @@ class TransactionFormState extends State<TransactionForm> {
                           child: Text(
                             "Cancel",
                             style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.textSecondary,
+                              color: context.textSecondary,
                             ),
                           ),
                         ),

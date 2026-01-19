@@ -104,14 +104,9 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                               child: Center(
                                 child: Image.asset(
                                   icon,
-                                  width: 40,
-                                  height: 40,
-                                  color: categoryIconController.text == icon
-                                      ? Colors.white
-                                      : Theme.of(context)
-                                          .colorScheme
-                                          .onSurface
-                                          .withValues(alpha: 0.8),
+                                  width: 50,
+                                  height: 50,
+                                  fit: BoxFit.contain,
                                 ),
                               ),
                             ),
