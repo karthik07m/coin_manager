@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/transaction.dart';
 import '../models/category.dart';
 import '../screens/transaction_form.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
+import '../providers/settings_provider.dart';
 
 class TransactionItem extends StatelessWidget {
   final Transaction transaction;
@@ -136,19 +138,33 @@ class TransactionItem extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppDimensions.spacing12),
+          // Amount with efficient currency selector
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                '${isExpense ? '-' : '+'}${UtilityFunction.addCommaWithSign(transaction.amount).substring(1)}',
-                style: AppTextStyles.amount.copyWith(
-                  color: amountColor,
-                  fontSize: 16,
+              Selector<SettingsProvider, ({String symbol, String code})>(
+                selector: (_, settings) => (
+                  symbol: settings.currencySymbol,
+                  code: settings.currencyCode,
                 ),
+                builder: (context, currency, _) {
+                  return Text(
+                    '${isExpense ? '-' : '+'}${UtilityFunction.addCommaWithSign(
+                      transaction.amount,
+                      currencySymbol: currency.symbol,
+                      currencyCode: currency.code,
+                    )}',
+                    style: AppTextStyles.amount.copyWith(
+                      color: amountColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 4),
               Text(
-                _formatTime(transaction.date),
+                _formatTime(context, transaction.date),
                 style: AppTextStyles.caption.copyWith(
                   fontSize: 10,
                 ),
@@ -160,10 +176,9 @@ class TransactionItem extends StatelessWidget {
     );
   }
 
-  String _formatTime(DateTime date) {
-    final hour = date.hour.toString().padLeft(2, '0');
-    final minute = date.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
+  String _formatTime(BuildContext context, DateTime date) {
+    final use24Hour = context.watch<SettingsProvider>().use24HourFormat;
+    return UtilityFunction.formatTime(date, use24Hour: use24Hour);
   }
 
   Future<bool?> _showConfirmDialog(BuildContext context) {

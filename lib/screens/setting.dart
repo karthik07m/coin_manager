@@ -47,6 +47,15 @@ class SettingsScreen extends StatelessWidget {
                       builder: (context) => const ManageBudgetScreen()),
                 ),
               ),
+              _buildSettingTile(
+                context,
+                icon: Icons.account_balance_outlined,
+                activeIcon: Icons.account_balance,
+                title: 'Manage Accounts',
+                subtitle: 'Add, edit accounts for tracking transactions',
+                onTap: () =>
+                    Navigator.pushNamed(context, '/account-management'),
+              ),
             ],
           ),
           const SizedBox(height: AppDimensions.spacing24),
@@ -78,6 +87,55 @@ class SettingsScreen extends StatelessWidget {
                         settings.toggleTheme(value);
                       },
                     ),
+                  );
+                },
+              ),
+              Consumer<SettingsProvider>(
+                builder: (context, settings, child) {
+                  return _buildSettingTile(
+                    context,
+                    icon: Icons.access_time_outlined,
+                    activeIcon: Icons.access_time,
+                    title: 'Time Format',
+                    subtitle: settings.use24HourFormat
+                        ? '24-hour format (14:30)'
+                        : '12-hour format (2:30 PM)',
+                    trailing: Switch(
+                      value: settings.use24HourFormat,
+                      onChanged: (value) {
+                        settings.toggleTimeFormat(value);
+                      },
+                    ),
+                  );
+                },
+              ),
+              Consumer<SettingsProvider>(
+                builder: (context, settings, child) {
+                  return _buildSettingTile(
+                    context,
+                    icon: Icons.notifications_outlined,
+                    activeIcon: Icons.notifications,
+                    title: 'Daily Reminder',
+                    subtitle: settings.enableNotifications
+                        ? 'Remind at ${settings.notificationTime.format(context)}'
+                        : 'Daily reminder disabled',
+                    trailing: Switch(
+                      value: settings.enableNotifications,
+                      onChanged: (value) {
+                        settings.toggleNotifications(value);
+                      },
+                    ),
+                    onTap: settings.enableNotifications
+                        ? () async {
+                            final TimeOfDay? picked = await showTimePicker(
+                              context: context,
+                              initialTime: settings.notificationTime,
+                            );
+                            if (picked != null) {
+                              settings.setNotificationTime(picked);
+                            }
+                          }
+                        : null,
                   );
                 },
               ),

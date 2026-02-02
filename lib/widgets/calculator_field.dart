@@ -1,137 +1,197 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:math_expressions/math_expressions.dart';
-import 'calculator_keyboard.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 
 class CalculatorTextFormField extends StatefulWidget {
   final TextEditingController controller;
+  final String currencySymbol;
 
-  const CalculatorTextFormField({super.key, required this.controller});
+  const CalculatorTextFormField({
+    super.key,
+    required this.controller,
+    this.currencySymbol = '\$',
+  });
 
   @override
   CalculatorTextFormFieldState createState() => CalculatorTextFormFieldState();
 }
 
 class CalculatorTextFormFieldState extends State<CalculatorTextFormField> {
-  // Use ValueNotifier for targeted rebuilds instead of setState
-  final ValueNotifier<bool> _showKeyboard = ValueNotifier<bool>(false);
-  final ValueNotifier<String> _displayValue = ValueNotifier<String>('0.00');
-
-  int _centsValue = 0;
+  final ValueNotifier<String> _displayValue = ValueNotifier<String>('0');
 
   @override
   void initState() {
     super.initState();
     _initializeFromController();
-
-    // Sync display value with controller
     widget.controller.addListener(_syncFromController);
   }
 
   void _initializeFromController() {
     if (widget.controller.text.isNotEmpty) {
-      try {
-        final value = double.parse(widget.controller.text.replaceAll(',', ''));
-        _centsValue = (value * 100).round();
-        _displayValue.value = _formatCurrency(_centsValue / 100.0);
-      } catch (e) {
-        _centsValue = 0;
-        _displayValue.value = '0.00';
-      }
+      _displayValue.value = widget.controller.text;
     }
   }
 
   void _syncFromController() {
-    // Only sync if controller has a valid number
-    final text = widget.controller.text.replaceAll(',', '');
-    final value = double.tryParse(text);
-    if (value != null) {
-      _displayValue.value = _formatCurrency(value);
+    final text = widget.controller.text;
+    if (text.isNotEmpty) {
+      _displayValue.value = text;
     }
   }
 
-  void _toggleKeyboard() {
-    // Dismiss system keyboard first
+  void _showCalculatorBottomSheet() {
+    HapticFeedback.selectionClick();
     FocusManager.instance.primaryFocus?.unfocus();
 
-    HapticFeedback.selectionClick();
-    _showKeyboard.value = !_showKeyboard.value;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _CalculatorBottomSheet(
+        initialValue: widget.controller.text,
+        currencySymbol: widget.currencySymbol,
+        onDone: (value) {
+          setState(() {
+            widget.controller.text = value;
+            _displayValue.value = value;
+          });
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _showCalculatorBottomSheet,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+          border: Border.all(
+            color: context.textSecondary.withValues(alpha: 0.2),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: ValueListenableBuilder<String>(
+                valueListenable: _displayValue,
+                builder: (context, display, _) {
+                  return Text(
+                    '${widget.currencySymbol}${display.isEmpty ? '0' : display}',
+                    style: AppTextStyles.h2.copyWith(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: context.textPrimary,
+                    ),
+                    textAlign: TextAlign.left,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  );
+                },
+              ),
+            ),
+            Icon(
+              Icons.calculate,
+              color: context.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _displayValue.dispose();
+    super.dispose();
+  }
+}
+
+class _CalculatorBottomSheet extends StatefulWidget {
+  final String initialValue;
+  final String currencySymbol;
+  final Function(String) onDone;
+
+  const _CalculatorBottomSheet({
+    required this.initialValue,
+    required this.currencySymbol,
+    required this.onDone,
+  });
+
+  @override
+  State<_CalculatorBottomSheet> createState() => _CalculatorBottomSheetState();
+}
+
+class _CalculatorBottomSheetState extends State<_CalculatorBottomSheet> {
+  late String _currentValue;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentValue = widget.initialValue.isEmpty ? '0' : widget.initialValue;
   }
 
   void _onKeyTap(String key) {
     HapticFeedback.selectionClick();
+    setState(() {
+      String cleanValue = _currentValue.replaceAll(',', '');
+      if (cleanValue == '0') cleanValue = '';
 
-    if (['+', '-', '*', '/'].contains(key)) {
-      // Operator - append to expression
-      final current = widget.controller.text;
-      widget.controller.text = current + key;
-      _displayValue.value = widget.controller.text;
-    } else if (key == '.') {
-      // Ignore - handled automatically
-    } else {
-      // Number - cents-first entry
-      final digit = int.tryParse(key) ?? 0;
-      _centsValue = _centsValue * 10 + digit;
-      _updateDisplay();
-    }
-  }
-
-  void _updateDisplay() {
-    final dollars = _centsValue / 100.0;
-    final formatted = _formatCurrency(dollars);
-    widget.controller.text = formatted;
-    _displayValue.value = formatted;
-  }
-
-  // Optimized currency formatter - pure function, no rebuilds
-  String _formatCurrency(double value) {
-    final parts = value.toStringAsFixed(2).split('.');
-    final intPart = parts[0];
-    final decPart = parts[1];
-
-    if (intPart.length <= 3) {
-      return '$intPart.$decPart';
-    }
-
-    // Add commas for thousands
-    final buffer = StringBuffer();
-    int count = 0;
-    for (int i = intPart.length - 1; i >= 0; i--) {
-      if (count > 0 && count % 3 == 0) {
-        buffer.write(',');
+      if (['+', '-', '×', '÷'].contains(key)) {
+        // Operator
+        if (cleanValue.isEmpty) return;
+        _currentValue = cleanValue + key;
+      } else if (key == '.') {
+        // Decimal point
+        if (cleanValue.contains(RegExp(r'[+\-×÷]'))) {
+          final parts = cleanValue.split(RegExp(r'[+\-×÷]'));
+          if (!parts.last.contains('.')) {
+            _currentValue = cleanValue + key;
+          }
+        } else if (!cleanValue.contains('.')) {
+          _currentValue = cleanValue.isEmpty ? '0.' : cleanValue + key;
+        }
+      } else {
+        // Number
+        _currentValue = cleanValue + key;
       }
-      buffer.write(intPart[i]);
-      count++;
-    }
-
-    return '${buffer.toString().split('').reversed.join()}.$decPart';
+    });
   }
 
   void _onBackspace() {
     HapticFeedback.lightImpact();
-    _centsValue = _centsValue ~/ 10;
-    _updateDisplay();
-  }
-
-  void _onClear() {
-    HapticFeedback.heavyImpact();
-    _centsValue = 0;
-    widget.controller.text = '0.00';
-    _displayValue.value = '0.00';
+    setState(() {
+      if (_currentValue.isNotEmpty && _currentValue != '0') {
+        _currentValue = _currentValue.substring(0, _currentValue.length - 1);
+        if (_currentValue.isEmpty) _currentValue = '0';
+      }
+    });
   }
 
   void _onEvaluate() {
     HapticFeedback.mediumImpact();
     try {
-      String expression = widget.controller.text.replaceAll(',', '');
-      final parser = GrammarParser();
-      final exp = parser.parse(expression);
-      final contextModel = ContextModel();
-      final result = RealEvaluator(contextModel).evaluate(exp);
-      _centsValue = (result * 100).round();
-      _updateDisplay();
+      String expression = _currentValue
+          .replaceAll(',', '')
+          .replaceAll('×', '*')
+          .replaceAll('÷', '/');
+
+      if (expression.contains(RegExp(r'[+\-*/]'))) {
+        final parser = GrammarParser();
+        final exp = parser.parse(expression);
+        final contextModel = ContextModel();
+        final result = RealEvaluator(contextModel).evaluate(exp);
+        setState(() {
+          _currentValue = result.toString();
+        });
+      }
     } catch (e) {
       // Keep current value on error
     }
@@ -139,123 +199,178 @@ class CalculatorTextFormFieldState extends State<CalculatorTextFormField> {
 
   void _onDone() {
     _onEvaluate();
-    _showKeyboard.value = false;
+    widget.onDone(_currentValue);
+    Navigator.pop(context);
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Amount Input Field - uses ValueListenableBuilder for targeted rebuilds
-        GestureDetector(
-          onTap: _toggleKeyboard,
-          child: ValueListenableBuilder<bool>(
-            valueListenable: _showKeyboard,
-            builder: (context, showKeyboard, child) {
-              return Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                decoration: BoxDecoration(
-                  color: context.appSurface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: showKeyboard
-                        ? AppColors.primary
-                        : AppColors.divider.withValues(alpha: 0.3),
-                    width: showKeyboard ? 2 : 1,
-                  ),
-                  boxShadow: showKeyboard
-                      ? [
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: child,
-              );
-            },
-            child: Row(
-              children: [
-                // Dollar badge - const widget, never rebuilds
-                const _DollarBadge(),
-                const SizedBox(width: 16),
-                // Amount display - only rebuilds when value changes
-                Expanded(
-                  child: ValueListenableBuilder<String>(
-                    valueListenable: _displayValue,
-                    builder: (context, value, _) {
-                      return Text(
-                        value,
-                        style: AppTextStyles.h2.copyWith(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: context.textPrimary,
-                        ),
-                        textAlign: TextAlign.right,
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        // Calculator Keyboard - wrapped in RepaintBoundary for isolation
-        ValueListenableBuilder<bool>(
-          valueListenable: _showKeyboard,
-          builder: (context, showKeyboard, _) {
-            if (!showKeyboard) return const SizedBox.shrink();
-
-            return RepaintBoundary(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: CalculatorKeyboard(
-                  onKeyTap: _onKeyTap,
-                  onBackspace: _onBackspace,
-                  onClear: _onClear,
-                  onEvaluate: _onEvaluate,
-                  onDone: _onDone,
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_syncFromController);
-    _showKeyboard.dispose();
-    _displayValue.dispose();
-    super.dispose();
-  }
-}
-
-// Extracted const widget - zero rebuilds
-class _DollarBadge extends StatelessWidget {
-  const _DollarBadge();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        color: context.appBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Text(
-        '\$',
-        style: AppTextStyles.h2.copyWith(
-          color: AppColors.primary,
-          fontWeight: FontWeight.bold,
-          fontSize: 24,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag handle
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: context.textSecondary.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Title
+              Text(
+                'Enter Amount',
+                style: AppTextStyles.h2.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: context.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Amount Display
+              Container(
+                width: double.infinity,
+                alignment: Alignment.centerRight,
+                padding:
+                    const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                child: Text(
+                  '${widget.currencySymbol}$_currentValue',
+                  style: AppTextStyles.h1.copyWith(
+                    fontSize: 48,
+                    fontWeight: FontWeight.bold,
+                    color: context.textPrimary,
+                  ),
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Calculator Keypad - Dark theme
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: context.appSurface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    _buildKeyRow(context, ['7', '8', '9', '÷']),
+                    const SizedBox(height: 12),
+                    _buildKeyRow(context, ['4', '5', '6', '×']),
+                    const SizedBox(height: 12),
+                    _buildKeyRow(context, ['1', '2', '3', '-']),
+                    const SizedBox(height: 12),
+                    _buildKeyRow(context, ['0', '.', '⌫', '+']),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Set Amount Button - Green accent
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _onDone,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.check, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Done',
+                        style: AppTextStyles.bodyLarge.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKeyRow(BuildContext context, List<String> keys) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: keys.map((key) => _buildKey(context, key)).toList(),
+    );
+  }
+
+  Widget _buildKey(BuildContext context, String key) {
+    final isOperator = ['+', '-', '×', '÷'].contains(key);
+    final isBackspace = key == '⌫';
+
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: Material(
+            color: isOperator
+                ? AppColors.primary.withValues(alpha: 0.15)
+                : context.appSurfaceLight,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(
+              onTap: () {
+                if (isBackspace) {
+                  _onBackspace();
+                } else {
+                  _onKeyTap(key);
+                }
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                alignment: Alignment.center,
+                child: isBackspace
+                    ? Icon(
+                        Icons.backspace_outlined,
+                        size: 24,
+                        color: context.textSecondary,
+                      )
+                    : Text(
+                        key,
+                        style: TextStyle(
+                          fontSize: isOperator ? 28 : 24,
+                          fontWeight: FontWeight.w500,
+                          color: isOperator
+                              ? AppColors.primary
+                              : context.textPrimary,
+                        ),
+                      ),
+              ),
+            ),
+          ),
         ),
       ),
     );

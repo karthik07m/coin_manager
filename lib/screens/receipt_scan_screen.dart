@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/receipt_scanner_service.dart';
+import '../utilities/constants.dart';
+import '../utilities/theme_helper.dart';
 
 class ReceiptScanScreen extends StatefulWidget {
   const ReceiptScanScreen({super.key});
@@ -107,28 +109,74 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: context.appBackground,
       appBar: AppBar(
-        title: const Text('Scan Receipt'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: context.appBackground,
+        elevation: 0,
+        title: Text(
+          'Scan Receipt',
+          style: AppTextStyles.h2,
+        ),
+        centerTitle: true,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppDimensions.spacing16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Image preview area
+            // Image preview area with modern styling
             Container(
-              height: 250,
+              height: 280,
               decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[400]!),
+                gradient: _scanResult == null
+                    ? LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          context.appSurface,
+                          context.appSurfaceLight,
+                        ],
+                      )
+                    : null,
+                color: _scanResult != null ? context.appSurface : null,
+                borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
+                border: Border.all(
+                  color: _scanResult != null
+                      ? AppColors.primary.withValues(alpha: 0.3)
+                      : context.textSecondary.withValues(alpha: 0.2),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            color: AppColors.primary,
+                            strokeWidth: 3,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Processing receipt...',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: context.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
                   : _scanResult != null
                       ? ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(
+                              AppDimensions.radiusLarge - 2),
                           child: Image.file(
                             File(_scanResult!.imagePath),
                             fit: BoxFit.cover,
@@ -138,43 +186,77 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
-                                Icons.receipt_long,
-                                size: 64,
-                                color: Colors.grey[500],
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color:
+                                      AppColors.primary.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.receipt_long,
+                                  size: 64,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No receipt scanned yet',
+                                style: AppTextStyles.bodyLarge.copyWith(
+                                  color: context.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Capture or select a receipt',
-                                style: TextStyle(color: Colors.grey[600]),
+                                'Capture or select a receipt to extract data',
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: context.textSecondary,
+                                ),
                               ),
                             ],
                           ),
                         ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppDimensions.spacing20),
 
-            // Capture buttons
+            // Capture buttons with modern design
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: _isLoading ? null : () => _scanReceipt(true),
-                    icon: const Icon(Icons.camera_alt),
+                    icon: const Icon(Icons.camera_alt, size: 20),
                     label: const Text('Camera'),
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      disabledBackgroundColor:
+                          AppColors.primary.withValues(alpha: 0.5),
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: ElevatedButton.icon(
+                  child: OutlinedButton.icon(
                     onPressed: _isLoading ? null : () => _scanReceipt(false),
-                    icon: const Icon(Icons.photo_library),
+                    icon: const Icon(Icons.photo_library, size: 20),
                     label: const Text('Gallery'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: BorderSide(
+                        color: AppColors.primary.withValues(alpha: 0.5),
+                        width: 2,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                     ),
                   ),
                 ),
@@ -182,106 +264,233 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
             ),
 
             if (_errorMessage != null) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: AppDimensions.spacing16),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.red[50],
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppColors.negative.withValues(alpha: 0.1),
+                  borderRadius:
+                      BorderRadius.circular(AppDimensions.radiusMedium),
+                  border: Border.all(
+                    color: AppColors.negative.withValues(alpha: 0.3),
+                  ),
                 ),
-                child: Text(
-                  _errorMessage!,
-                  style: TextStyle(color: Colors.red[700]),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      color: AppColors.negative,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.negative,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
 
             if (_scanResult != null) ...[
-              const SizedBox(height: 24),
-              const Text(
-                'Extracted Information',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+              const SizedBox(height: AppDimensions.spacing24),
+              Row(
+                children: [
+                  Icon(
+                    Icons.edit_note,
+                    size: 20,
+                    color: context.textSecondary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'EXTRACTED INFORMATION',
+                    style: AppTextStyles.caption.copyWith(
+                      color: context.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppDimensions.spacing16),
 
-              // Title field
-              TextField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Title / Store Name',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.store),
+              // Title field with modern styling
+              Container(
+                decoration: BoxDecoration(
+                  color: context.appSurface,
+                  borderRadius:
+                      BorderRadius.circular(AppDimensions.radiusMedium),
+                  border: Border.all(
+                    color: context.textSecondary.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: TextField(
+                  controller: _titleController,
+                  style: AppTextStyles.bodyMedium,
+                  decoration: InputDecoration(
+                    labelText: 'Store Name / Title',
+                    labelStyle: AppTextStyles.bodyMedium.copyWith(
+                      color: context.textSecondary,
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.all(16),
+                    prefixIcon: Icon(
+                      Icons.store,
+                      color: AppColors.primary,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
 
               // Amount field
-              TextField(
-                controller: _amountController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'Amount',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.attach_money),
+              Container(
+                decoration: BoxDecoration(
+                  color: context.appSurface,
+                  borderRadius:
+                      BorderRadius.circular(AppDimensions.radiusMedium),
+                  border: Border.all(
+                    color: context.textSecondary.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: TextField(
+                  controller: _amountController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  style: AppTextStyles.bodyMedium,
+                  decoration: InputDecoration(
+                    labelText: 'Amount',
+                    labelStyle: AppTextStyles.bodyMedium.copyWith(
+                      color: context.textSecondary,
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.all(16),
+                    prefixIcon: Icon(
+                      Icons.attach_money,
+                      color: AppColors.primary,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
 
               // Date field
-              TextField(
-                controller: _dateController,
-                readOnly: true,
-                onTap: _selectDate,
-                decoration: const InputDecoration(
-                  labelText: 'Date',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.calendar_today),
+              Container(
+                decoration: BoxDecoration(
+                  color: context.appSurface,
+                  borderRadius:
+                      BorderRadius.circular(AppDimensions.radiusMedium),
+                  border: Border.all(
+                    color: context.textSecondary.withValues(alpha: 0.2),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-
-              // Raw text preview
-              ExpansionTile(
-                title: const Text('Raw OCR Text'),
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
+                child: TextField(
+                  controller: _dateController,
+                  readOnly: true,
+                  onTap: _selectDate,
+                  style: AppTextStyles.bodyMedium,
+                  decoration: InputDecoration(
+                    labelText: 'Date',
+                    labelStyle: AppTextStyles.bodyMedium.copyWith(
+                      color: context.textSecondary,
                     ),
-                    child: Text(
-                      _scanResult!.rawText.isEmpty
-                          ? 'No text extracted'
-                          : _scanResult!.rawText,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                      ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.all(16),
+                    prefixIcon: Icon(
+                      Icons.calendar_today,
+                      color: AppColors.primary,
                     ),
                   ),
-                ],
+                ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppDimensions.spacing20),
 
-              // Confirm button
-              ElevatedButton(
-                onPressed: _confirmAndReturn,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+              // Raw text preview with modern styling
+              Container(
+                decoration: BoxDecoration(
+                  color: context.appSurface,
+                  borderRadius:
+                      BorderRadius.circular(AppDimensions.radiusMedium),
+                  border: Border.all(
+                    color: context.textSecondary.withValues(alpha: 0.2),
+                  ),
                 ),
-                child: const Text(
-                  'Use This Receipt',
-                  style: TextStyle(fontSize: 16),
+                child: ExpansionTile(
+                  tilePadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  title: Text(
+                    'Raw OCR Text',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  leading: Icon(
+                    Icons.text_snippet,
+                    color: AppColors.primary,
+                  ),
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.all(12),
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: context.appBackground,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _scanResult!.rawText.isEmpty
+                            ? 'No text extracted'
+                            : _scanResult!.rawText,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          fontFamily: 'monospace',
+                          color: context.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              const SizedBox(height: AppDimensions.spacing24),
+
+              // Confirm button with modern styling
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _confirmAndReturn,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    elevation: 4,
+                    shadowColor: AppColors.primary.withValues(alpha: 0.3),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.check_circle, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Use This Receipt',
+                        style: AppTextStyles.bodyLarge.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppDimensions.spacing20),
             ],
           ],
         ),

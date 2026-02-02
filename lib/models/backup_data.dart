@@ -6,6 +6,10 @@ class BackupData {
   final List<Map<String, dynamic>> budgetValues;
   final List<Map<String, dynamic>> budgetTotals;
   final List<Map<String, dynamic>> receipts;
+  final List<Map<String, dynamic>> debts;
+  final List<Map<String, dynamic>> debtPayments;
+  final List<Map<String, dynamic>> accounts;
+  final Map<String, dynamic> settings;
 
   BackupData({
     required this.version,
@@ -15,6 +19,10 @@ class BackupData {
     required this.budgetValues,
     required this.budgetTotals,
     required this.receipts,
+    required this.debts,
+    required this.debtPayments,
+    required this.accounts,
+    required this.settings,
   });
 
   Map<String, dynamic> toJson() {
@@ -26,6 +34,10 @@ class BackupData {
       'budget_values': budgetValues,
       'budget_totals': budgetTotals,
       'receipts': receipts,
+      'debts': debts,
+      'debt_payments': debtPayments,
+      'accounts': accounts,
+      'settings': settings,
     };
   }
 
@@ -41,6 +53,11 @@ class BackupData {
       budgetTotals:
           List<Map<String, dynamic>>.from(json['budget_totals'] as List),
       receipts: List<Map<String, dynamic>>.from(json['receipts'] as List),
+      debts: List<Map<String, dynamic>>.from(json['debts'] ?? []),
+      debtPayments:
+          List<Map<String, dynamic>>.from(json['debt_payments'] ?? []),
+      accounts: List<Map<String, dynamic>>.from(json['accounts'] ?? []),
+      settings: Map<String, dynamic>.from(json['settings'] ?? {}),
     );
   }
 

@@ -3,9 +3,11 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/category_provider.dart';
+import '../providers/settings_provider.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
+import '../screens/all_transactions_screen.dart';
 
 class RecentTransactionsWidget extends StatelessWidget {
   final Function(int)? onTabSelected;
@@ -14,9 +16,11 @@ class RecentTransactionsWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<TransactionProvider, CategoryProvider>(
-      builder: (context, transactionProvider, categoryProvider, child) {
+    return Consumer3<TransactionProvider, CategoryProvider, SettingsProvider>(
+      builder: (context, transactionProvider, categoryProvider,
+          settingsProvider, child) {
         final allTransactions = transactionProvider.transactions;
+        final currencySymbol = settingsProvider.currencySymbol;
 
         // Get last 5 transactions
         final recentTransactions = allTransactions.take(5).toList();
@@ -47,8 +51,9 @@ class RecentTransactionsWidget extends StatelessWidget {
                 ),
                 TextButton(
                   onPressed: () {
-                    // Navigate to transactions tab
-                    onTabSelected?.call(1);
+                    // Navigate to All Transactions screen
+                    Navigator.of(context)
+                        .pushNamed(AllTransactionsScreen.routeName);
                   },
                   child: Text(
                     'See All',
@@ -119,7 +124,7 @@ class RecentTransactionsWidget extends StatelessWidget {
                     ),
                   ),
                   trailing: Text(
-                    '${transaction.isExpense ? '-' : '+'}${UtilityFunction.addCommaWithSign(transaction.amount).substring(1)}',
+                    '${transaction.isExpense ? '-' : '+'}${UtilityFunction.addCommaWithSign(transaction.amount, currencySymbol: currencySymbol).substring(1)}',
                     style: AppTextStyles.bodyLarge.copyWith(
                       color: transaction.isExpense
                           ? AppColors.negative

@@ -8,8 +8,13 @@ import '../utilities/theme_helper.dart';
 
 class QuickStatsWidget extends StatelessWidget {
   final Function(int)? onTabSelected;
+  final DateTime selectedMonth;
 
-  const QuickStatsWidget({super.key, this.onTabSelected});
+  const QuickStatsWidget({
+    super.key,
+    this.onTabSelected,
+    required this.selectedMonth,
+  });
 
   Color _getStatusColor(double percent) {
     if (percent < 50) return AppColors.positive;
@@ -21,8 +26,7 @@ class QuickStatsWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer2<TransactionProvider, MonthlyBudgetProvider>(
       builder: (context, transactionProvider, budgetProvider, child) {
-        final now = DateTime.now();
-        final currentMonth = now.month.toString();
+        final currentMonth = selectedMonth.month.toString();
 
         final totalBudget = budgetProvider.getTotalBudget(currentMonth);
         final totalExpenses = transactionProvider.totalExpenses;
@@ -31,10 +35,26 @@ class QuickStatsWidget extends StatelessWidget {
             totalBudget > 0 ? (totalExpenses / totalBudget * 100) : 0.0;
 
         // Calculate days remaining in month
-        final lastDayOfMonth = DateTime(now.year, now.month + 1, 0);
-        final daysRemaining = lastDayOfMonth.day - now.day + 1;
+        final now = DateTime.now();
+        final lastDayOfMonth =
+            DateTime(selectedMonth.year, selectedMonth.month + 1, 0);
+        final isCurrentMonth =
+            selectedMonth.year == now.year && selectedMonth.month == now.month;
+        final isPastMonth =
+            selectedMonth.isBefore(DateTime(now.year, now.month, 1));
+
+        // For current month, calculate actual days remaining; for past months, 0 days; for future months, all days
+        final daysRemaining = isCurrentMonth
+            ? (lastDayOfMonth.day - now.day + 1)
+            : isPastMonth
+                ? 0
+                : lastDayOfMonth.day;
         final daysInMonth = lastDayOfMonth.day;
-        final daysElapsed = daysInMonth - daysRemaining;
+        final daysElapsed = isCurrentMonth
+            ? (daysInMonth - daysRemaining)
+            : isPastMonth
+                ? daysInMonth
+                : 0;
 
         // Calculate average daily spending and safe daily budget
         final avgDailySpending =
@@ -59,8 +79,8 @@ class QuickStatsWidget extends StatelessWidget {
 
         return GestureDetector(
           onTap: () {
-            // Navigate to Budget tab (index 3)
-            onTabSelected?.call(3);
+            // Navigate to Budget tab (index 2)
+            onTabSelected?.call(2);
           },
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

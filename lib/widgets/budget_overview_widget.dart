@@ -3,9 +3,11 @@ import 'package:provider/provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/category_provider.dart';
 import '../providers/monthly_budget_provider.dart';
+import '../providers/settings_provider.dart';
 import '../widgets/budget_progress_card.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
+import '../utilities/functions.dart';
 
 class BudgetOverviewWidget extends StatelessWidget {
   const BudgetOverviewWidget({super.key});
@@ -28,6 +30,8 @@ class BudgetOverviewWidget extends StatelessWidget {
         TransactionProvider>(
       builder: (context, categoryProvider, budgetProvider, transactionProvider,
           child) {
+        final currencySymbol =
+            Provider.of<SettingsProvider>(context).currencySymbol;
         final expenseCategories =
             categoryProvider.categories.where((cat) => cat.isExpense).toList();
 
@@ -183,7 +187,8 @@ class BudgetOverviewWidget extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '\$${totalBudget.toStringAsFixed(2)}',
+                            UtilityFunction.formatMoney(totalBudget,
+                                symbol: currencySymbol),
                             style: AppTextStyles.h2.copyWith(
                               fontWeight: FontWeight.bold,
                               fontSize: 28,
@@ -247,7 +252,8 @@ class BudgetOverviewWidget extends StatelessWidget {
                           context,
                           icon: Icons.shopping_bag,
                           label: 'Spent',
-                          value: '\$${totalSpent.toStringAsFixed(2)}',
+                          value: UtilityFunction.formatMoney(totalSpent,
+                              symbol: currencySymbol),
                           color: statusColor,
                         ),
                       ),
@@ -337,6 +343,7 @@ class BudgetOverviewWidget extends StatelessWidget {
                 budgetAmount: budget,
                 spentAmount: spent,
                 daysRemaining: daysRemaining,
+                currencySymbol: currencySymbol,
               );
             }),
           ],

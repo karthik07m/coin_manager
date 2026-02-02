@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/transaction_provider.dart';
 import '../widgets/charts/categories_pie_chart.dart';
+import '../widgets/charts/accounts_pie_chart.dart';
+import '../providers/account_provider.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import 'package:intl/intl.dart';
@@ -16,6 +18,7 @@ class ChartsScreen extends StatefulWidget {
 class _ChartsScreenState extends State<ChartsScreen> {
   DateTime _selectedMonth = DateTime.now();
   bool _isInitialized = false;
+  int _selectedChart = 0; // 0 for Expenses, 1 for Accounts
 
   @override
   void initState() {
@@ -39,6 +42,8 @@ class _ChartsScreenState extends State<ChartsScreen> {
   Future<void> _fetchData(BuildContext context, DateTime month) async {
     final transactionProvider =
         Provider.of<TransactionProvider>(context, listen: false);
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
 
     final startDate = DateTime(month.year, month.month, 1);
     final endDate = DateTime(month.year, month.month + 1, 0);
@@ -47,6 +52,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
       startDate: startDate,
       endDate: endDate,
     );
+    await accountProvider.loadAccounts();
   }
 
   void _showMonthPicker(BuildContext context) {
@@ -227,8 +233,8 @@ class _ChartsScreenState extends State<ChartsScreen> {
           ),
         ],
       ),
-      body: Consumer<TransactionProvider>(
-        builder: (context, transactionProvider, child) {
+      body: Consumer2<TransactionProvider, AccountProvider>(
+        builder: (context, transactionProvider, accountProvider, child) {
           final transactions = transactionProvider.transactions;
 
           // Calculate total expenses
@@ -245,26 +251,89 @@ class _ChartsScreenState extends State<ChartsScreen> {
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(AppDimensions.spacing16),
-              child: Container(
-                padding: const EdgeInsets.all(AppDimensions.spacing20),
-                decoration: BoxDecoration(
-                  color: context.appSurfaceLight,
-                  borderRadius:
-                      BorderRadius.circular(AppDimensions.radiusLarge),
-                  border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.2),
-                    width: 1,
+              child: Column(
+                children: [
+                  // Chart Selector
+                  Container(
+                    width: double.infinity,
+                    margin:
+                        const EdgeInsets.only(bottom: AppDimensions.spacing20),
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: context.appSurfaceLight,
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.radiusMedium),
+                      border: Border.all(
+                        color: AppColors.divider.withValues(alpha: 0.5),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        _buildTypeSelector(0, 'Expenses'),
+                        _buildTypeSelector(1, 'Accounts'),
+                      ],
+                    ),
                   ),
-                ),
-                child: CategoriesPieChart(
-                  screenHeight: MediaQuery.of(context).size.height * 0.8,
-                  categories: transactionProvider.categories,
-                  totalExpenses: totalExpenses,
-                ),
+
+                  // Chart Card
+                  Container(
+                    padding: const EdgeInsets.all(AppDimensions.spacing20),
+                    decoration: BoxDecoration(
+                      color: context.appSurfaceLight,
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.radiusLarge),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: _selectedChart == 0
+                        ? CategoriesPieChart(
+                            screenHeight:
+                                MediaQuery.of(context).size.height * 0.8,
+                            categories: transactionProvider.categories,
+                            totalExpenses: totalExpenses,
+                            currentMonth: _selectedMonth,
+                          )
+                        : AccountsPieChart(
+                            totalExpenses: totalExpenses,
+                            currentMonth: _selectedMonth,
+                          ),
+                  ),
+                ],
               ),
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildTypeSelector(int index, String text) {
+    final isSelected = _selectedChart == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedChart = index;
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppDimensions.radiusSmall),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            text,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: isSelected ? Colors.white : context.textSecondary,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            ),
+          ),
+        ),
       ),
     );
   }

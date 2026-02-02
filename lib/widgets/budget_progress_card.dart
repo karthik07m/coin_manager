@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
+import '../utilities/functions.dart';
 
 class BudgetProgressCard extends StatelessWidget {
   final String categoryName;
@@ -8,6 +9,7 @@ class BudgetProgressCard extends StatelessWidget {
   final double budgetAmount;
   final double spentAmount;
   final int daysRemaining;
+  final String currencySymbol;
 
   const BudgetProgressCard({
     super.key,
@@ -16,13 +18,14 @@ class BudgetProgressCard extends StatelessWidget {
     required this.budgetAmount,
     required this.spentAmount,
     required this.daysRemaining,
+    required this.currencySymbol,
   });
 
   @override
   Widget build(BuildContext context) {
     final percentSpent = budgetAmount > 0 ? (spentAmount / budgetAmount) : 0.0;
     final remaining = budgetAmount - spentAmount;
-    final dailyBudget = daysRemaining > 0 ? remaining / daysRemaining : 0;
+    final dailyBudget = daysRemaining > 0 ? remaining / daysRemaining : 0.0;
 
     // Determine color based on percentage spent
     Color progressColor;
@@ -178,7 +181,8 @@ class BudgetProgressCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '\$${spentAmount.toStringAsFixed(2)}',
+                        UtilityFunction.formatMoney(spentAmount,
+                            symbol: currencySymbol),
                         style: AppTextStyles.h2.copyWith(
                           fontWeight: FontWeight.bold,
                           color: progressColor,
@@ -200,7 +204,8 @@ class BudgetProgressCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '\$${budgetAmount.toStringAsFixed(2)}',
+                        UtilityFunction.formatMoney(budgetAmount,
+                            symbol: currencySymbol),
                         style: AppTextStyles.bodyLarge.copyWith(
                           fontWeight: FontWeight.w600,
                           color: context.textPrimary,
@@ -277,7 +282,8 @@ class BudgetProgressCard extends StatelessWidget {
                         context: context,
                         icon: Icons.trending_down,
                         label: remaining >= 0 ? 'Remaining' : 'Over',
-                        value: '\$${remaining.abs().toStringAsFixed(2)}',
+                        value: UtilityFunction.formatMoney(remaining.abs(),
+                            symbol: currencySymbol),
                         color:
                             remaining >= 0 ? progressColor : AppColors.negative,
                       ),
@@ -292,7 +298,8 @@ class BudgetProgressCard extends StatelessWidget {
                         context: context,
                         icon: Icons.calendar_today,
                         label: 'Daily Budget',
-                        value: '\$${dailyBudget.toStringAsFixed(2)}',
+                        value: UtilityFunction.formatMoney(dailyBudget,
+                            symbol: currencySymbol),
                         color: context.textSecondary,
                       ),
                     ),

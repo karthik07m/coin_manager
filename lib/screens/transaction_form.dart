@@ -1,13 +1,17 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/category.dart';
 import '../models/transaction.dart';
 import '../models/receipt.dart';
+import '../models/account.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/category_provider.dart';
+import '../providers/account_provider.dart';
+import '../providers/settings_provider.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../widgets/calculator_field.dart';
@@ -29,11 +33,13 @@ class TransactionFormState extends State<TransactionForm> {
   late TextEditingController _titleController;
   late TextEditingController _amountController;
   int selectedCategory = defaultExpenseCat;
+  int selectedAccount = 1; // Default to Cash
   DateTime _selectedDate = DateTime.now();
   Transaction? _transaction;
   bool _isExpense = true;
   bool _isRecurring = false;
   Map<int, Category> categoryMap = {};
+  Map<int, Account> accountMap = {};
 
   // Receipt data
   String? _receiptImagePath;
@@ -48,6 +54,8 @@ class TransactionFormState extends State<TransactionForm> {
 
     final categoryProvider =
         Provider.of<CategoryProvider>(context, listen: false);
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
 
     Future.delayed(Duration.zero, () async {
       if (!mounted) return;
@@ -58,16 +66,59 @@ class TransactionFormState extends State<TransactionForm> {
       }
       if (!mounted) return;
       await _fetchAndMapCategories(categoryProvider);
+      await _loadAccounts(accountProvider); // Make async and wait for load
+    });
+  }
+
+  Future<void> _loadAccounts(AccountProvider accountProvider) async {
+    // Ensure accounts are loaded first
+    if (!accountProvider.isLoaded) {
+      await accountProvider.loadAccounts();
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      accountMap = {for (var acc in accountProvider.accounts) acc.id!: acc};
+      // Ensure we have a valid account selected
+      if (!accountMap.containsKey(selectedAccount) && accountMap.isNotEmpty) {
+        selectedAccount = accountMap.values.first.id ?? 1;
+      }
     });
   }
 
   Future<void> _fetchAndMapCategories(CategoryProvider categoryProvider) async {
+    // We intentionally fetch all categories to ensure proper mapping for existing transactions
     await categoryProvider.fetchCategories(_isExpense);
+
     setState(() {
+      // Filter locally for the selection UI
+      final allCategories = categoryProvider.categories;
+      final filteredCategories =
+          allCategories.where((c) => c.isExpense == _isExpense).toList();
+
+      // Update the map for quick access (map should contain ALL categories)
       categoryMap = categoryProvider.categoryMap;
+
       // Ensure we have a valid category selected
       if (!categoryMap.containsKey(selectedCategory)) {
-        selectedCategory = _isExpense ? defaultExpenseCat : defaultIncomeCat;
+        // If current selection is invalid for the new type, pick the first valid one or default
+        if (filteredCategories.isNotEmpty) {
+          selectedCategory = filteredCategories.first.id!;
+        } else {
+          selectedCategory = _isExpense ? defaultExpenseCat : defaultIncomeCat;
+        }
+      } else {
+        // If current selection is valid but wrong type (e.g. toggled type), switch to default
+        final currentCat = categoryMap[selectedCategory];
+        if (currentCat != null && currentCat.isExpense != _isExpense) {
+          if (filteredCategories.isNotEmpty) {
+            selectedCategory = filteredCategories.first.id!;
+          } else {
+            selectedCategory =
+                _isExpense ? defaultExpenseCat : defaultIncomeCat;
+          }
+        }
       }
     });
   }
@@ -81,6 +132,7 @@ class TransactionFormState extends State<TransactionForm> {
         _titleController.text = _transaction!.title;
         _amountController.text = _transaction!.amount.toString();
         selectedCategory = _transaction!.categoryId;
+        selectedAccount = _transaction!.accountId;
         _selectedDate = _transaction!.date;
         _isExpense = _transaction!.isExpense;
         _isRecurring = _transaction!.isRecurring;
@@ -154,6 +206,22 @@ class TransactionFormState extends State<TransactionForm> {
     });
   }
 
+  Future<void> _uploadReceipt() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1920,
+      maxHeight: 1920,
+      imageQuality: 85,
+    );
+
+    if (image != null) {
+      setState(() {
+        _receiptImagePath = image.path;
+      });
+    }
+  }
+
   String getCategoryName(int categoryId) {
     final category = categoryMap[categoryId];
     if (category == null) {
@@ -164,6 +232,32 @@ class TransactionFormState extends State<TransactionForm> {
 
   String getCategoryIcon(int categoryId) {
     return categoryMap[categoryId]?.icon ?? 'assets/categories/other.png';
+  }
+
+  String getAccountName(int accountId) {
+    final account = accountMap[accountId];
+    if (account == null) return 'Cash';
+    return account.name;
+  }
+
+  IconData getAccountIcon(int accountId) {
+    final account = accountMap[accountId];
+    if (account == null) return Icons.account_balance_wallet;
+
+    switch (account.icon) {
+      case 'wallet':
+        return Icons.account_balance_wallet;
+      case 'account_balance':
+        return Icons.account_balance;
+      case 'credit_card':
+        return Icons.credit_card;
+      case 'payment':
+        return Icons.payment;
+      case 'savings':
+        return Icons.savings;
+      default:
+        return Icons.account_balance_wallet;
+    }
   }
 
   @override
@@ -250,7 +344,9 @@ class TransactionFormState extends State<TransactionForm> {
             Expanded(
               child: Consumer<CategoryProvider>(
                 builder: (context, categoryProvider, child) {
-                  final categories = categoryProvider.categories;
+                  final categories = categoryProvider.categories
+                      .where((c) => c.isExpense == _isExpense)
+                      .toList();
                   return GridView.builder(
                     padding: const EdgeInsets.all(AppDimensions.spacing16),
                     gridDelegate:
@@ -410,6 +506,7 @@ class TransactionFormState extends State<TransactionForm> {
         title: _titleController.text,
         amount: double.parse(_amountController.text.replaceAll(',', '')),
         categoryId: selectedCategory,
+        accountId: selectedAccount,
         date: _selectedDate,
         isExpense: _isExpense,
         isRecurring: _isRecurring,
@@ -439,11 +536,39 @@ class TransactionFormState extends State<TransactionForm> {
           style: AppTextStyles.h2,
         ),
         actions: [
-          // Scan receipt button
-          IconButton(
-            onPressed: _scanReceipt,
-            icon: const Icon(Icons.document_scanner),
-            tooltip: 'Scan Receipt',
+          // Receipt options
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.receipt),
+            tooltip: 'Receipt',
+            onSelected: (value) {
+              if (value == 'scan') {
+                _scanReceipt();
+              } else if (value == 'upload') {
+                _uploadReceipt();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'scan',
+                child: Row(
+                  children: [
+                    Icon(Icons.document_scanner),
+                    SizedBox(width: 12),
+                    Text('Scan Receipt'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'upload',
+                child: Row(
+                  children: [
+                    Icon(Icons.upload_file),
+                    SizedBox(width: 12),
+                    Text('Upload Photo'),
+                  ],
+                ),
+              ),
+            ],
           ),
           if (_transaction?.id != null)
             IconButton(
@@ -617,7 +742,14 @@ class TransactionFormState extends State<TransactionForm> {
                     ),
                   ),
                   const SizedBox(height: AppDimensions.spacing16),
-                  CalculatorTextFormField(controller: _amountController),
+                  Consumer<SettingsProvider>(
+                    builder: (context, settings, child) {
+                      return CalculatorTextFormField(
+                        controller: _amountController,
+                        currencySymbol: settings.currencySymbol,
+                      );
+                    },
+                  ),
                   const SizedBox(height: AppDimensions.spacing16),
                   InkWell(
                     onTap: _showCategorySelector,
@@ -653,6 +785,159 @@ class TransactionFormState extends State<TransactionForm> {
                           const SizedBox(width: AppDimensions.spacing12),
                           Text(
                             getCategoryName(selectedCategory),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color:
+                                      Theme.of(context).colorScheme.onSurface,
+                                ),
+                          ),
+                          const Spacer(),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 16,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.6),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppDimensions.spacing16),
+                  // Account Selector
+                  InkWell(
+                    onTap: () {
+                      FocusScope.of(context).unfocus();
+                      showModalBottomSheet(
+                        context: context,
+                        backgroundColor: Theme.of(context).colorScheme.surface,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.vertical(top: Radius.circular(20)),
+                        ),
+                        builder: (BuildContext context) {
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(
+                                    AppDimensions.spacing16),
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .outline
+                                          .withValues(alpha: 0.1),
+                                      width: 1,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Select Account',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurface,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(
+                                height: 300,
+                                child: ListView.builder(
+                                  itemCount: accountMap.length,
+                                  padding: const EdgeInsets.all(
+                                      AppDimensions.spacing16),
+                                  itemBuilder: (context, index) {
+                                    // Sort accounts alphabetically by name
+                                    final sortedAccounts = accountMap.values
+                                        .toList()
+                                      ..sort(
+                                          (a, b) => a.name.compareTo(b.name));
+                                    final account = sortedAccounts[index];
+                                    final isSelected =
+                                        selectedAccount == account.id;
+                                    return ListTile(
+                                      onTap: () {
+                                        setState(() {
+                                          selectedAccount = account.id!;
+                                          Navigator.pop(context);
+                                        });
+                                      },
+                                      leading: Icon(
+                                        getAccountIcon(account.id!),
+                                        color: isSelected
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                            : Theme.of(context)
+                                                .colorScheme
+                                                .onSurface
+                                                .withValues(alpha: 0.6),
+                                      ),
+                                      title: Text(
+                                        account.name,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              fontWeight: isSelected
+                                                  ? FontWeight.bold
+                                                  : FontWeight.normal,
+                                            ),
+                                      ),
+                                      trailing: isSelected
+                                          ? Icon(Icons.check,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary)
+                                          : null,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(AppDimensions.spacing12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius:
+                            BorderRadius.circular(AppDimensions.radiusMedium),
+                        border: Border.all(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .outline
+                              .withValues(alpha: 0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            getAccountIcon(selectedAccount),
+                            size: 28,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: AppDimensions.spacing12),
+                          Text(
+                            getAccountName(selectedAccount),
                             style: Theme.of(context)
                                 .textTheme
                                 .bodyMedium
@@ -763,101 +1048,182 @@ class TransactionFormState extends State<TransactionForm> {
                       },
                     ),
                   ),
-                  // Receipt preview
+                  // Receipt Section
+                  const SizedBox(height: AppDimensions.spacing8),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.receipt_long,
+                        size: 20,
+                        color: context.textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'RECEIPT',
+                        style: AppTextStyles.caption.copyWith(
+                          color: context.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppDimensions.spacing12),
+                  // Receipt preview or buttons
                   if (_receiptImagePath != null)
                     Container(
                       margin: const EdgeInsets.only(
                           bottom: AppDimensions.spacing16),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
+                        color: context.appSurface,
                         borderRadius:
                             BorderRadius.circular(AppDimensions.radiusMedium),
                         border: Border.all(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .outline
-                              .withValues(alpha: 0.3),
-                          width: 1,
+                          color: AppColors.primary.withValues(alpha: 0.3),
+                          width: 1.5,
                         ),
                       ),
                       child: ListTile(
+                        contentPadding: const EdgeInsets.all(12),
                         leading: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: Image.file(
                             File(_receiptImagePath!),
-                            width: 48,
-                            height: 48,
+                            width: 56,
+                            height: 56,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) =>
-                                const Icon(Icons.receipt, size: 48),
+                                Container(
+                              width: 56,
+                              height: 56,
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              child: const Icon(Icons.receipt,
+                                  size: 32, color: AppColors.primary),
+                            ),
                           ),
                         ),
-                        title: const Text('Receipt Attached'),
-                        subtitle: const Text('Tap to view'),
+                        title: Text(
+                          'Receipt Attached',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Tap to view full size',
+                          style: AppTextStyles.caption.copyWith(
+                            color: context.textSecondary,
+                          ),
+                        ),
                         trailing: IconButton(
-                          icon: const Icon(Icons.close, color: Colors.red),
+                          icon: Icon(
+                            Icons.close_rounded,
+                            color: AppColors.negative,
+                          ),
                           onPressed: _removeReceipt,
+                          tooltip: 'Remove receipt',
                         ),
                         onTap: _viewReceipt,
                       ),
-                    ),
-                  TextFormField(
-                    controller: _titleController,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                    decoration: InputDecoration(
-                      labelText: 'Notes',
-                      labelStyle:
-                          Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.6),
+                    )
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _scanReceipt,
+                            icon: const Icon(Icons.document_scanner, size: 18),
+                            label: const Text('Scan'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
                               ),
-                      hintText: 'Add notes about this transaction...',
-                      hintStyle:
-                          Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
+                              side: BorderSide(
+                                color: context.textSecondary
                                     .withValues(alpha: 0.3),
                               ),
-                      filled: true,
-                      fillColor: Theme.of(context).colorScheme.surface,
-                      border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppDimensions.radiusMedium),
-                        borderSide: BorderSide(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .outline
-                              .withValues(alpha: 0.3),
-                          width: 1,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _uploadReceipt,
+                            icon: const Icon(Icons.upload_file, size: 18),
+                            label: const Text('Upload'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              side: BorderSide(
+                                color: context.textSecondary
+                                    .withValues(alpha: 0.3),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: AppDimensions.spacing20),
+                  // Notes Section
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.note_alt_outlined,
+                        size: 20,
+                        color: context.textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'NOTES (OPTIONAL)',
+                        style: AppTextStyles.caption.copyWith(
+                          color: context.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.2,
                         ),
                       ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppDimensions.radiusMedium),
-                        borderSide: BorderSide(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .outline
-                              .withValues(alpha: 0.3),
-                          width: 1,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppDimensions.radiusMedium),
-                        borderSide: BorderSide(
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 1,
-                        ),
+                    ],
+                  ),
+                  const SizedBox(height: AppDimensions.spacing12),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: context.appSurface,
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.radiusMedium),
+                      border: Border.all(
+                        color: context.textSecondary.withValues(alpha: 0.2),
+                        width: 1,
                       ),
                     ),
-                    maxLength: 250,
-                    maxLines: 3,
+                    child: TextFormField(
+                      controller: _titleController,
+                      style: AppTextStyles.bodyMedium,
+                      decoration: InputDecoration(
+                        hintText: 'Add notes about this transaction...',
+                        hintStyle: AppTextStyles.bodyMedium.copyWith(
+                          color: context.textSecondary.withValues(alpha: 0.4),
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(16),
+                        counterStyle: AppTextStyles.caption.copyWith(
+                          color: context.textSecondary,
+                        ),
+                      ),
+                      maxLength: 500,
+                      maxLines: null,
+                      minLines: 3,
+                      keyboardType: TextInputType.multiline,
+                      textCapitalization: TextCapitalization.sentences,
+                    ),
                   ),
                   const SizedBox(height: AppDimensions.spacing24),
                   SizedBox(

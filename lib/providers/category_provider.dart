@@ -11,25 +11,19 @@ class CategoryProvider with ChangeNotifier {
   Map<int, Category> get categoryMap => Map.unmodifiable(_categoryMap);
 
   /// Fetch categories by `isExpense` type and update local cache
+  /// Fetch all categories regardless of `isExpense`
+  /// NOTE: The isExpense parameter is ignored to ensure all categories are loaded.
   Future<void> fetchCategories(bool isExpense) async {
-    final data = await DBHelper().getCategories(isExpense);
-    _categories.clear();
-    _categoryMap.clear();
-
-    for (var map in data) {
-      final category = Category.fromMap(map);
-      _categories.add(category);
-      if (category.id != null) {
-        _categoryMap[category.id!] = category;
-      }
-    }
-
-    notifyListeners();
+    debugPrint(
+        'CategoryProvider: fetchCategories called (isExpense=$isExpense) - Redirecting to fetchAllCategories');
+    await fetchAllCategories();
   }
 
   /// Fetch all categories regardless of `isExpense`
   Future<void> fetchAllCategories() async {
+    debugPrint('CategoryProvider: fetchAllCategories called');
     final data = await DBHelper().getAllCategories();
+    debugPrint('CategoryProvider: DB returned ${data.length} categories');
 
     _categories
       ..clear()
@@ -41,6 +35,8 @@ class CategoryProvider with ChangeNotifier {
       ..addEntries(
           _categories.map((category) => MapEntry(category.id!, category)));
 
+    debugPrint(
+        'CategoryProvider: Loaded ${_categories.length} categories into state');
     notifyListeners();
   }
 
@@ -54,7 +50,7 @@ class CategoryProvider with ChangeNotifier {
       createdOn: category.createdOn,
       modifiedOn: category.modifiedOn,
     );
-    await fetchCategories(category.isExpense);
+    await fetchAllCategories();
   }
 
   /// Delete a category by ID and remove it from cache
@@ -78,7 +74,7 @@ class CategoryProvider with ChangeNotifier {
       budget: category.budget,
       modifiedOn: category.modifiedOn,
     );
-    await fetchCategories(category.isExpense);
+    await fetchAllCategories();
   }
 
   /// Fetch category details by ID using the map for quick access

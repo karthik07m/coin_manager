@@ -22,8 +22,9 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     _loadCategories();
   }
 
-  // Load categories based on the selected type (Income/Expense)
+  // Load categories (now fetches all)
   Future<void> _loadCategories() async {
+    // We pass _isExpenseSelected but it's ignored by the provider now
     await Provider.of<CategoryProvider>(context, listen: false)
         .fetchCategories(_isExpenseSelected);
   }
@@ -107,6 +108,8 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                                   width: 50,
                                   height: 50,
                                   fit: BoxFit.contain,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const Icon(Icons.category, size: 30),
                                 ),
                               ),
                             ),
@@ -237,7 +240,10 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
           Expanded(
             child: Consumer<CategoryProvider>(
               builder: (context, categoryProvider, child) {
-                final categories = categoryProvider.categories;
+                final allCategories = categoryProvider.categories;
+                final categories = allCategories
+                    .where((c) => c.isExpense == _isExpenseSelected)
+                    .toList();
 
                 if (categories.isEmpty) {
                   return const Center(
@@ -256,11 +262,12 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                       child: ListTile(
                         leading: category.icon.isNotEmpty
                             ? Image.asset(
-                                category
-                                    .icon, // Use the icon path stored in the category object
+                                category.icon,
                                 width: 40,
                                 height: 40,
                                 fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    const Icon(Icons.category, size: 32),
                               )
                             : const Icon(Icons.category),
                         title: Text(category.name),

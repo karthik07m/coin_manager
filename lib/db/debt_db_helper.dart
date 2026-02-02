@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:path/path.dart';
@@ -101,11 +102,22 @@ class DebtDBHelper {
   void _onUpgrade(Database db, int oldVersion, int newVersion) async {
     // Handle database migrations
     if (oldVersion < 2) {
-      // Add recurring debt columns
-      await db.execute(
-          'ALTER TABLE $debtsTable ADD COLUMN $columnIsRecurring INTEGER DEFAULT 0');
-      await db.execute(
-          'ALTER TABLE $debtsTable ADD COLUMN $columnRecurringAmount REAL');
+      // Check if columns already exist before adding
+      try {
+        await db.execute(
+            'ALTER TABLE $debtsTable ADD COLUMN $columnIsRecurring INTEGER DEFAULT 0');
+      } catch (e) {
+        // Column might already exist, check and continue
+        debugPrint('Note: $columnIsRecurring column might already exist');
+      }
+
+      try {
+        await db.execute(
+            'ALTER TABLE $debtsTable ADD COLUMN $columnRecurringAmount REAL');
+      } catch (e) {
+        // Column might already exist, check and continue
+        debugPrint('Note: $columnRecurringAmount column might already exist');
+      }
     }
   }
 

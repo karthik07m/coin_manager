@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/notification_service.dart';
 
 class SettingsProvider extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.dark;
@@ -13,6 +14,10 @@ class SettingsProvider extends ChangeNotifier {
   bool _recurIncome = false;
   bool _recurBudget = false;
   int _incomeDay = 1; // Day of month for recurring income (1-28)
+  bool _use24HourFormat = false; // Default to 12-hour format
+  bool _enableNotifications = false;
+  TimeOfDay _notificationTime =
+      const TimeOfDay(hour: 20, minute: 0); // Default 8 PM
 
   ThemeMode get themeMode => _themeMode;
   String get currencyCode => _currencyCode;
@@ -25,6 +30,9 @@ class SettingsProvider extends ChangeNotifier {
   bool get recurIncome => _recurIncome;
   bool get recurBudget => _recurBudget;
   int get incomeDay => _incomeDay;
+  bool get use24HourFormat => _use24HourFormat;
+  bool get enableNotifications => _enableNotifications;
+  TimeOfDay get notificationTime => _notificationTime;
 
   SettingsProvider() {
     _loadSettings();
@@ -46,6 +54,11 @@ class SettingsProvider extends ChangeNotifier {
     _recurIncome = prefs.getBool('recurIncome') ?? false;
     _recurBudget = prefs.getBool('recurBudget') ?? false;
     _incomeDay = prefs.getInt('incomeDay') ?? 1;
+    _use24HourFormat = prefs.getBool('use24HourFormat') ?? false;
+    _enableNotifications = prefs.getBool('enableNotifications') ?? false;
+    final notifHour = prefs.getInt('notificationHour') ?? 20;
+    final notifMinute = prefs.getInt('notificationMinute') ?? 0;
+    _notificationTime = TimeOfDay(hour: notifHour, minute: notifMinute);
     notifyListeners();
   }
 
@@ -92,6 +105,55 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setBool('recurIncome', recurIncome);
     await prefs.setBool('recurBudget', recurBudget);
     await prefs.setInt('incomeDay', incomeDay);
+    notifyListeners();
+  }
+
+  Future<void> toggleTimeFormat(bool use24Hour) async {
+    _use24HourFormat = use24Hour;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('use24HourFormat', use24Hour);
+    notifyListeners();
+  }
+
+  Future<void> toggleNotifications(bool enable) async {
+    _enableNotifications = enable;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('enableNotifications', enable);
+
+    if (enable) {
+      await NotificationService().requestPermissions();
+      await NotificationService().scheduleDailyReminder(
+        hour: _notificationTime.hour,
+        minute: _notificationTime.minute,
+      );
+
+      // Check if exact alarms are permitted and log
+      final canScheduleExact =
+          await NotificationService().canScheduleExactAlarms();
+      debugPrint('Daily reminder enabled. Exact alarms: $canScheduleExact');
+
+      if (!canScheduleExact) {
+        debugPrint(
+            '⚠️ Exact alarm permission not granted. Notifications may be delayed by up to 15 minutes.');
+      }
+    } else {
+      await NotificationService().cancelDailyReminder();
+    }
+    notifyListeners();
+  }
+
+  Future<void> setNotificationTime(TimeOfDay time) async {
+    _notificationTime = time;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('notificationHour', time.hour);
+    await prefs.setInt('notificationMinute', time.minute);
+
+    if (_enableNotifications) {
+      await NotificationService().scheduleDailyReminder(
+        hour: time.hour,
+        minute: time.minute,
+      );
+    }
     notifyListeners();
   }
 }

@@ -4,12 +4,14 @@ import '../providers/transaction_provider.dart';
 import '../providers/category_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/debt_provider.dart';
+import '../providers/account_provider.dart';
 import '../screens/balance_card.dart';
 import '../widgets/recent_transactions_widget.dart';
 import '../widgets/quick_stats_widget.dart';
 import '../widgets/budget_expenses_chart_widget.dart';
 import '../widgets/debt_summary_widget.dart';
 import '../utilities/constants.dart';
+import '../widgets/upcoming_payments_widget.dart';
 import '../utilities/theme_helper.dart';
 
 class HomePage extends StatefulWidget {
@@ -27,13 +29,16 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    // Load categories, transactions, and debts on init
+    // Load categories, transactions, debts, and accounts on init
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final categoryProvider =
           Provider.of<CategoryProvider>(context, listen: false);
       categoryProvider.fetchAllCategories();
       final debtProvider = Provider.of<DebtProvider>(context, listen: false);
       debtProvider.loadDebtsFromDB();
+      final accountProvider =
+          Provider.of<AccountProvider>(context, listen: false);
+      accountProvider.loadAccounts();
       _fetchData(context, _selectedMonth);
     });
   }
@@ -49,6 +54,10 @@ class _HomePageState extends State<HomePage> {
       startDate: startDate,
       endDate: endDate,
     );
+    await transactionProvider.loadUpcomingTransactions();
+
+    // Load previous month for comparison
+    await transactionProvider.loadPreviousMonthExpenses(month);
   }
 
   @override
@@ -85,6 +94,8 @@ class _HomePageState extends State<HomePage> {
                     screenWidth: MediaQuery.of(context).size.width,
                     totalIncome: totalIncome,
                     totalExpenses: totalExpenses,
+                    previousMonthExpenses:
+                        transactionProvider.previousMonthExpenses,
                     selectedMonth: _selectedMonth,
                     onMonthChanged: (DateTime newMonth) {
                       setState(() {
@@ -113,7 +124,17 @@ class _HomePageState extends State<HomePage> {
                     ),
                     child: QuickStatsWidget(
                       onTabSelected: widget.onTabSelected,
+                      selectedMonth: _selectedMonth,
                     ),
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacing20),
+
+                  // Upcoming Payments
+                  const Padding(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: AppDimensions.spacing16),
+                    child: UpcomingPaymentsWidget(),
                   ),
 
                   const SizedBox(height: AppDimensions.spacing20),
@@ -143,7 +164,9 @@ class _HomePageState extends State<HomePage> {
                         width: 1,
                       ),
                     ),
-                    child: const BudgetExpensesChartWidget(),
+                    child: BudgetExpensesChartWidget(
+                      selectedMonth: _selectedMonth,
+                    ),
                   ),
 
                   const SizedBox(height: AppDimensions.spacing20),

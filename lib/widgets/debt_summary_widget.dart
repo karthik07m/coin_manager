@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/debt_provider.dart';
+import '../providers/settings_provider.dart';
 import '../utilities/constants.dart';
 import '../utilities/functions.dart';
 import '../utilities/theme_helper.dart';
@@ -11,13 +12,14 @@ class DebtSummaryWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<DebtProvider>(
-      builder: (context, debtProvider, child) {
+    return Consumer2<DebtProvider, SettingsProvider>(
+      builder: (context, debtProvider, settingsProvider, child) {
         final totalLiabilities = debtProvider.totalLiabilities;
         final totalReceivables = debtProvider.totalReceivables;
         final netPosition = debtProvider.netPosition;
         final activeCount = debtProvider.activeDebtCount;
         final overdueCount = debtProvider.overdueDebtCount;
+        final currencySymbol = settingsProvider.currencySymbol;
 
         return InkWell(
           onTap: () {
@@ -117,6 +119,7 @@ class DebtSummaryWidget extends StatelessWidget {
                         totalLiabilities > 0
                             ? AppColors.negative
                             : context.textSecondary,
+                        currencySymbol,
                       ),
                     ),
                     Container(
@@ -134,6 +137,7 @@ class DebtSummaryWidget extends StatelessWidget {
                         totalReceivables > 0
                             ? AppColors.positive
                             : context.textSecondary,
+                        currencySymbol,
                       ),
                     ),
                   ],
@@ -175,7 +179,8 @@ class DebtSummaryWidget extends StatelessWidget {
                         ],
                       ),
                       Text(
-                        UtilityFunction.addCommaWithSign(netPosition.abs()),
+                        UtilityFunction.addCommaWithSign(netPosition.abs(),
+                            currencySymbol: currencySymbol),
                         style: AppTextStyles.bodyLarge.copyWith(
                           color: netPosition >= 0
                               ? AppColors.positive
@@ -254,6 +259,7 @@ class DebtSummaryWidget extends StatelessWidget {
     double amount,
     IconData icon,
     Color color,
+    String currencySymbol,
   ) {
     return Column(
       children: [
@@ -271,7 +277,8 @@ class DebtSummaryWidget extends StatelessWidget {
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(
-            UtilityFunction.addCommaWithSign(amount),
+            UtilityFunction.addCommaWithSign(amount,
+                currencySymbol: currencySymbol),
             style: AppTextStyles.amount.copyWith(
               color: color,
               fontWeight: FontWeight.bold,

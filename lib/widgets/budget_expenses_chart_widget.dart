@@ -5,11 +5,17 @@ import 'package:fl_chart/fl_chart.dart';
 
 import '../providers/transaction_provider.dart';
 import '../providers/monthly_budget_provider.dart';
+import '../providers/settings_provider.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 
 class BudgetExpensesChartWidget extends StatefulWidget {
-  const BudgetExpensesChartWidget({super.key});
+  final DateTime selectedMonth;
+
+  const BudgetExpensesChartWidget({
+    super.key,
+    required this.selectedMonth,
+  });
 
   @override
   State<BudgetExpensesChartWidget> createState() =>
@@ -44,16 +50,18 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<TransactionProvider, MonthlyBudgetProvider>(
-      builder: (context, transactionProvider, budgetProvider, child) {
-        final now = DateTime.now();
-        final currentMonth = now.month.toString();
+    return Consumer3<TransactionProvider, MonthlyBudgetProvider,
+        SettingsProvider>(
+      builder: (context, transactionProvider, budgetProvider, settingsProvider,
+          child) {
+        final currentMonth = widget.selectedMonth.month.toString();
         final totalBudget = budgetProvider.getTotalBudget(currentMonth);
+        final currencySymbol = settingsProvider.currencySymbol;
 
         // Calculate daily data for the month
         final dailyData = _calculateDailyData(
           transactionProvider,
-          now,
+          widget.selectedMonth,
           totalBudget,
         );
 
@@ -86,6 +94,7 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
                             _getValueAtDay(dailyData['budgetSpots'],
                                 touchedIndex!.toDouble()),
                             AppColors.positive,
+                            currencySymbol,
                           ),
                           const SizedBox(width: 12),
                           _buildValueItem(
@@ -93,6 +102,7 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
                             _getValueAtDay(dailyData['expenseSpots'],
                                 touchedIndex!.toDouble()),
                             AppColors.negative,
+                            currencySymbol,
                           ),
                         ],
                       ),
@@ -126,7 +136,8 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
                 return SizedBox(
                   height: 200,
                   child: LineChart(
-                    _buildChartData(dailyData, _animation.value),
+                    _buildChartData(
+                        dailyData, _animation.value, currencySymbol),
                     duration: const Duration(milliseconds: 250),
                   ),
                 );
@@ -161,19 +172,19 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
     );
   }
 
-  String _formatCurrency(double value) {
+  String _formatCurrency(double value, String symbol) {
     if (value >= 1000) {
       // Show in thousands with 1 decimal place
-      return '\$${(value / 1000).toStringAsFixed(1)}k';
+      return '$symbol${(value / 1000).toStringAsFixed(1)}k';
     } else if (value >= 100) {
       // Show whole dollars for hundreds
-      return '\$${value.toStringAsFixed(0)}';
+      return '$symbol${value.toStringAsFixed(0)}';
     } else if (value > 0) {
       // Show with 1 decimal for smaller values
-      return '\$${value.toStringAsFixed(1)}';
+      return '$symbol${value.toStringAsFixed(1)}';
     } else {
       // Show $0 for zero
-      return '\$0';
+      return '${symbol}0';
     }
   }
 
@@ -185,7 +196,8 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
     }
   }
 
-  Widget _buildValueItem(String label, double value, Color color) {
+  Widget _buildValueItem(
+      String label, double value, Color color, String currencySymbol) {
     return Row(
       children: [
         Container(
@@ -208,7 +220,7 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
                 ),
               ),
               TextSpan(
-                text: _formatCurrency(value),
+                text: _formatCurrency(value, currencySymbol),
                 style: AppTextStyles.caption.copyWith(
                   color: context.textPrimary,
                   fontWeight: FontWeight.bold,
@@ -224,12 +236,26 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
 
   Map<String, dynamic> _calculateDailyData(
     TransactionProvider transactionProvider,
-    DateTime now,
+    DateTime selectedMonth,
     double totalBudget,
   ) {
-    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+    final daysInMonth =
+        DateTime(selectedMonth.year, selectedMonth.month + 1, 0).day;
     final dailyBudget = totalBudget / daysInMonth;
-    final currentDay = now.day;
+
+    // Determine how many days to show based on whether we're viewing current month or past month
+    final now = DateTime.now();
+    final isCurrentMonth =
+        selectedMonth.year == now.year && selectedMonth.month == now.month;
+    final isPastMonth =
+        selectedMonth.isBefore(DateTime(now.year, now.month, 1));
+
+    // For current month, show up to today; for past months, show all days; for future months, show day 1
+    final currentDay = isCurrentMonth
+        ? now.day
+        : isPastMonth
+            ? daysInMonth
+            : 1;
 
     List<FlSpot> budgetSpots = [];
     List<FlSpot> expenseSpots = [];
@@ -242,8 +268,9 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
       cumulativeBudget += dailyBudget;
 
       // Calculate expenses for this day
-      final dayStart = DateTime(now.year, now.month, day);
-      final dayEnd = DateTime(now.year, now.month, day, 23, 59, 59);
+      final dayStart = DateTime(selectedMonth.year, selectedMonth.month, day);
+      final dayEnd =
+          DateTime(selectedMonth.year, selectedMonth.month, day, 23, 59, 59);
 
       final dayExpenses = transactionProvider.transactions
           .where((t) =>
@@ -271,18 +298,23 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
     // Calculate maximum Y value from both budget and expenses to prevent clip/overflow
     final maxBudget = budgetSpots.isNotEmpty ? budgetSpots.last.y : 0.0;
     final maxExpense = expenseSpots.isNotEmpty ? expenseSpots.last.y : 0.0;
-    final absoluteMax = maxBudget > maxExpense ? maxBudget : maxExpense;
+    var absoluteMax = maxBudget > maxExpense ? maxBudget : maxExpense;
+
+    // Ensure a minimum Y value to prevent flat line bugs when data is 0
+    if (absoluteMax <= 0) absoluteMax = 100;
 
     return {
       'budgetSpots': budgetSpots,
       'expenseSpots': expenseSpots,
-      'maxY': (absoluteMax * 1.1).ceilToDouble(), // Add 10% breathing room
+      'maxY': (absoluteMax * 1.15)
+          .ceilToDouble(), // Add 15% breathing room instead of 10%
       'currentDay': currentDay,
       'daysInMonth': daysInMonth,
     };
   }
 
-  LineChartData _buildChartData(Map<String, dynamic> data, double progress) {
+  LineChartData _buildChartData(
+      Map<String, dynamic> data, double progress, String currencySymbol) {
     final List<FlSpot> budgetSpots = data['budgetSpots'];
     final List<FlSpot> expenseSpots = data['expenseSpots'];
     final double maxY = data['maxY'];
@@ -319,18 +351,26 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,
-            reservedSize: 32, // Increased slightly for better label clearance
-            interval: 5,
+            reservedSize: 32,
+            interval: 1, // We control visibility manually
             getTitlesWidget: (value, meta) {
-              if (value == 1 ||
-                  value == 10 ||
-                  value == 20 ||
-                  value == daysInMonth.toDouble()) {
+              // Ensure we only process whole integers to avoid duplication at boundaries
+              if (value != value.toInt().toDouble())
+                return const SizedBox.shrink();
+
+              final val = value.toInt();
+              // Show: 1st, 7th, 14th, 21st, 28th, and Last Day
+              // This provides better spacing than 1, 10, 20
+              if (val == 1 ||
+                  val == 7 ||
+                  val == 14 ||
+                  val == 21 ||
+                  val == 28 ||
+                  val == daysInMonth) {
                 return Padding(
-                  padding: const EdgeInsets.only(
-                      top: 10), // More spacing from axis line
+                  padding: const EdgeInsets.only(top: 10),
                   child: Text(
-                    value.toInt().toString(),
+                    val.toString(),
                     style: AppTextStyles.caption.copyWith(
                       color: context.textSecondary,
                       fontSize: 10,
@@ -346,10 +386,13 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
           sideTitles: SideTitles(
             showTitles: true,
             reservedSize: 50,
-            interval: maxY > 0 ? maxY / 4 : 100, // Prevent zero interval
+            interval: maxY > 0 ? maxY / 4 : 100,
             getTitlesWidget: (value, meta) {
+              // Hide negative values to avoid duplicate "0" due to bottom buffer
+              if (value < 0) return const SizedBox.shrink();
+
               return Text(
-                _formatCurrency(value),
+                _formatCurrency(value, currencySymbol),
                 style: AppTextStyles.caption.copyWith(
                   color: context.textSecondary,
                   fontSize: 10,
@@ -360,11 +403,12 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
         ),
       ),
       borderData: FlBorderData(show: false),
-      clipData: const FlClipData.all(), // Prevent markers from modifying parent
-      minX: 1,
-      maxX: daysInMonth.toDouble(),
+      clipData: const FlClipData
+          .none(), // Allow markers to draw outside the axis range to prevent cutoff
+      minX: 0.5, // Buffer at start
+      maxX: daysInMonth + 0.5, // Buffer at end
       minY: -maxY *
-          0.05, // Small negative buffer so the line doesn't ride the absolute bottom edge visually
+          0.1, // Increased negative buffer to handle spline overshoot at the bottom
       maxY: maxY,
       lineBarsData: [
         // Budget line

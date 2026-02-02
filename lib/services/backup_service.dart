@@ -6,10 +6,12 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../db/transaction_db_helper.dart';
 import '../db/category_db_helper.dart';
 import '../db/monthly_budget_db_helper.dart';
 import '../db/receipt_db_helper.dart';
+import '../db/debt_db_helper.dart';
 import '../models/backup_data.dart';
 
 class BackupService {
@@ -104,6 +106,10 @@ class BackupService {
       await _restoreBudgetTotals(backupData.budgetTotals);
       await _restoreTransactions(backupData.transactions);
       await _restoreReceipts(backupData.receipts);
+      await _restoreDebts(backupData.debts);
+      await _restoreDebtPayments(backupData.debtPayments);
+      await _restoreAccounts(backupData.accounts);
+      await _restoreSettings(backupData.settings);
 
       // 6. Restore receipt images
       final receiptsDir = Directory(path.join(extractDir.path, 'receipts'));
@@ -141,6 +147,23 @@ class BackupService {
     final receipts = await receiptDb.getAllReceipts();
     final receiptsData = receipts.map((r) => r.toMap()).toList();
 
+    // Get all debts
+    final debtDb = DebtDBHelper();
+    final debtsDatabase = await debtDb.database;
+    final debts = await debtsDatabase.query('debts');
+    final debtPayments = await debtsDatabase.query('debt_payments');
+
+    // Get all accounts
+    final accounts = await transactionsDb.query('accounts');
+
+    // Get all settings from SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final settings = <String, dynamic>{};
+    final keys = prefs.getKeys();
+    for (String key in keys) {
+      settings[key] = prefs.get(key);
+    }
+
     return BackupData(
       version: BackupData.currentVersion,
       createdAt: DateTime.now(),
@@ -149,6 +172,10 @@ class BackupService {
       budgetValues: budgetValues,
       budgetTotals: budgetTotals,
       receipts: receiptsData,
+      debts: debts,
+      debtPayments: debtPayments,
+      accounts: accounts,
+      settings: settings,
     );
   }
 
@@ -234,6 +261,14 @@ class BackupService {
     // Clear receipts
     final receiptDb = await ReceiptDBHelper().database;
     await receiptDb.delete('receipts');
+
+    // Clear debts and payments
+    final debtDb = await DebtDBHelper().database;
+    await debtDb.delete('debt_payments');
+    await debtDb.delete('debts');
+
+    // Clear accounts
+    await transactionDb.delete('accounts');
   }
 
   Future<void> _restoreCategories(List<Map<String, dynamic>> categories) async {
@@ -287,6 +322,54 @@ class BackupService {
           conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);
+  }
+
+  Future<void> _restoreDebts(List<Map<String, dynamic>> debts) async {
+    final db = await DebtDBHelper().database;
+    final batch = db.batch();
+    for (final debt in debts) {
+      batch.insert('debts', debt, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> _restoreDebtPayments(
+      List<Map<String, dynamic>> debtPayments) async {
+    final db = await DebtDBHelper().database;
+    final batch = db.batch();
+    for (final payment in debtPayments) {
+      batch.insert('debt_payments', payment,
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> _restoreAccounts(List<Map<String, dynamic>> accounts) async {
+    final db = await TransactionDBHelper().database;
+    final batch = db.batch();
+    for (final account in accounts) {
+      batch.insert('accounts', account,
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> _restoreSettings(Map<String, dynamic> settings) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in settings.keys) {
+      final value = settings[key];
+      if (value is bool) {
+        await prefs.setBool(key, value);
+      } else if (value is int) {
+        await prefs.setInt(key, value);
+      } else if (value is double) {
+        await prefs.setDouble(key, value);
+      } else if (value is String) {
+        await prefs.setString(key, value);
+      } else if (value is List) {
+        await prefs.setStringList(key, value.map((e) => e.toString()).toList());
+      }
+    }
   }
 
   Future<void> _restoreReceiptImages(Directory sourceDir) async {

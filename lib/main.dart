@@ -8,6 +8,7 @@ import 'providers/transaction_provider.dart';
 import 'providers/monthly_budget_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/debt_provider.dart';
+import 'providers/account_provider.dart';
 
 import 'screens/category_manger.dart';
 import 'screens/create_category.dart';
@@ -20,8 +21,16 @@ import 'screens/backup_management_screen.dart';
 import 'screens/debt_list_screen.dart';
 import 'screens/debt_form_screen.dart';
 import 'screens/debt_detail_screen.dart';
+import 'screens/all_transactions_screen.dart';
+import 'screens/account_management_screen.dart';
+import 'screens/account_form_screen.dart';
+import 'screens/upcoming_payments_screen.dart';
 
-void main() {
+import 'services/notification_service.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService().init();
   runApp(const MyApp());
 }
 
@@ -46,6 +55,9 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (context) => DebtProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => AccountProvider(),
         ),
       ],
       child: Consumer<SettingsProvider>(
@@ -173,6 +185,13 @@ class MyApp extends StatelessWidget {
               DebtFormScreen.routeName: (ctx) => const DebtFormScreen(),
               DebtDetailScreen.routeName: (ctx) =>
                   const DebtDetailScreen(debtId: ''),
+              AllTransactionsScreen.routeName: (ctx) =>
+                  const AllTransactionsScreen(),
+              AccountManagementScreen.routeName: (ctx) =>
+                  const AccountManagementScreen(),
+              AccountFormScreen.routeName: (ctx) => const AccountFormScreen(),
+              UpcomingPaymentsScreen.routeName: (ctx) =>
+                  const UpcomingPaymentsScreen(),
             },
           );
         },

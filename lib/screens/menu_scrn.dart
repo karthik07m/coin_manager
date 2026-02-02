@@ -26,8 +26,8 @@ class BottomNavBarState extends State<MenuScrn> {
   List<Widget> get _screens => [
         HomePage(onTabSelected: _onItemTapped),
         const TransactionList(),
-        const ChartsScreen(), // Charts screen
         const MonthlyBudgetScreen(), // Budget tracker screen
+        const ChartsScreen(), // Charts screen
         const SettingsScreen(),
       ];
 
@@ -69,6 +69,9 @@ class BottomNavBarState extends State<MenuScrn> {
     // Check for generic recurring transactions (Subscriptions etc)
     await transactionProvider.checkAndGenerateRecurringTransactions();
 
+    // Load upcoming transactions AFTER generating recurring instances
+    await transactionProvider.loadUpcomingTransactions();
+
     // Load transactions for this month
     await transactionProvider.loadTransactionsFromDB(
       startDate: firstDayOfMonth,
@@ -86,6 +89,7 @@ class BottomNavBarState extends State<MenuScrn> {
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         amount: settings.monthlyIncome,
         categoryId: defaultIncomeCat,
+        accountId: 1, // Default to Cash account
         title: 'Monthly Income',
         date: firstDayOfMonth,
         isExpense: false,

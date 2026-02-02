@@ -95,6 +95,8 @@ class CreateCategoryScreenState extends State<CreateCategoryScreen> {
                           width: 50,
                           height: 50,
                           fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(Icons.category, size: 30),
                         ),
                       ),
                     ),

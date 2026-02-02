@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/debt_provider.dart';
+import '../providers/settings_provider.dart';
 import '../models/debt.dart';
 import '../models/debt_payment.dart';
 import '../utilities/constants.dart';
@@ -245,12 +246,16 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                 }
 
                                 final remaining = debt.getRemainingAmount();
+                                final currencySymbol =
+                                    Provider.of<SettingsProvider>(context,
+                                            listen: false)
+                                        .currencySymbol;
                                 if (amount > remaining) {
-                                  ScaffoldMessenger.of(this.context)
-                                      .showSnackBar(
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text(
-                                          'Amount cannot exceed remaining balance of ${UtilityFunction.addCommaWithSign(remaining)}'),
+                                          'Amount cannot exceed remaining balance of ${UtilityFunction.addCommaWithSign(remaining, currencySymbol: currencySymbol)}'),
                                       backgroundColor: AppColors.negative,
                                     ),
                                   );
@@ -272,31 +277,30 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                 final debtProvider = Provider.of<DebtProvider>(
                                     this.context,
                                     listen: false);
+                                final messenger = ScaffoldMessenger.of(context);
+                                final navigator = Navigator.of(context);
+
                                 final success = await debtProvider
                                     .recordPayment(debt.id, payment);
 
-                                if (this.context.mounted) {
-                                  Navigator.pop(context);
-                                  if (success) {
-                                    ScaffoldMessenger.of(this.context)
-                                        .showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                            'Payment recorded successfully'),
-                                        backgroundColor: AppColors.positive,
-                                      ),
-                                    );
-                                    _loadPaymentHistory();
-                                  } else {
-                                    ScaffoldMessenger.of(this.context)
-                                        .showSnackBar(
-                                      const SnackBar(
-                                        content:
-                                            Text('Failed to record payment'),
-                                        backgroundColor: AppColors.negative,
-                                      ),
-                                    );
-                                  }
+                                if (!context.mounted) return;
+                                navigator.pop();
+                                if (success) {
+                                  messenger.showSnackBar(
+                                    const SnackBar(
+                                      content:
+                                          Text('Payment recorded successfully'),
+                                      backgroundColor: AppColors.positive,
+                                    ),
+                                  );
+                                  _loadPaymentHistory();
+                                } else {
+                                  messenger.showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Failed to record payment'),
+                                      backgroundColor: AppColors.negative,
+                                    ),
+                                  );
                                 }
                               },
                               style: ElevatedButton.styleFrom(
@@ -424,9 +428,10 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
           ),
         ],
       ),
-      body: Consumer<DebtProvider>(
-        builder: (context, debtProvider, child) {
+      body: Consumer2<DebtProvider, SettingsProvider>(
+        builder: (context, debtProvider, settingsProvider, child) {
           final debt = debtProvider.getDebtById(widget.debtId);
+          final currencySymbol = settingsProvider.currencySymbol;
 
           if (debt == null) {
             return const Center(
@@ -527,7 +532,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          UtilityFunction.addCommaWithSign(remaining),
+                          UtilityFunction.addCommaWithSign(remaining,
+                              currencySymbol: currencySymbol),
                           style: AppTextStyles.h1.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -536,7 +542,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'of ${UtilityFunction.addCommaWithSign(debt.amount)}',
+                          'of ${UtilityFunction.addCommaWithSign(debt.amount, currencySymbol: currencySymbol)}',
                           style: AppTextStyles.bodyMedium.copyWith(
                             color: Colors.white.withValues(alpha: 0.8),
                           ),
@@ -644,7 +650,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                             _buildDetailRow(
                               'Recurring Amount',
                               UtilityFunction.addCommaWithSign(
-                                  debt.recurringAmount!),
+                                  debt.recurringAmount!,
+                                  currencySymbol: currencySymbol),
                               Icons.payments,
                             ),
                           ],
@@ -759,7 +766,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                   children: [
                                     Text(
                                       UtilityFunction.addCommaWithSign(
-                                          payment.amount),
+                                          payment.amount,
+                                          currencySymbol: currencySymbol),
                                       style: AppTextStyles.bodyLarge.copyWith(
                                         fontWeight: FontWeight.bold,
                                       ),

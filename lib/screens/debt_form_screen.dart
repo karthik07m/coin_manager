@@ -188,19 +188,18 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
         await debtProvider.addDebt(debt);
       }
 
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _existingDebt != null
-                  ? 'Debt updated successfully'
-                  : 'Debt added successfully',
-            ),
-            backgroundColor: AppColors.positive,
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _existingDebt != null
+                ? 'Debt updated successfully'
+                : 'Debt added successfully',
           ),
-        );
-        Navigator.pop(context);
-      }
+          backgroundColor: AppColors.positive,
+        ),
+      );
+      Navigator.pop(context);
     }
   }
 
@@ -245,12 +244,11 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
       ),
     );
 
-    if (confirmed == true && context.mounted) {
+    if (confirmed == true && mounted) {
       final debtProvider = Provider.of<DebtProvider>(context, listen: false);
       await debtProvider.deleteDebt(_existingDebt!.id);
-      if (context.mounted) {
-        Navigator.pop(context);
-      }
+      if (!mounted) return;
+      Navigator.pop(context);
     }
   }
 

@@ -187,7 +187,9 @@ class _MonthlyBudgetScreenState extends State<MonthlyBudgetScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Quick Stats
-                  const QuickStatsWidget(),
+                  QuickStatsWidget(
+                    selectedMonth: _selectedMonth,
+                  ),
 
                   const SizedBox(height: AppDimensions.spacing24),
 

@@ -6,6 +6,7 @@ import '../providers/transaction_provider.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
+import '../providers/settings_provider.dart';
 
 class ManageBudgetScreen extends StatefulWidget {
   const ManageBudgetScreen({super.key});
@@ -99,6 +100,9 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final settingsProvider = Provider.of<SettingsProvider>(context);
+    final currencySymbol = settingsProvider.currencySymbol;
+
     return Scaffold(
       backgroundColor: context.appBackground,
       appBar: AppBar(
@@ -186,7 +190,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
                                     Text(
-                                      '\$',
+                                      currencySymbol,
                                       style: AppTextStyles.h2.copyWith(
                                         color: Colors.white,
                                         fontSize: 28,
@@ -250,6 +254,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                       child: _buildWhiteSummaryItem(
                                         'Allocated',
                                         totalAllocated,
+                                        currencySymbol,
                                       ),
                                     ),
                                     Container(
@@ -262,6 +267,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                       child: _buildWhiteSummaryItem(
                                         'Remaining',
                                         remainingBudget,
+                                        currencySymbol,
                                       ),
                                     ),
                                   ],
@@ -389,7 +395,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                                 if (budget > 0) ...[
                                                   const SizedBox(height: 2),
                                                   Text(
-                                                    'Spent: \$${spent.toStringAsFixed(2)}',
+                                                    'Spent: ${UtilityFunction.formatMoney(spent, symbol: currencySymbol)}',
                                                     style: AppTextStyles.caption
                                                         .copyWith(
                                                       color: progressColor,
@@ -420,7 +426,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                                   color: context.textSecondary
                                                       .withValues(alpha: 0.4),
                                                 ),
-                                                prefixText: '\$ ',
+                                                prefixText: '$currencySymbol ',
                                                 prefixStyle: TextStyle(
                                                   color: context.textSecondary,
                                                   fontSize: 15,
@@ -477,7 +483,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                               ),
                                             ),
                                             Text(
-                                              '\$${(budget - spent).toStringAsFixed(2)} left',
+                                              '${UtilityFunction.formatMoney(budget - spent, symbol: currencySymbol)} left',
                                               style: AppTextStyles.caption
                                                   .copyWith(
                                                 color: progressColor,
@@ -510,7 +516,6 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: SizedBox(
-            height: AppDimensions.buttonHeight,
             child: ElevatedButton(
               onPressed: _saveBudgets,
               style: ElevatedButton.styleFrom(
@@ -518,16 +523,16 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                 foregroundColor: Colors.white,
                 elevation: 4,
                 shadowColor: AppColors.primary.withValues(alpha: 0.3),
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.circular(AppDimensions.radiusMedium),
+                  borderRadius: BorderRadius.circular(30),
                 ),
               ),
               child: const Text(
                 'Save Changes',
                 style: TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
@@ -539,7 +544,8 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
     );
   }
 
-  Widget _buildWhiteSummaryItem(String label, double amount) {
+  Widget _buildWhiteSummaryItem(
+      String label, double amount, String currencySymbol) {
     return Column(
       children: [
         Text(
@@ -552,7 +558,8 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          UtilityFunction.addCommaWithSign(amount),
+          UtilityFunction.addCommaWithSign(amount,
+              currencySymbol: currencySymbol),
           style: AppTextStyles.h3.copyWith(
             color: Colors.white,
             fontWeight: FontWeight.bold,

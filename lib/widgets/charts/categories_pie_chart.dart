@@ -4,17 +4,20 @@ import '../../models/category_amount.dart';
 import '../../utilities/constants.dart';
 import '../../utilities/theme_helper.dart';
 import '../../utilities/functions.dart';
+import '../../screens/all_transactions_screen.dart';
 
 class CategoriesPieChart extends StatefulWidget {
   final double screenHeight;
   final List<CategoryAmount> categories;
   final double totalExpenses;
+  final DateTime currentMonth;
 
   const CategoriesPieChart({
     super.key,
     required this.screenHeight,
     required this.categories,
     required this.totalExpenses,
+    required this.currentMonth,
   });
 
   @override
@@ -25,7 +28,6 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
     with SingleTickerProviderStateMixin {
   int? _touchedIndex;
   Set<String> _selectedCategories = {};
-  bool _initialized = false;
 
   // Animation controller for entrance animation
   late AnimationController _animationController;
@@ -43,20 +45,13 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
       curve: Curves.easeOutQuart, // Very smooth deceleration
     );
 
+    // Initialize selected categories once
+    _initializeSelectedCategories();
+
     // Start animation after a small delay to allow UI to settle
     Future.delayed(const Duration(milliseconds: 200), () {
       if (mounted) _animationController.forward();
     });
-  }
-
-  @override
-  void didUpdateWidget(CategoriesPieChart oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Initialize selected categories on first build or when categories change
-    if (!_initialized ||
-        widget.categories.length != oldWidget.categories.length) {
-      _initializeSelectedCategories();
-    }
   }
 
   @override
@@ -68,7 +63,6 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
   void _initializeSelectedCategories() {
     // Select all categories by default
     _selectedCategories = widget.categories.map((c) => c.name).toSet();
-    _initialized = true;
   }
 
   @override
@@ -119,7 +113,7 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
                   ),
                 ),
                 child: Text(
-                  UtilityFunction.addCommaWithSign(filteredTotal),
+                  UtilityFunction.addCommaWithSign(widget.totalExpenses),
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: AppColors.primary,
                     fontWeight: FontWeight.bold,
@@ -153,18 +147,22 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
                           touchCallback: (event, pieTouchResponse) {
                             if (event is FlTapUpEvent &&
                                 pieTouchResponse != null) {
+                              final index = pieTouchResponse
+                                  .touchedSection?.touchedSectionIndex;
+
+                              if (index != null &&
+                                  index >= 0 &&
+                                  index < displayCategories.length) {
+                                // Only provide visual feedback, no navigation
+                                setState(() {
+                                  _touchedIndex = index;
+                                });
+                              }
+                            } else if (event is FlPanEndEvent ||
+                                event is FlTapUpEvent) {
+                              // Reset touched state when user stops touching
                               setState(() {
-                                final index = pieTouchResponse
-                                    .touchedSection?.touchedSectionIndex;
-                                if (index != null &&
-                                    index >= 0 &&
-                                    index < displayCategories.length) {
-                                  // Toggle selection
-                                  _touchedIndex =
-                                      _touchedIndex == index ? null : index;
-                                } else {
-                                  _touchedIndex = null;
-                                }
+                                _touchedIndex = null;
                               });
                             }
                           },
@@ -175,41 +173,157 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
                           : const Duration(milliseconds: 150),
                       curve: Curves.linear,
                     ),
-                    // Center display (Total or Selected)
+                    // Center display (Total or Selected) - Tappable for all transactions
                     Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _touchedIndex != null &&
-                                    _touchedIndex! >= 0 &&
-                                    _touchedIndex! < displayCategories.length
-                                ? displayCategories[_touchedIndex!].name
-                                : 'Total',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                              letterSpacing: 0.2,
-                              color: context.textSecondary,
+                      child: GestureDetector(
+                        onTap: () {
+                          final startDate = DateTime(
+                            widget.currentMonth.year,
+                            widget.currentMonth.month,
+                            1,
+                          );
+                          final endDate = DateTime(
+                            widget.currentMonth.year,
+                            widget.currentMonth.month + 1,
+                            0,
+                          );
+
+                          // Determine if we should filter by category
+                          final int? categoryId = _touchedIndex != null &&
+                                  _touchedIndex! >= 0 &&
+                                  _touchedIndex! < displayCategories.length
+                              ? displayCategories[_touchedIndex!].id
+                              : null;
+
+                          Navigator.push(
+                            context,
+                            PageRouteBuilder(
+                              pageBuilder:
+                                  (context, animation, secondaryAnimation) =>
+                                      AllTransactionsScreen(
+                                initialStartDate: startDate,
+                                initialEndDate: endDate,
+                                initialCategoryId:
+                                    categoryId, // Filter by category if touched
+                                hideFiltersInitially: true,
+                              ),
+                              transitionsBuilder: (context, animation,
+                                  secondaryAnimation, child) {
+                                // Same premium animation for consistency
+                                const slideBegin = Offset(0.15, 0.0);
+                                const slideEnd = Offset.zero;
+
+                                final slideCurve = CurvedAnimation(
+                                  parent: animation,
+                                  curve: const Interval(0.0, 1.0,
+                                      curve: Curves.easeOutCubic),
+                                );
+
+                                final fadeCurve = CurvedAnimation(
+                                  parent: animation,
+                                  curve: const Interval(0.0, 0.5,
+                                      curve: Curves.easeIn),
+                                );
+
+                                final scaleCurve = CurvedAnimation(
+                                  parent: animation,
+                                  curve: const Interval(0.0, 0.8,
+                                      curve: Curves.easeOutBack),
+                                );
+
+                                return SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: slideBegin,
+                                    end: slideEnd,
+                                  ).animate(slideCurve),
+                                  child: FadeTransition(
+                                    opacity: fadeCurve,
+                                    child: ScaleTransition(
+                                      scale:
+                                          Tween<double>(begin: 0.95, end: 1.0)
+                                              .animate(scaleCurve),
+                                      child: child,
+                                    ),
+                                  ),
+                                );
+                              },
+                              transitionDuration:
+                                  const Duration(milliseconds: 500),
                             ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _touchedIndex != null &&
-                                    _touchedIndex! >= 0 &&
-                                    _touchedIndex! < displayCategories.length
-                                ? UtilityFunction.addCommaWithSign(
-                                    displayCategories[_touchedIndex!].amount)
-                                : UtilityFunction.addCommaWithSign(
-                                    filteredTotal),
-                            style: AppTextStyles.h2.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 26,
+                          ).then((_) {
+                            // Reset touched state when returning
+                            if (mounted) {
+                              setState(() {
+                                _touchedIndex = null;
+                              });
+                            }
+                          });
+                        },
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _touchedIndex != null &&
+                                      _touchedIndex! >= 0 &&
+                                      _touchedIndex! < displayCategories.length
+                                  ? displayCategories[_touchedIndex!].name
+                                  : 'Total',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                                letterSpacing: 0.2,
+                                color: context.textSecondary,
+                              ),
+                              textAlign: TextAlign.center,
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 4),
+                            Text(
+                              _touchedIndex != null &&
+                                      _touchedIndex! >= 0 &&
+                                      _touchedIndex! < displayCategories.length
+                                  ? UtilityFunction.addCommaWithSign(
+                                      displayCategories[_touchedIndex!].amount)
+                                  : UtilityFunction.addCommaWithSign(widget
+                                      .totalExpenses), // Use the total from parent for accuracy
+                              style: AppTextStyles.h2.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 26,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            // View Details hint
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.touch_app,
+                                    size: 14,
+                                    color: AppColors.primary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'View Details',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -424,7 +538,7 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
     for (int i = 0; i < categories.length; i++) {
       final cat = categories[i];
       final isTouched = _touchedIndex == i;
-      final radius = isTouched ? 55.0 : 50.0;
+      final radius = isTouched ? 60.0 : 50.0; // Larger touch feedback
       final percentage =
           totalVisible > 0 ? (cat.amount / totalVisible * 100) : 0.0;
 
@@ -438,11 +552,20 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
         value: cat.amount,
         radius: radius,
         showTitle: percentage > 4, // Only show if > 4% to avoid clutter
-        title: '${percentage.round()}%',
+        title: '${percentage.toStringAsFixed(1)}%', // Show one decimal place
         titleStyle: AppTextStyles.bodySmall.copyWith(
           color: Colors.white,
           fontWeight: FontWeight.bold,
-          fontSize: isTouched ? 14 : 12,
+          fontSize: isTouched ? 15 : 12, // Larger text when touched
+          shadows: isTouched
+              ? [
+                  const Shadow(
+                    color: Colors.black26,
+                    blurRadius: 4,
+                    offset: Offset(0, 1),
+                  )
+                ]
+              : null,
         ),
         badgeWidget: _touchedIndex == i ? _buildBadge(cat.icon) : null,
         badgePositionPercentageOffset: .98,

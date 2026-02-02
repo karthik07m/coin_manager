@@ -3,6 +3,7 @@ class Transaction {
   String title;
   double amount;
   int categoryId;
+  int accountId;
   DateTime date;
   bool isExpense;
   bool isRecurring;
@@ -15,6 +16,7 @@ class Transaction {
       required this.title,
       required this.amount,
       required this.categoryId,
+      required this.accountId,
       required this.date,
       required this.createdOn,
       required this.modifiedOn,
@@ -27,6 +29,7 @@ class Transaction {
       required String title,
       required double amount,
       required int categoryId,
+      required int accountId,
       required DateTime date,
       required bool isExpense,
       bool isRecurring = false,
@@ -37,6 +40,7 @@ class Transaction {
       title: title,
       amount: amount,
       categoryId: categoryId,
+      accountId: accountId,
       date: date,
       createdOn: now,
       modifiedOn: now,
@@ -50,11 +54,13 @@ class Transaction {
       {required String title,
       required double amount,
       required int categoryId,
+      required int accountId,
       required bool isExpense,
       required bool isRecurring}) {
     this.title = title;
     this.amount = amount;
     this.categoryId = categoryId;
+    this.accountId = accountId;
     this.isExpense = isExpense;
     this.isRecurring = isRecurring;
     modifiedOn = DateTime.now();
@@ -67,6 +73,7 @@ class Transaction {
       'title': title,
       'amount': amount,
       'category_id': categoryId,
+      'account_id': accountId,
       'date': date.toIso8601String(),
       'created_on': createdOn.toIso8601String(),
       'modified_on': modifiedOn.toIso8601String(),
@@ -83,6 +90,7 @@ class Transaction {
       title: map['title'],
       amount: map['amount'],
       categoryId: map['category_id'],
+      accountId: map['account_id'] ?? 1, // Default to first account if missing
       date: DateTime.parse(map['date']),
       createdOn: DateTime.parse(map['created_on']),
       modifiedOn: DateTime.parse(map['modified_on']),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/debt_provider.dart';
+import '../providers/settings_provider.dart';
 import '../models/debt.dart';
 import '../utilities/constants.dart';
 import '../utilities/functions.dart';
@@ -89,13 +90,15 @@ class _DebtListScreenState extends State<DebtListScreen>
           ),
         ),
       ),
-      body: Consumer<DebtProvider>(
-        builder: (context, debtProvider, child) {
+      body: Consumer2<DebtProvider, SettingsProvider>(
+        builder: (context, debtProvider, settingsProvider, child) {
+          final currencySymbol = settingsProvider.currencySymbol;
           return TabBarView(
             controller: _tabController,
             children: [
-              _buildDebtList(true, debtProvider), // Liabilities
-              _buildDebtList(false, debtProvider), // Receivables
+              _buildDebtList(true, debtProvider, currencySymbol), // Liabilities
+              _buildDebtList(
+                  false, debtProvider, currencySymbol), // Receivables
             ],
           );
         },
@@ -172,7 +175,8 @@ class _DebtListScreenState extends State<DebtListScreen>
     );
   }
 
-  Widget _buildDebtList(bool isLiability, DebtProvider debtProvider) {
+  Widget _buildDebtList(
+      bool isLiability, DebtProvider debtProvider, String currencySymbol) {
     final debts = debtProvider
         .filterByTypeAndStatus(
           isLiability: isLiability,
@@ -210,13 +214,13 @@ class _DebtListScreenState extends State<DebtListScreen>
         itemCount: debts.length,
         itemBuilder: (context, index) {
           final debt = debts[index];
-          return _buildDebtCard(debt);
+          return _buildDebtCard(debt, currencySymbol);
         },
       ),
     );
   }
 
-  Widget _buildDebtCard(Debt debt) {
+  Widget _buildDebtCard(Debt debt, String currencySymbol) {
     final remaining = debt.getRemainingAmount();
     final progress = debt.getProgressPercentage();
 
@@ -341,14 +345,15 @@ class _DebtListScreenState extends State<DebtListScreen>
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        UtilityFunction.addCommaWithSign(remaining),
+                        UtilityFunction.addCommaWithSign(remaining,
+                            currencySymbol: currencySymbol),
                         style: AppTextStyles.h3.copyWith(
                           color: statusColor,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       Text(
-                        'of ${UtilityFunction.addCommaWithSign(debt.amount)}',
+                        'of ${UtilityFunction.addCommaWithSign(debt.amount, currencySymbol: currencySymbol)}',
                         style: AppTextStyles.caption.copyWith(
                           color: context.textSecondary,
                           fontSize: 11,
@@ -356,7 +361,7 @@ class _DebtListScreenState extends State<DebtListScreen>
                       ),
                       if (debt.amountPaid > 0)
                         Text(
-                          'Paid: ${UtilityFunction.addCommaWithSign(debt.amountPaid)}',
+                          'Paid: ${UtilityFunction.addCommaWithSign(debt.amountPaid, currencySymbol: currencySymbol)}',
                           style: AppTextStyles.caption.copyWith(
                             color: AppColors.positive,
                             fontSize: 10,

@@ -79,6 +79,29 @@ class UtilityFunction {
         date1.day == date2.day;
   }
 
+  // Format time based on user preference (12-hour or 24-hour)
+  static String formatTime(DateTime dateTime, {bool use24Hour = false}) {
+    if (use24Hour) {
+      // 24-hour format: 14:30
+      final hour = dateTime.hour.toString().padLeft(2, '0');
+      final minute = dateTime.minute.toString().padLeft(2, '0');
+      return '$hour:$minute';
+    } else {
+      // 12-hour format: 2:30 PM
+      int hour = dateTime.hour;
+      final period = hour >= 12 ? 'PM' : 'AM';
+
+      if (hour == 0) {
+        hour = 12;
+      } else if (hour > 12) {
+        hour -= 12;
+      }
+
+      final minute = dateTime.minute.toString().padLeft(2, '0');
+      return '$hour:$minute $period';
+    }
+  }
+
   static String addComma(double value) {
     String amount = value.toStringAsFixed(2);
     // currency = CurrencyProvider.currentCurrency;
@@ -88,13 +111,54 @@ class UtilityFunction {
     return " $currency $finalAmount";
   }
 
-  static String addCommaWithSign(double value) {
-    String amount = value.toStringAsFixed(2);
+  /// Format number with Indian numbering system (lakhs/crores)
+  /// Example: 1234567.89 => 12,34,567.89
+  static String formatIndianNumber(double value) {
+    final parts = value.toStringAsFixed(2).split('.');
+    final intPart = parts[0];
+    final decPart = parts[1];
 
-    currency = "\$";
-    String finalAmount = amount.replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => "${m[1]},");
-    return "$currency$finalAmount";
+    if (intPart.length <= 3) {
+      return '$intPart.$decPart';
+    }
+
+    // Indian system: last 3 digits, then groups of 2
+    final buffer = StringBuffer();
+    final length = intPart.length;
+
+    // Add first group (rightmost 3 digits)
+    buffer.write(intPart.substring(length - 3));
+
+    // Add remaining groups of 2 from right to left
+    int pos = length - 3;
+    while (pos > 0) {
+      final start = pos - 2 >= 0 ? pos - 2 : 0;
+      final group = intPart.substring(start, pos);
+      buffer.write(',');
+      buffer.write(group);
+      pos = start;
+    }
+
+    // Reverse to get correct order
+    final reversed = buffer.toString().split('').reversed.join();
+    return '$reversed.$decPart';
+  }
+
+  static String addCommaWithSign(double value,
+      {String currencySymbol = '\$', String currencyCode = 'USD'}) {
+    String formattedAmount;
+
+    // Use Indian numbering for INR
+    if (currencyCode == 'INR') {
+      formattedAmount = formatIndianNumber(value);
+    } else {
+      // International numbering (groups of 3)
+      String amount = value.toStringAsFixed(2);
+      formattedAmount = amount.replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => "${m[1]},");
+    }
+
+    return "$currencySymbol$formattedAmount";
   }
 
   /// Format money with commas and optional decimals

@@ -8,6 +8,7 @@ import '../models/transaction.dart';
 import '../widgets/calculator_field.dart';
 import '../utilities/constants.dart';
 import '../utilities/budget_rules.dart';
+import '../services/notification_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
   static const routeName = '/onboarding';
@@ -175,6 +176,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       amount: income,
       categoryId: defaultIncomeCat,
+      accountId: 1, // Default to Cash account
       title: 'Monthly Income',
       date: DateTime.now(),
       isExpense: false,
@@ -193,7 +195,80 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
 
     if (!mounted) return;
+
+    // Ask for notification permissions
+    await _askForNotifications();
+
+    if (!mounted) return;
     Navigator.of(context).pushReplacementNamed('/');
+  }
+
+  Future<void> _askForNotifications() async {
+    final bool? shouldRequest = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.notifications_active,
+                  color: Theme.of(context).colorScheme.primary),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Stay on Track',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Enable notifications to get daily reminders to log your expenses. This helps you stay consistent with your budget!',
+          style: TextStyle(fontSize: 16, color: Colors.black87),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Maybe Later',
+              style: TextStyle(
+                color: Colors.black.withValues(alpha: 0.5),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Enable Notifications'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldRequest == true && mounted) {
+      final notificationService = NotificationService();
+      await notificationService.requestPermissions();
+      // Schedule default daily reminder at 8pm
+      await notificationService.scheduleDailyReminder(hour: 20, minute: 0);
+    }
   }
 
   @override
