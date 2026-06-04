@@ -5,11 +5,11 @@ import '../providers/transaction_provider.dart';
 import '../widgets/transaction_item.dart';
 import '../providers/category_provider.dart';
 import '../providers/settings_provider.dart';
-
 import '../utilities/functions.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../widgets/empty_transaction_state.dart';
+import '../widgets/shimmer_loading.dart';
 import 'all_transactions_screen.dart';
 
 class TransactionList extends StatefulWidget {
@@ -27,6 +27,8 @@ class _TransactionListState extends State<TransactionList> {
   late DateTime _endDate;
   late List<DateTime> _months;
   int? _selectedCategoryFilter;
+  bool _initialized = false;
+
   @override
   void initState() {
     super.initState();
@@ -40,15 +42,23 @@ class _TransactionListState extends State<TransactionList> {
     _pageController = PageController(initialPage: initialIndex);
     _scrollController = ScrollController();
 
-    // Scroll to show January of current year as first visible month
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final now = DateTime.now();
-      final januaryIndex =
-          _months.indexWhere((m) => m.year == now.year && m.month == 1);
-      if (januaryIndex != -1 && _scrollController.hasClients) {
-        _scrollController.jumpTo(januaryIndex * 78.0);
+      if (_scrollController.hasClients) {
+        _scrollToSelectedMonth(initialIndex);
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Load transactions once after the widget is inserted into the tree.
+    // Previously this happened inside build() which violates Flutter best
+    // practices (side-effects must not occur during widget construction).
+    if (!_initialized) {
+      _initialized = true;
+      _loadTransactions();
+    }
   }
 
   List<DateTime> _generateMonths() {
@@ -87,6 +97,9 @@ class _TransactionListState extends State<TransactionList> {
     _loadTransactions();
   }
 
+  // _loadTransactions is now called from didChangeDependencies and
+  // _onPageChanged, never from inside build(). This avoids side-effects
+  // during widget construction which caused jank.
   void _loadTransactions() {
     Provider.of<TransactionProvider>(context, listen: false)
         .loadTransactionsFromDB(startDate: _startDate, endDate: _endDate);
@@ -119,11 +132,21 @@ class _TransactionListState extends State<TransactionList> {
   Widget build(BuildContext context) {
     return Consumer<TransactionProvider>(
         builder: (context, transactionProvider, child) {
-      final transactions = transactionProvider.transactions;
-
+      // Show shimmer skeleton while first load is in progress.
+      // This replaces the jarring empty → content flash.
       if (!transactionProvider.isTransactionsLoaded) {
-        _loadTransactions();
+        return Column(
+          children: [
+            _buildHeader(),
+            const SizedBox(height: 8),
+            _buildMonthScroller(),
+            const SizedBox(height: 16),
+            Expanded(child: _buildTransactionShimmer()),
+          ],
+        );
       }
+
+      final transactions = transactionProvider.transactions;
 
       // Apply filters
       final filteredTransactions = transactions.where((transaction) {
@@ -592,6 +615,41 @@ class _TransactionListState extends State<TransactionList> {
                   color: isSelected ? AppColors.primary : context.textPrimary,
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Shimmer skeleton shown while transactions load for the first time.
+  Widget _buildTransactionShimmer() {
+    return ShimmerLoading(
+      isLoading: true,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+        itemCount: 7,
+        itemBuilder: (context, index) => Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Row(
+            children: [
+              ShimmerCircle(size: 48),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ShimmerBox(
+                        height: 14,
+                        width: double.infinity,
+                        borderRadius: 8),
+                    const SizedBox(height: 8),
+                    ShimmerBox(height: 12, width: 120, borderRadius: 8),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              ShimmerBox(height: 16, width: 60, borderRadius: 8),
             ],
           ),
         ),

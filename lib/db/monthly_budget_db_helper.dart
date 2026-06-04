@@ -132,4 +132,28 @@ class MonthlyBudgetDBHelper {
     }
     return budgets;
   }
+
+  // Copy Budget to Next Month
+  Future<void> copyBudgetToNextMonth(String currentMonth) async {
+    // Calculate next month key
+    final currentMonthInt = int.parse(currentMonth);
+    final nextMonthInt = currentMonthInt == 12 ? 1 : currentMonthInt + 1;
+    final nextMonth = nextMonthInt.toString();
+
+    // Get current month's total budget
+    final totalBudget = await getTotalBudget(currentMonth);
+
+    // Get all category budgets for current month
+    final categoryBudgets = await getAllBudgetsForMonth(currentMonth);
+
+    // Copy total budget to next month
+    if (totalBudget > 0) {
+      await setTotalBudget(nextMonth, totalBudget);
+    }
+
+    // Copy all category budgets to next month
+    for (var entry in categoryBudgets.entries) {
+      await setBudget(entry.key, nextMonth, entry.value);
+    }
+  }
 }

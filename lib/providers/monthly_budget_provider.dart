@@ -70,4 +70,19 @@ class MonthlyBudgetProvider with ChangeNotifier {
     notifyListeners();
     await _dbHelper.setTotalBudget(month, amount);
   }
+
+  // Copy current month's budget to next month
+  Future<void> copyBudgetToNextMonth(String currentMonth) async {
+    await _dbHelper.copyBudgetToNextMonth(currentMonth);
+
+    // Calculate next month and load its data
+    final currentMonthInt = int.parse(currentMonth);
+    final nextMonthInt = currentMonthInt == 12 ? 1 : currentMonthInt + 1;
+    final nextMonth = nextMonthInt.toString();
+
+    // Load the next month's data to update the UI
+    await loadMonthlyData(nextMonth);
+
+    notifyListeners();
+  }
 }

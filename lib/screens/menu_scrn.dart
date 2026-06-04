@@ -23,17 +23,22 @@ class MenuScrn extends StatefulWidget {
 class BottomNavBarState extends State<MenuScrn> {
   int _selectedIndex = 0;
 
-  List<Widget> get _screens => [
-        HomePage(onTabSelected: _onItemTapped),
-        const TransactionList(),
-        const MonthlyBudgetScreen(), // Budget tracker screen
-        const ChartsScreen(), // Charts screen
-        const SettingsScreen(),
-      ];
+  // Cached so widgets are built ONCE and kept alive across tab switches.
+  // Previously a getter — this was creating new widget instances on every
+  // setState() call, causing full subtree rebuilds on every tab tap.
+  late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
+    // Initialize screens once — never recreated.
+    _screens = [
+      HomePage(onTabSelected: _onItemTapped),
+      const TransactionList(),
+      const MonthlyBudgetScreen(),
+      const ChartsScreen(),
+      const SettingsScreen(),
+    ];
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAndCheckRecurring();
     });
@@ -78,11 +83,15 @@ class BottomNavBarState extends State<MenuScrn> {
       endDate: lastDayOfMonth,
     );
 
-    // Check if income transaction exists for this month
-    final hasIncomeThisMonth = transactionProvider.transactions
-        .any((t) => !t.isExpense && t.categoryId == defaultIncomeCat);
+    // Auto-add monthly income ONCE per calendar month.
+    // We use a persisted flag (lastAutoIncomeMonth) rather than checking the
+    // in-memory transaction list. This prevents the income from being
+    // re-inserted every time the app launches after the user deletes it.
+    final autoIncomeKey = '${now.year}-${now.month}';
+    final alreadyAddedThisMonth =
+        settings.lastAutoIncomeMonth == autoIncomeKey;
 
-    if (!hasIncomeThisMonth &&
+    if (!alreadyAddedThisMonth &&
         settings.recurIncome &&
         settings.monthlyIncome > 0) {
       final incomeTransaction = Transaction.createNew(
@@ -95,6 +104,8 @@ class BottomNavBarState extends State<MenuScrn> {
         isExpense: false,
       );
       await transactionProvider.addTransaction(incomeTransaction);
+      // Persist the flag so we don't add again this month, even after a restart
+      await settings.markAutoIncomeAdded(now.year, now.month);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -116,14 +127,16 @@ class BottomNavBarState extends State<MenuScrn> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBody: true, // Allow body to extend behind the floating nav bar
+      extendBody: true,
       body: Stack(
         children: [
-          // Background Gradient
-          // Background layer removed to use Theme.scaffoldBackgroundColor
-          // Screen Content
           SafeArea(
-            child: _screens[_selectedIndex],
+            // IndexedStack keeps all screens alive and simply shows/hides them.
+            // This eliminates the rebuild cost entirely on tab switch.
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: _screens,
+            ),
           ),
         ],
       ),

@@ -352,10 +352,20 @@ class TransactionDBHelper {
   Future<List<trans_model.Transaction>> getRecurringTransactions() async {
     var dbClient = await database;
     try {
-      final List<Map<String, dynamic>> transactions = await dbClient.query(
-        tableName,
-        where: '$columnIsRecurring = 1',
-      );
+      // Return only the OLDEST (seed/template) recurring transaction per unique
+      // (title, categoryId, amount, isExpense) group.
+      // If we returned all clones, deleting one generated instance would cause
+      // checkAndGenerateRecurring to recreate it from a surviving sibling clone.
+      final List<Map<String, dynamic>> transactions = await dbClient.rawQuery('''
+        SELECT * FROM $tableName
+        WHERE $columnIsRecurring = 1
+          AND $columnId IN (
+            SELECT $columnId FROM $tableName
+            WHERE $columnIsRecurring = 1
+            GROUP BY $columnTitle, $columnCategoryId, $columnAmount, $columnIsExpense
+            HAVING $columnId = MIN($columnId)
+          )
+      ''');
       return transactions
           .map((map) => trans_model.Transaction.fromMap(map))
           .toList();

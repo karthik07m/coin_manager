@@ -189,7 +189,11 @@ class AccountDBHelper {
 
       if (accountMaps.isEmpty) return 0.0;
 
-      final initialBalance = accountMaps.first[columnBalance] as double? ?? 0.0;
+      // Handle both int and double from SQLite
+      final balanceValue = accountMaps.first[columnBalance];
+      final initialBalance = balanceValue is int
+          ? balanceValue.toDouble()
+          : (balanceValue as double? ?? 0.0);
 
       // Calculate transaction impact
       final transactionResult = await db.rawQuery(
@@ -205,8 +209,15 @@ class AccountDBHelper {
 
       if (transactionResult.isEmpty) return initialBalance;
 
-      final income = transactionResult.first['income'] as double? ?? 0.0;
-      final expense = transactionResult.first['expense'] as double? ?? 0.0;
+      // Handle both int and double from SQLite SUM operations
+      final incomeValue = transactionResult.first['income'];
+      final expenseValue = transactionResult.first['expense'];
+      final income = incomeValue is int
+          ? incomeValue.toDouble()
+          : (incomeValue as double? ?? 0.0);
+      final expense = expenseValue is int
+          ? expenseValue.toDouble()
+          : (expenseValue as double? ?? 0.0);
 
       return initialBalance + income - expense;
     } catch (e) {

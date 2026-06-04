@@ -15,6 +15,7 @@ class SettingsProvider extends ChangeNotifier {
   bool _recurBudget = false;
   int _incomeDay = 1; // Day of month for recurring income (1-28)
   bool _use24HourFormat = false; // Default to 12-hour format
+  String _lastAutoIncomeMonth = ''; // "YYYY-M" of the last month auto-income was added
   bool _enableNotifications = false;
   TimeOfDay _notificationTime =
       const TimeOfDay(hour: 20, minute: 0); // Default 8 PM
@@ -32,6 +33,7 @@ class SettingsProvider extends ChangeNotifier {
   int get incomeDay => _incomeDay;
   bool get use24HourFormat => _use24HourFormat;
   bool get enableNotifications => _enableNotifications;
+  String get lastAutoIncomeMonth => _lastAutoIncomeMonth;
   TimeOfDay get notificationTime => _notificationTime;
 
   SettingsProvider() {
@@ -54,6 +56,7 @@ class SettingsProvider extends ChangeNotifier {
     _recurIncome = prefs.getBool('recurIncome') ?? false;
     _recurBudget = prefs.getBool('recurBudget') ?? false;
     _incomeDay = prefs.getInt('incomeDay') ?? 1;
+    _lastAutoIncomeMonth = prefs.getString('lastAutoIncomeMonth') ?? '';
     _use24HourFormat = prefs.getBool('use24HourFormat') ?? false;
     _enableNotifications = prefs.getBool('enableNotifications') ?? false;
     final notifHour = prefs.getInt('notificationHour') ?? 20;
@@ -105,6 +108,16 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setBool('recurIncome', recurIncome);
     await prefs.setBool('recurBudget', recurBudget);
     await prefs.setInt('incomeDay', incomeDay);
+    notifyListeners();
+  }
+
+  /// Marks that auto monthly income has been added for a given month.
+  /// Call this after successfully inserting the auto-income transaction so
+  /// we never re-add it even if the user deletes it later.
+  Future<void> markAutoIncomeAdded(int year, int month) async {
+    _lastAutoIncomeMonth = '$year-$month';
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('lastAutoIncomeMonth', _lastAutoIncomeMonth);
     notifyListeners();
   }
 

@@ -25,6 +25,7 @@ import 'screens/all_transactions_screen.dart';
 import 'screens/account_management_screen.dart';
 import 'screens/account_form_screen.dart';
 import 'screens/upcoming_payments_screen.dart';
+import 'utilities/page_transitions.dart';
 
 import 'services/notification_service.dart';
 
@@ -115,6 +116,13 @@ class MyApp extends StatelessWidget {
                 displayColor: const Color(0xFF1F2937), // Softer dark
               ),
               useMaterial3: true,
+              // Smooth slide transitions globally for push/pop routes
+              pageTransitionsTheme: const PageTransitionsTheme(
+                builders: {
+                  TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+                  TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+                },
+              ),
             ),
             darkTheme: ThemeData(
               brightness: Brightness.dark,
@@ -164,11 +172,69 @@ class MyApp extends StatelessWidget {
                 displayColor: AppColors.textPrimary,
               ),
               useMaterial3: true,
+              // Smooth slide transitions globally for push/pop routes
+              pageTransitionsTheme: const PageTransitionsTheme(
+                builders: {
+                  TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+                  TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+                },
+              ),
             ),
             home: settings.isFirstLaunch
                 ? const OnboardingScreen()
                 : const MenuScrn(),
             debugShowCheckedModeBanner: false,
+            // onGenerateRoute provides context-aware transitions:
+            // form screens slide up from bottom, detail screens scale+fade,
+            // all others slide from right. Falls back to named routes table.
+            onGenerateRoute: (settings) {
+              switch (settings.name) {
+                case TransactionForm.routeName:
+                  return PageTransitions.slideFromBottom(
+                      const TransactionForm(), settings: settings);
+                case CreateCategoryScreen.routeName:
+                  return PageTransitions.slideFromBottom(
+                      const CreateCategoryScreen(), settings: settings);
+                case CategoryManagementScreen.routeName:
+                  return PageTransitions.slideFromRight(
+                      const CategoryManagementScreen(), settings: settings);
+                case PrivacyPolicyScreen.routeName:
+                  return PageTransitions.slideFromRight(
+                      const PrivacyPolicyScreen(), settings: settings);
+                case OnboardingScreen.routeName:
+                  return PageTransitions.fade(
+                      const OnboardingScreen(), settings: settings);
+                case '/manageBudget':
+                  return PageTransitions.slideFromRight(
+                      const ManageBudgetScreen(), settings: settings);
+                case BackupManagementScreen.routeName:
+                  return PageTransitions.slideFromRight(
+                      const BackupManagementScreen(), settings: settings);
+                case DebtListScreen.routeName:
+                  return PageTransitions.slideFromRight(
+                      const DebtListScreen(), settings: settings);
+                case DebtFormScreen.routeName:
+                  return PageTransitions.slideFromBottom(
+                      const DebtFormScreen(), settings: settings);
+                case DebtDetailScreen.routeName:
+                  return PageTransitions.scaleWithFade(
+                      const DebtDetailScreen(debtId: ''), settings: settings);
+                case AllTransactionsScreen.routeName:
+                  return PageTransitions.slideFromRight(
+                      const AllTransactionsScreen(), settings: settings);
+                case AccountManagementScreen.routeName:
+                  return PageTransitions.slideFromRight(
+                      const AccountManagementScreen(), settings: settings);
+                case AccountFormScreen.routeName:
+                  return PageTransitions.slideFromBottom(
+                      const AccountFormScreen(), settings: settings);
+                case UpcomingPaymentsScreen.routeName:
+                  return PageTransitions.slideFromRight(
+                      const UpcomingPaymentsScreen(), settings: settings);
+                default:
+                  return null; // Fall through to routes table
+              }
+            },
             routes: {
               TransactionForm.routeName: (ctx) => const TransactionForm(),
               CreateCategoryScreen.routeName: (ctx) =>

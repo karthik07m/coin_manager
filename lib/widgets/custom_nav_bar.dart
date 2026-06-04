@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../utilities/constants.dart';
 
 class CustomNavBar extends StatelessWidget {
@@ -18,7 +19,7 @@ class CustomNavBar extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       decoration: BoxDecoration(
-        color: colorScheme.surface.withAlpha(230), // Slightly transparent
+        color: colorScheme.surface.withAlpha(230),
         borderRadius: BorderRadius.circular(AppDimensions.radiusExtraLarge),
         border: Border.all(
           color: colorScheme.primary.withValues(alpha: 0.1),
@@ -59,7 +60,11 @@ class CustomNavBar extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GestureDetector(
-      onTap: () => onItemSelected(index),
+      onTap: () {
+        // Tactile feedback on nav tap — feels premium on device
+        HapticFeedback.selectionClick();
+        onItemSelected(index);
+      },
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: AppDurations.fast,
@@ -77,24 +82,48 @@ class CustomNavBar extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              isSelected ? filledIcon : outlinedIcon,
-              color: isSelected
-                  ? colorScheme.primary
-                  : colorScheme.onSurface.withValues(alpha: 0.6),
-              size: AppDimensions.iconMedium,
-            ),
-            if (isSelected) ...[
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 10,
+            // Animated icon switch with size bump when selected
+            AnimatedSwitcher(
+              duration: AppDurations.fast,
+              transitionBuilder: (child, animation) => ScaleTransition(
+                scale: Tween<double>(begin: 0.7, end: 1.0).animate(
+                  CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
                 ),
+                child: FadeTransition(opacity: animation, child: child),
               ),
-            ]
+              child: Icon(
+                isSelected ? filledIcon : outlinedIcon,
+                key: ValueKey(isSelected),
+                color: isSelected
+                    ? colorScheme.primary
+                    : colorScheme.onSurface.withValues(alpha: 0.6),
+                size: isSelected
+                    ? AppDimensions.iconMedium + 2
+                    : AppDimensions.iconMedium,
+              ),
+            ),
+            // Label fades in/out smoothly instead of causing a layout jump
+            AnimatedSize(
+              duration: AppDurations.fast,
+              curve: Curves.easeOutCubic,
+              child: isSelected
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: AnimatedOpacity(
+                        opacity: isSelected ? 1.0 : 0.0,
+                        duration: AppDurations.fast,
+                        child: Text(
+                          label,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
           ],
         ),
       ),

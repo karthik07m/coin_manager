@@ -8,6 +8,7 @@ import '../models/transaction.dart';
 import '../utilities/constants.dart';
 import '../utilities/functions.dart';
 import '../utilities/theme_helper.dart';
+import 'transaction_form.dart';
 
 class UpcomingPaymentsScreen extends StatefulWidget {
   static const routeName = '/upcoming-payments';
@@ -22,11 +23,9 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
   @override
   void initState() {
     super.initState();
-    // Load all upcoming transactions when screen opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final transactionProvider =
-          Provider.of<TransactionProvider>(context, listen: false);
-      transactionProvider.loadAllUpcomingTransactions();
+      Provider.of<TransactionProvider>(context, listen: false)
+          .loadAllUpcomingTransactions();
     });
   }
 
@@ -35,7 +34,7 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
     return Scaffold(
       backgroundColor: context.appBackground,
       appBar: AppBar(
-        title: const Text('Upcoming Payments'),
+        title: const Text('Recurring Transactions'),
         backgroundColor: context.appSurface,
         elevation: 0,
       ),
@@ -51,20 +50,20 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    Icons.calendar_today_outlined,
+                    Icons.repeat_outlined,
                     size: 64,
                     color: context.textSecondary.withValues(alpha: 0.5),
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No Upcoming Payments',
+                    'No Recurring Transactions',
                     style: AppTextStyles.bodyLarge.copyWith(
                       color: context.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Add recurring transactions to see them here',
+                    'Mark a transaction as recurring to see it here',
                     style: AppTextStyles.bodySmall.copyWith(
                       color: context.textSecondary,
                     ),
@@ -74,15 +73,16 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
             );
           }
 
-          // Calculate total
-          final totalAmount = upcomingList.fold<double>(
-            0.0,
-            (sum, transaction) => sum + transaction.amount,
-          );
+          final totalExpense = upcomingList
+              .where((t) => t.isExpense)
+              .fold<double>(0.0, (sum, t) => sum + t.amount);
+          final totalIncome = upcomingList
+              .where((t) => !t.isExpense)
+              .fold<double>(0.0, (sum, t) => sum + t.amount);
 
           return Column(
             children: [
-              // Total Summary Card
+              // Summary card — split income / expense
               Container(
                 margin: const EdgeInsets.all(AppDimensions.spacing16),
                 padding: const EdgeInsets.all(AppDimensions.spacing16),
@@ -96,44 +96,82 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                   ),
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'TOTAL UPCOMING',
-                          style: AppTextStyles.caption.copyWith(
-                            color: context.textSecondary,
-                            letterSpacing: 1.2,
+                    // Expense column
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'EXPENSES',
+                            style: AppTextStyles.caption.copyWith(
+                              color: context.textSecondary,
+                              letterSpacing: 1.2,
+                              fontSize: 10,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          UtilityFunction.addCommaWithSign(
-                            totalAmount,
-                            currencySymbol: currencySymbol,
+                          const SizedBox(height: 4),
+                          Text(
+                            UtilityFunction.addCommaWithSign(
+                              totalExpense,
+                              currencySymbol: currencySymbol,
+                            ),
+                            style: AppTextStyles.h3.copyWith(
+                              color: AppColors.negative,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          style: AppTextStyles.h2.copyWith(
-                            color: AppColors.negative,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    // Divider
+                    Container(
+                      width: 1,
+                      height: 36,
+                      color: context.textSecondary.withValues(alpha: 0.2),
+                      margin: const EdgeInsets.symmetric(horizontal: 12),
+                    ),
+                    // Income column
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'INCOME',
+                            style: AppTextStyles.caption.copyWith(
+                              color: context.textSecondary,
+                              letterSpacing: 1.2,
+                              fontSize: 10,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            UtilityFunction.addCommaWithSign(
+                              totalIncome,
+                              currencySymbol: currencySymbol,
+                            ),
+                            style: AppTextStyles.h3.copyWith(
+                              color: AppColors.positive,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Count badge
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.negative.withValues(alpha: 0.1),
+                        color: AppColors.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        '${upcomingList.length} Payment${upcomingList.length != 1 ? 's' : ''}',
+                        '${upcomingList.length} Total',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.negative,
+                          color: AppColors.primary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -142,7 +180,7 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                 ),
               ),
 
-              // List of upcoming payments
+              // List
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.symmetric(
@@ -178,6 +216,9 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
     String? categoryName,
     String currencySymbol,
   ) {
+    final Color amountColor =
+        transaction.isExpense ? AppColors.negative : AppColors.positive;
+
     // Date Logic
     String dateString;
     final now = DateTime.now();
@@ -203,17 +244,18 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
       decoration: BoxDecoration(
         color: context.appSurface,
         borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+        border: Border.all(
+          color: amountColor.withValues(alpha: 0.12),
+          width: 1,
+        ),
       ),
       child: Row(
         children: [
-          // Icon
+          // Category icon
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Theme.of(context)
-                  .colorScheme
-                  .surfaceContainerHighest
-                  .withValues(alpha: 0.3),
+              color: amountColor.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: iconPath != null
@@ -224,18 +266,18 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                     errorBuilder: (context, error, stackTrace) => Icon(
                       Icons.category,
                       size: 24,
-                      color: context.textSecondary,
+                      color: amountColor,
                     ),
                   )
                 : Icon(
                     Icons.category_outlined,
                     size: 24,
-                    color: context.textSecondary,
+                    color: amountColor,
                   ),
           ),
           const SizedBox(width: 16),
 
-          // Details
+          // Title + date
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,33 +294,49 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
+                    // Income / Expense badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: amountColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        transaction.isExpense ? 'Expense' : 'Income',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: amountColor,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Text(
                       dateString,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: isToday
-                            ? AppColors.negative
-                            : context.textSecondary,
+                        color: isToday ? amountColor : context.textSecondary,
                         fontWeight:
                             isToday ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                     if (daysUntil <= 3 && !isToday) ...[
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
+                          horizontal: 5,
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.negative.withValues(alpha: 0.15),
+                          color: AppColors.warning.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          '${daysUntil}d left',
+                          '${daysUntil}d',
                           style: const TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.negative,
+                            color: AppColors.warning,
                           ),
                         ),
                       ),
@@ -289,57 +347,46 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
             ),
           ),
 
-          // Amount and Stop button
+          // Amount + actions
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                UtilityFunction.addCommaWithSign(
+                '${transaction.isExpense ? '-' : '+'}${UtilityFunction.addCommaWithSign(
                   transaction.amount,
                   currencySymbol: currencySymbol,
-                ),
+                )}',
                 style: AppTextStyles.amount.copyWith(
-                  fontSize: 18,
-                  color: AppColors.negative,
+                  fontSize: 16,
+                  color: amountColor,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 4),
-              // Stop recurring button
-              if (transaction.isRecurring)
-                InkWell(
-                  onTap: () => _showStopRecurringDialog(context, transaction),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.negative.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.stop_circle_outlined,
-                          size: 14,
-                          color: AppColors.negative,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Stop',
-                          style: AppTextStyles.caption.copyWith(
-                            color: AppColors.negative,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
+              const SizedBox(height: 6),
+              // Edit + Stop row
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Edit button
+                  _ActionChip(
+                    icon: Icons.edit_outlined,
+                    label: 'Edit',
+                    color: AppColors.primary,
+                    onTap: () => _editTransaction(context, transaction),
                   ),
-                ),
+                  const SizedBox(width: 6),
+                  // Stop button
+                  if (transaction.isRecurring)
+                    _ActionChip(
+                      icon: Icons.stop_circle_outlined,
+                      label: 'Stop',
+                      color: AppColors.negative,
+                      onTap: () =>
+                          _showStopRecurringDialog(context, transaction),
+                    ),
+                ],
+              ),
             ],
           ),
         ],
@@ -347,20 +394,28 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
     );
   }
 
+  void _editTransaction(BuildContext context, Transaction transaction) {
+    Navigator.of(context).pushNamed(
+      TransactionForm.routeName,
+      arguments: transaction.id,
+    );
+  }
+
   void _showStopRecurringDialog(BuildContext context, Transaction transaction) {
+    final label = transaction.isExpense ? 'payment' : 'income';
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           backgroundColor: context.appSurface,
           title: Text(
-            'Stop Recurring Payment?',
+            'Stop Recurring ${transaction.isExpense ? 'Payment' : 'Income'}?',
             style: AppTextStyles.h3.copyWith(
               color: context.textPrimary,
             ),
           ),
           content: Text(
-            'This will stop all future payments for "${transaction.title}". Past transactions will remain in your history.',
+            'This will stop all future $label entries for "${transaction.title.isEmpty ? 'this transaction' : transaction.title}". Past entries will remain in your history.',
             style: AppTextStyles.bodyMedium.copyWith(
               color: context.textSecondary,
             ),
@@ -379,19 +434,17 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
               onPressed: () async {
                 Navigator.of(dialogContext).pop();
 
-                // Stop the recurring payment
                 final transactionProvider = Provider.of<TransactionProvider>(
                   context,
                   listen: false,
                 );
                 await transactionProvider.stopRecurringPayment(transaction);
 
-                // Show success message
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Recurring payment stopped',
+                        'Recurring $label stopped',
                         style: TextStyle(color: context.textPrimary),
                       ),
                       backgroundColor: context.appSurface,
@@ -410,6 +463,51 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+/// Small tappable chip used for Edit / Stop actions.
+class _ActionChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 3),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -355,8 +355,9 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
             interval: 1, // We control visibility manually
             getTitlesWidget: (value, meta) {
               // Ensure we only process whole integers to avoid duplication at boundaries
-              if (value != value.toInt().toDouble())
+              if (value != value.toInt().toDouble()) {
                 return const SizedBox.shrink();
+              }
 
               final val = value.toInt();
               // Show: 1st, 7th, 14th, 21st, 28th, and Last Day

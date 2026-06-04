@@ -6,6 +6,7 @@ import '../utilities/theme_helper.dart';
 import '../providers/settings_provider.dart';
 import 'package:provider/provider.dart';
 import 'calendar_expense_screen.dart';
+import '../widgets/animated_number.dart';
 
 class BalanceCard extends StatelessWidget {
   final double screenWidth;
@@ -194,9 +195,9 @@ class BalanceCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          UtilityFunction.addCommaWithSign(balance,
-                              currencySymbol: currencySymbol),
+                        AnimatedMoney(
+                          amount: balance,
+                          currencySymbol: currencySymbol,
                           style: AppTextStyles.h1.copyWith(
                             fontSize: 36,
                             fontWeight: FontWeight.bold,
@@ -205,6 +206,7 @@ class BalanceCard extends StatelessWidget {
                                 : AppColors.negative,
                             height: 1.2,
                           ),
+                          duration: const Duration(milliseconds: 1000),
                         ),
                         const SizedBox(height: 8),
                         // Trend indicator

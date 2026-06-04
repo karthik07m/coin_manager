@@ -16,11 +16,16 @@ class RecentTransactionsWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer3<TransactionProvider, CategoryProvider, SettingsProvider>(
-      builder: (context, transactionProvider, categoryProvider,
-          settingsProvider, child) {
+    // Use Consumer only for TransactionProvider — the only data that changes
+    // frequently. Categories and settings are accessed via Provider.of(listen: false)
+    // for one-time reads, avoiding rebuilds on unrelated provider changes.
+    return Consumer<TransactionProvider>(
+      builder: (context, transactionProvider, child) {
+        final categoryProvider =
+            Provider.of<CategoryProvider>(context, listen: false);
+        final currencySymbol =
+            Provider.of<SettingsProvider>(context, listen: false).currencySymbol;
         final allTransactions = transactionProvider.transactions;
-        final currencySymbol = settingsProvider.currencySymbol;
 
         // Get last 5 transactions
         final recentTransactions = allTransactions.take(5).toList();
@@ -84,52 +89,66 @@ class RecentTransactionsWidget extends StatelessWidget {
                   orElse: () => categoryProvider.categories.first,
                 );
 
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppDimensions.spacing12,
-                    vertical: AppDimensions.spacing4,
-                  ),
-                  leading: Container(
-                    width: 40,
-                    height: 40,
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: (transaction.isExpense
-                              ? AppColors.negative
-                              : AppColors.positive)
-                          .withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
+                return TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0.0, end: 1.0),
+                  duration: Duration(milliseconds: 200 + (index * 50)),
+                  curve: Curves.fastOutSlowIn,
+                  builder: (context, value, child) {
+                    return Opacity(
+                      opacity: value,
+                      child: Transform.translate(
+                        offset: Offset(0, 20 * (1 - value)),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: AppDimensions.spacing12,
+                      vertical: AppDimensions.spacing4,
                     ),
-                    child: Image.asset(
-                      category.icon,
-                      width: 24,
-                      height: 24,
+                    leading: Container(
+                      width: 40,
+                      height: 40,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: (transaction.isExpense
+                                ? AppColors.negative
+                                : AppColors.positive)
+                            .withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Image.asset(
+                        category.icon,
+                        width: 24,
+                        height: 24,
+                      ),
                     ),
-                  ),
-                  title: Text(
-                    transaction.title.isEmpty
-                        ? category.name
-                        : transaction.title,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: context.textPrimary,
+                    title: Text(
+                      transaction.title.isEmpty
+                          ? category.name
+                          : transaction.title,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: context.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    DateFormat('MMM dd, yyyy').format(transaction.date),
-                    style: AppTextStyles.caption.copyWith(
-                      color: context.textSecondary,
+                    subtitle: Text(
+                      DateFormat('MMM dd, yyyy').format(transaction.date),
+                      style: AppTextStyles.caption.copyWith(
+                        color: context.textSecondary,
+                      ),
                     ),
-                  ),
-                  trailing: Text(
-                    '${transaction.isExpense ? '-' : '+'}${UtilityFunction.addCommaWithSign(transaction.amount, currencySymbol: currencySymbol).substring(1)}',
-                    style: AppTextStyles.bodyLarge.copyWith(
-                      color: transaction.isExpense
-                          ? AppColors.negative
-                          : AppColors.positive,
-                      fontWeight: FontWeight.bold,
+                    trailing: Text(
+                      '${transaction.isExpense ? '-' : '+'}${UtilityFunction.addCommaWithSign(transaction.amount, currencySymbol: currencySymbol).substring(1)}',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        color: transaction.isExpense
+                            ? AppColors.negative
+                            : AppColors.positive,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 );

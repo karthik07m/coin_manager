@@ -10,7 +10,33 @@ class PageTransitions {
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         const begin = Offset(1.0, 0.0);
         const end = Offset.zero;
-        const curve = Curves.easeInOutCubic;
+        const curve = Curves.fastOutSlowIn;
+
+        var tween = Tween(begin: begin, end: end).chain(
+          CurveTween(curve: curve),
+        );
+
+        var offsetAnimation = animation.drive(tween);
+
+        return SlideTransition(
+          position: offsetAnimation,
+          child: child,
+        );
+      },
+      transitionDuration: const Duration(milliseconds: 250),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
+    );
+  }
+
+  /// Slide transition from bottom (for modal-like screens)
+  static Route<T> slideFromBottom<T>(Widget page, {RouteSettings? settings}) {
+    return PageRouteBuilder<T>(
+      settings: settings,
+      pageBuilder: (context, animation, secondaryAnimation) => page,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        const begin = Offset(0.0, 1.0);
+        const end = Offset.zero;
+        const curve = Curves.fastOutSlowIn;
 
         var tween = Tween(begin: begin, end: end).chain(
           CurveTween(curve: curve),
@@ -25,32 +51,6 @@ class PageTransitions {
       },
       transitionDuration: const Duration(milliseconds: 300),
       reverseTransitionDuration: const Duration(milliseconds: 250),
-    );
-  }
-
-  /// Slide transition from bottom (for modal-like screens)
-  static Route<T> slideFromBottom<T>(Widget page, {RouteSettings? settings}) {
-    return PageRouteBuilder<T>(
-      settings: settings,
-      pageBuilder: (context, animation, secondaryAnimation) => page,
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const begin = Offset(0.0, 1.0);
-        const end = Offset.zero;
-        const curve = Curves.easeOutCubic;
-
-        var tween = Tween(begin: begin, end: end).chain(
-          CurveTween(curve: curve),
-        );
-
-        var offsetAnimation = animation.drive(tween);
-
-        return SlideTransition(
-          position: offsetAnimation,
-          child: child,
-        );
-      },
-      transitionDuration: const Duration(milliseconds: 350),
-      reverseTransitionDuration: const Duration(milliseconds: 300),
     );
   }
 
@@ -83,7 +83,7 @@ class PageTransitions {
       settings: settings,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const curve = Curves.easeOutCubic;
+        const curve = Curves.fastOutSlowIn;
 
         var curvedAnimation = CurvedAnimation(
           parent: animation,
@@ -91,15 +91,15 @@ class PageTransitions {
         );
 
         return ScaleTransition(
-          scale: Tween<double>(begin: 0.9, end: 1.0).animate(curvedAnimation),
+          scale: Tween<double>(begin: 0.92, end: 1.0).animate(curvedAnimation),
           child: FadeTransition(
             opacity: curvedAnimation,
             child: child,
           ),
         );
       },
-      transitionDuration: const Duration(milliseconds: 300),
-      reverseTransitionDuration: const Duration(milliseconds: 250),
+      transitionDuration: const Duration(milliseconds: 250),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
     );
   }
 
@@ -110,10 +110,10 @@ class PageTransitions {
       settings: settings,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const curve = Curves.easeInOutCubic;
+        const curve = Curves.fastOutSlowIn;
 
         var slideAnimation = Tween<Offset>(
-          begin: const Offset(0.0, 0.05),
+          begin: const Offset(0.0, 0.03),
           end: Offset.zero,
         ).animate(CurvedAnimation(
           parent: animation,
@@ -136,8 +136,8 @@ class PageTransitions {
           ),
         );
       },
-      transitionDuration: const Duration(milliseconds: 300),
-      reverseTransitionDuration: const Duration(milliseconds: 250),
+      transitionDuration: const Duration(milliseconds: 250),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
     );
   }
 

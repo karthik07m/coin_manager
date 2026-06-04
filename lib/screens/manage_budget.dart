@@ -98,6 +98,84 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
     }
   }
 
+  void _copyToNextMonth() async {
+    final currentMonth = DateTime.now().month.toString();
+    final currentMonthInt = DateTime.now().month;
+    final nextMonthInt = currentMonthInt == 12 ? 1 : currentMonthInt + 1;
+    final nextMonthName = _getMonthName(nextMonthInt);
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Copy Budget to Next Month'),
+        content: Text(
+          'This will copy all budget settings from the current month to $nextMonthName. Any existing budgets for $nextMonthName will be overwritten.\n\nDo you want to continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Copy'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        final budgetProvider =
+            Provider.of<MonthlyBudgetProvider>(context, listen: false);
+        await budgetProvider.copyBudgetToNextMonth(currentMonth);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Budget copied to $nextMonthName successfully'),
+              backgroundColor: AppColors.positive,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error copying budget: $e'),
+              backgroundColor: AppColors.negative,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  String _getMonthName(int month) {
+    const monthNames = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
+    ];
+    return monthNames[month - 1];
+  }
+
   @override
   Widget build(BuildContext context) {
     final settingsProvider = Provider.of<SettingsProvider>(context);
@@ -110,6 +188,13 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
         title: const Text('Manage Budget', style: AppTextStyles.h3),
         centerTitle: true,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.copy_all_outlined),
+            tooltip: 'Copy to Next Month',
+            onPressed: _copyToNextMonth,
+          ),
+        ],
       ),
       body: SafeArea(
         child: Consumer3<CategoryProvider, MonthlyBudgetProvider,

@@ -34,8 +34,16 @@ class TransactionProvider extends ChangeNotifier {
       endDate: endDate,
     );
 
+    // Filter out future transactions - only show transactions on or before today
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+    final filteredTransactions = transactionsFromDB
+        .where((transaction) => !transaction.date.isAfter(today))
+        .toList();
+
     _transactions.clear();
-    _transactions.addAll(transactionsFromDB);
+    _transactions.addAll(filteredTransactions);
 
     _updateTotalsForMonth(
         startDate ?? DateTime.now(), endDate ?? DateTime.now());
@@ -91,9 +99,9 @@ class TransactionProvider extends ChangeNotifier {
         DateTime(transaction.date.year, transaction.date.month + 1, 0);
 
     _updateTotalsForMonth(startDate, endDate);
-    _calculateCategoryAmounts(); // Update pie chart categories
-    loadUpcomingTransactions(); // Refresh upcoming payments
-    notifyListeners();
+    await _calculateCategoryAmounts(); // Await to avoid double-notify race
+    await loadUpcomingTransactions(); // Refresh upcoming payments
+    notifyListeners(); // Single notify after ALL data is ready
   }
 
   Future<void> updateTransaction(Transaction transaction) async {
@@ -108,9 +116,9 @@ class TransactionProvider extends ChangeNotifier {
           DateTime(transaction.date.year, transaction.date.month + 1, 0);
 
       _updateTotalsForMonth(startDate, endDate);
-      _calculateCategoryAmounts(); // Update pie chart categories
-      loadUpcomingTransactions(); // Refresh upcoming payments
-      notifyListeners();
+      await _calculateCategoryAmounts(); // Await to avoid double-notify race
+      await loadUpcomingTransactions(); // Refresh upcoming payments
+      notifyListeners(); // Single notify after ALL data is ready
     }
   }
 
@@ -125,9 +133,9 @@ class TransactionProvider extends ChangeNotifier {
         DateTime(transaction.date.year, transaction.date.month + 1, 0);
 
     _updateTotalsForMonth(startDate, endDate);
-    _calculateCategoryAmounts(); // Update pie chart categories
-    loadUpcomingTransactions(); // Refresh upcoming payments
-    notifyListeners();
+    await _calculateCategoryAmounts(); // Await to avoid double-notify race
+    await loadUpcomingTransactions(); // Refresh upcoming payments
+    notifyListeners(); // Single notify after ALL data is ready
   }
 
   /// Stop a recurring payment by disabling its recurring flag and deleting all future instances
@@ -172,7 +180,10 @@ class TransactionProvider extends ChangeNotifier {
         .fold(0.0, (sum, transaction) => sum + transaction.amount);
   }
 
-  void _calculateCategoryAmounts() async {
+  // Returns Future<void> so callers can await it and avoid race conditions
+  // where notifyListeners() fires before category data is computed.
+  // The internal notifyListeners() call has been removed — callers manage that.
+  Future<void> _calculateCategoryAmounts() async {
     Map<int, double> categoryTotals = {};
 
     // Calculate the total amount per category
@@ -201,8 +212,8 @@ class TransactionProvider extends ChangeNotifier {
       if (categoryDetails != null) {
         categoryList.add(CategoryAmount(
           id: categoryId,
-          name: categoryDetails['name'], // category name
-          icon: categoryDetails['icon'], // category icon
+          name: categoryDetails['name'],
+          icon: categoryDetails['icon'],
           amount: amount,
         ));
       } else {
@@ -210,15 +221,14 @@ class TransactionProvider extends ChangeNotifier {
         categoryList.add(CategoryAmount(
           id: categoryId,
           name: 'Unknown',
-          icon: 'assets/categories/other.png', // Default icon
+          icon: 'assets/categories/other.png',
           amount: amount,
         ));
       }
     }
 
-    // Update the categories list
+    // Update the categories list — caller will notify.
     categories = categoryList;
-    notifyListeners();
   }
 
   List<Transaction> getTransactionsByCategory(int categoryId) {
