@@ -27,8 +27,9 @@ class BudgetProjection {
     required List<Transaction> upcomingRecurring,
     required DateTime selectedMonth,
     required double totalBudget,
+    DateTime? now, // Injectable clock so tests are deterministic.
   }) {
-    final now = DateTime.now();
+    now ??= DateTime.now();
     final firstOfCurrent = DateTime(now.year, now.month, 1);
     final firstOfSelected =
         DateTime(selectedMonth.year, selectedMonth.month, 1);
