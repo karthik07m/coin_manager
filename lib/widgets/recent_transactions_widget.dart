@@ -8,6 +8,7 @@ import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
 import '../screens/all_transactions_screen.dart';
+import '../screens/transaction_form.dart';
 
 class RecentTransactionsWidget extends StatelessWidget {
   final Function(int)? onTabSelected;
@@ -24,7 +25,8 @@ class RecentTransactionsWidget extends StatelessWidget {
         final categoryProvider =
             Provider.of<CategoryProvider>(context, listen: false);
         final currencySymbol =
-            Provider.of<SettingsProvider>(context, listen: false).currencySymbol;
+            Provider.of<SettingsProvider>(context, listen: false)
+                .currencySymbol;
         final allTransactions = transactionProvider.transactions;
 
         // Get last 5 transactions
@@ -63,7 +65,7 @@ class RecentTransactionsWidget extends StatelessWidget {
                   child: Text(
                     'See All',
                     style: AppTextStyles.caption.copyWith(
-                      color: AppColors.primary,
+                      color: context.appAccent,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -103,6 +105,13 @@ class RecentTransactionsWidget extends StatelessWidget {
                     );
                   },
                   child: ListTile(
+                    onTap: () {
+                      Navigator.pushNamed(
+                        context,
+                        TransactionForm.routeName,
+                        arguments: transaction.id,
+                      );
+                    },
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: AppDimensions.spacing12,
                       vertical: AppDimensions.spacing4,

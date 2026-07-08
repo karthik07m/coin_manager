@@ -8,6 +8,8 @@ class BackupData {
   final List<Map<String, dynamic>> receipts;
   final List<Map<String, dynamic>> debts;
   final List<Map<String, dynamic>> debtPayments;
+  final List<Map<String, dynamic>> goals;
+  final List<Map<String, dynamic>> goalContributions;
   final List<Map<String, dynamic>> accounts;
   final Map<String, dynamic> settings;
 
@@ -21,6 +23,8 @@ class BackupData {
     required this.receipts,
     required this.debts,
     required this.debtPayments,
+    this.goals = const [],
+    this.goalContributions = const [],
     required this.accounts,
     required this.settings,
   });
@@ -36,6 +40,8 @@ class BackupData {
       'receipts': receipts,
       'debts': debts,
       'debt_payments': debtPayments,
+      'goals': goals,
+      'goal_contributions': goalContributions,
       'accounts': accounts,
       'settings': settings,
     };
@@ -56,6 +62,9 @@ class BackupData {
       debts: List<Map<String, dynamic>>.from(json['debts'] ?? []),
       debtPayments:
           List<Map<String, dynamic>>.from(json['debt_payments'] ?? []),
+      goals: List<Map<String, dynamic>>.from(json['goals'] ?? []),
+      goalContributions:
+          List<Map<String, dynamic>>.from(json['goal_contributions'] ?? []),
       accounts: List<Map<String, dynamic>>.from(json['accounts'] ?? []),
       settings: Map<String, dynamic>.from(json['settings'] ?? {}),
     );

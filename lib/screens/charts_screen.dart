@@ -1,15 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import '../db/category_db_helper.dart';
+import '../db/transaction_db_helper.dart';
+import '../models/transaction.dart';
 import '../providers/transaction_provider.dart';
 import '../widgets/charts/categories_pie_chart.dart';
 import '../widgets/charts/accounts_pie_chart.dart';
 import '../providers/account_provider.dart';
+import '../providers/settings_provider.dart';
 import '../utilities/constants.dart';
+import '../utilities/functions.dart';
 import '../utilities/theme_helper.dart';
 import 'package:intl/intl.dart';
 
 class ChartsScreen extends StatefulWidget {
-  const ChartsScreen({super.key});
+  final ValueListenable<int> activationSignal;
+
+  const ChartsScreen({
+    super.key,
+    required this.activationSignal,
+  });
 
   @override
   State<ChartsScreen> createState() => _ChartsScreenState();
@@ -19,14 +30,32 @@ class _ChartsScreenState extends State<ChartsScreen> {
   DateTime _selectedMonth = DateTime.now();
   bool _isInitialized = false;
   int _selectedChart = 0; // 0 for Expenses, 1 for Accounts
+  int _categorySelectionResetToken = 0;
+  List<Transaction> _previousMonthTransactions = [];
+  Map<int, String> _categoryNames = {};
 
   @override
   void initState() {
     super.initState();
+    widget.activationSignal.addListener(_handleActivation);
     // Load data when screen is first created
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchData(context, _selectedMonth);
     });
+  }
+
+  @override
+  void dispose() {
+    widget.activationSignal.removeListener(_handleActivation);
+    super.dispose();
+  }
+
+  void _handleActivation() {
+    if (!mounted) return;
+    setState(() {
+      _categorySelectionResetToken++;
+    });
+    _fetchData(context, _selectedMonth);
   }
 
   @override
@@ -53,6 +82,32 @@ class _ChartsScreenState extends State<ChartsScreen> {
       endDate: endDate,
     );
     await accountProvider.loadAccounts();
+    await _loadInsightData(month);
+  }
+
+  Future<void> _loadInsightData(DateTime month) async {
+    final previousMonth = DateTime(month.year, month.month - 1, 1);
+    final previousStart = DateTime(previousMonth.year, previousMonth.month, 1);
+    final previousEnd =
+        DateTime(previousMonth.year, previousMonth.month + 1, 0, 23, 59, 59);
+
+    final previousTransactions =
+        await TransactionDBHelper().getTransactionsByType(
+      startDate: previousStart,
+      endDate: previousEnd,
+    );
+    final categories = await DBHelper().getAllCategories();
+    final categoryNames = {
+      for (final category in categories)
+        if (category['id'] != null)
+          category['id'] as int: category['name'] as String,
+    };
+
+    if (!mounted) return;
+    setState(() {
+      _previousMonthTransactions = previousTransactions;
+      _categoryNames = categoryNames;
+    });
   }
 
   void _showMonthPicker(BuildContext context) {
@@ -150,6 +205,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                               // Update the parent state and close dialog
                               this.setState(() {
                                 _selectedMonth = month;
+                                _categorySelectionResetToken++;
                               });
                               _fetchData(context, month);
                               Navigator.pop(context);
@@ -159,7 +215,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                             child: Container(
                               decoration: BoxDecoration(
                                 color: isSelected
-                                    ? AppColors.primary
+                                    ? context.appAccent
                                     : context.appBackground,
                                 borderRadius: BorderRadius.circular(
                                     AppDimensions.radiusMedium),
@@ -225,7 +281,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                 ),
               ),
               style: TextButton.styleFrom(
-                foregroundColor: AppColors.primary,
+                foregroundColor: context.appAccent,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
@@ -233,21 +289,25 @@ class _ChartsScreenState extends State<ChartsScreen> {
           ),
         ],
       ),
-      body: Consumer2<TransactionProvider, AccountProvider>(
-        builder: (context, transactionProvider, accountProvider, child) {
+      body: Consumer3<TransactionProvider, AccountProvider, SettingsProvider>(
+        builder:
+            (context, transactionProvider, accountProvider, settings, child) {
           final transactions = transactionProvider.transactions;
 
           // Calculate total expenses
           double totalExpenses = 0.0;
+          double totalIncome = 0.0;
           for (var transaction in transactions) {
             if (transaction.isExpense) {
               totalExpenses += transaction.amount;
+            } else {
+              totalIncome += transaction.amount;
             }
           }
 
           return RefreshIndicator(
             onRefresh: () => _fetchData(context, _selectedMonth),
-            color: AppColors.primary,
+            color: context.appAccent,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(AppDimensions.spacing16),
@@ -276,6 +336,17 @@ class _ChartsScreenState extends State<ChartsScreen> {
                     ),
                   ),
 
+                  _buildMonthlyInsightsCard(
+                    context,
+                    transactions: transactions,
+                    previousTransactions: _previousMonthTransactions,
+                    totalIncome: totalIncome,
+                    totalExpenses: totalExpenses,
+                    currencySymbol: settings.currencySymbol,
+                    currencyCode: settings.currencyCode,
+                  ),
+                  const SizedBox(height: AppDimensions.spacing20),
+
                   // Chart Card
                   Container(
                     padding: const EdgeInsets.all(AppDimensions.spacing20),
@@ -284,7 +355,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                       borderRadius:
                           BorderRadius.circular(AppDimensions.radiusLarge),
                       border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.2),
+                        color: context.appAccent.withValues(alpha: 0.2),
                         width: 1,
                       ),
                     ),
@@ -295,6 +366,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                             categories: transactionProvider.categories,
                             totalExpenses: totalExpenses,
                             currentMonth: _selectedMonth,
+                            resetSelectionToken: _categorySelectionResetToken,
                           )
                         : AccountsPieChart(
                             totalExpenses: totalExpenses,
@@ -322,14 +394,16 @@ class _ChartsScreenState extends State<ChartsScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary : Colors.transparent,
+            color: isSelected ? context.appAccent : Colors.transparent,
             borderRadius: BorderRadius.circular(AppDimensions.radiusSmall),
           ),
           alignment: Alignment.center,
           child: Text(
             text,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: isSelected ? Colors.white : context.textSecondary,
+              color: isSelected
+                  ? Theme.of(context).colorScheme.onPrimary
+                  : context.textSecondary,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
             ),
           ),
@@ -337,4 +411,298 @@ class _ChartsScreenState extends State<ChartsScreen> {
       ),
     );
   }
+
+  Widget _buildMonthlyInsightsCard(
+    BuildContext context, {
+    required List<Transaction> transactions,
+    required List<Transaction> previousTransactions,
+    required double totalIncome,
+    required double totalExpenses,
+    required String currencySymbol,
+    required String currencyCode,
+  }) {
+    final previousExpenses = _sumByType(previousTransactions, isExpense: true);
+    final previousIncome = _sumByType(previousTransactions, isExpense: false);
+    final expenseDelta = totalExpenses - previousExpenses;
+    final incomeDelta = totalIncome - previousIncome;
+    final expensePercent = _percentChange(totalExpenses, previousExpenses);
+    final topCategory = _topExpenseCategory(transactions);
+    final previousTopCategory = _topExpenseCategory(previousTransactions);
+    final netSavings = totalIncome - totalExpenses;
+    final trendColor =
+        expenseDelta <= 0 ? AppColors.positive : AppColors.negative;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppDimensions.spacing16),
+      decoration: BoxDecoration(
+        color: context.appSurfaceLight,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
+        border: Border.all(
+          color: context.appAccent.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: context.appAccent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.query_stats,
+                  color: context.appAccent,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacing12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Monthly Insights',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        color: context.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _insightSummary(
+                        expenseDelta: expenseDelta,
+                        expensePercent: expensePercent,
+                        topCategory: topCategory.name,
+                      ),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.textSecondary,
+                        letterSpacing: 0,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacing16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildInsightMetric(
+                  context,
+                  label: 'Expense trend',
+                  value: _formatSignedMoney(
+                    expenseDelta,
+                    currencySymbol,
+                    currencyCode,
+                  ),
+                  detail: previousExpenses > 0
+                      ? '${expensePercent.abs().toStringAsFixed(0)}% vs last month'
+                      : 'No previous data',
+                  color: trendColor,
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacing12),
+              Expanded(
+                child: _buildInsightMetric(
+                  context,
+                  label: 'Net this month',
+                  value: UtilityFunction.formatMoney(
+                    netSavings.abs(),
+                    symbol: currencySymbol,
+                    currencyCode: currencyCode,
+                  ),
+                  detail: netSavings >= 0 ? 'saved' : 'short',
+                  color:
+                      netSavings >= 0 ? AppColors.positive : AppColors.negative,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacing12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildInsightMetric(
+                  context,
+                  label: 'Top category',
+                  value: topCategory.name,
+                  detail: topCategory.amount > 0
+                      ? UtilityFunction.formatMoney(
+                          topCategory.amount,
+                          symbol: currencySymbol,
+                          currencyCode: currencyCode,
+                        )
+                      : 'No expenses',
+                  color: AppColors.accentBlue,
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacing12),
+              Expanded(
+                child: _buildInsightMetric(
+                  context,
+                  label: 'Income change',
+                  value: _formatSignedMoney(
+                    incomeDelta,
+                    currencySymbol,
+                    currencyCode,
+                  ),
+                  detail:
+                      previousIncome > 0 ? 'vs last month' : 'No previous data',
+                  color:
+                      incomeDelta >= 0 ? AppColors.positive : AppColors.warning,
+                ),
+              ),
+            ],
+          ),
+          if (previousTopCategory.amount > 0 && topCategory.amount > 0) ...[
+            const SizedBox(height: AppDimensions.spacing12),
+            Text(
+              topCategory.name == previousTopCategory.name
+                  ? '${topCategory.name} is still your largest spending category.'
+                  : 'Top category changed from ${previousTopCategory.name} to ${topCategory.name}.',
+              style: AppTextStyles.caption.copyWith(
+                color: context.textSecondary,
+                fontSize: 10,
+                letterSpacing: 0,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInsightMetric(
+    BuildContext context, {
+    required String label,
+    required String value,
+    required String detail,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(AppDimensions.spacing12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppDimensions.radiusSmall),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(
+              color: context.textSecondary,
+              fontSize: 10,
+              letterSpacing: 0,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            detail,
+            style: AppTextStyles.caption.copyWith(
+              color: context.textSecondary,
+              fontSize: 10,
+              letterSpacing: 0,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  double _sumByType(List<Transaction> transactions, {required bool isExpense}) {
+    return transactions
+        .where((transaction) => transaction.isExpense == isExpense)
+        .fold(0.0, (sum, transaction) => sum + transaction.amount);
+  }
+
+  double _percentChange(double current, double previous) {
+    if (previous <= 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / previous) * 100;
+  }
+
+  _CategoryInsight _topExpenseCategory(List<Transaction> transactions) {
+    final totals = <int, double>{};
+    for (final transaction in transactions) {
+      if (!transaction.isExpense) continue;
+      totals[transaction.categoryId] =
+          (totals[transaction.categoryId] ?? 0) + transaction.amount;
+    }
+
+    if (totals.isEmpty) {
+      return const _CategoryInsight(name: 'None', amount: 0);
+    }
+
+    final top = totals.entries.reduce((a, b) => a.value >= b.value ? a : b);
+    return _CategoryInsight(
+      name: _categoryNames[top.key] ?? 'Unknown',
+      amount: top.value,
+    );
+  }
+
+  String _formatSignedMoney(
+    double value,
+    String currencySymbol,
+    String currencyCode,
+  ) {
+    final sign = value > 0
+        ? '+'
+        : value < 0
+            ? '-'
+            : '';
+    return '$sign${UtilityFunction.formatMoney(
+      value.abs(),
+      symbol: currencySymbol,
+      currencyCode: currencyCode,
+    )}';
+  }
+
+  String _insightSummary({
+    required double expenseDelta,
+    required double expensePercent,
+    required String topCategory,
+  }) {
+    if (expenseDelta == 0) {
+      return 'Spending is flat compared with last month.';
+    }
+    final direction = expenseDelta > 0 ? 'up' : 'down';
+    return 'Spending is $direction ${expensePercent.abs().toStringAsFixed(0)}%; $topCategory leads this month.';
+  }
+}
+
+class _CategoryInsight {
+  final String name;
+  final double amount;
+
+  const _CategoryInsight({
+    required this.name,
+    required this.amount,
+  });
 }

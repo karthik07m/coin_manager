@@ -7,6 +7,7 @@ class Transaction {
   DateTime date;
   bool isExpense;
   bool isRecurring;
+  String? recurrenceId;
   String? receiptId;
   final DateTime createdOn;
   late DateTime modifiedOn;
@@ -22,6 +23,7 @@ class Transaction {
       required this.modifiedOn,
       required this.isExpense,
       this.isRecurring = false,
+      this.recurrenceId,
       this.receiptId});
 
   factory Transaction.createNew(
@@ -33,6 +35,7 @@ class Transaction {
       required DateTime date,
       required bool isExpense,
       bool isRecurring = false,
+      String? recurrenceId,
       String? receiptId}) {
     DateTime now = DateTime.now();
     return Transaction(
@@ -46,6 +49,7 @@ class Transaction {
       modifiedOn: now,
       isExpense: isExpense,
       isRecurring: isRecurring,
+      recurrenceId: isRecurring ? (recurrenceId ?? id) : null,
       receiptId: receiptId,
     );
   }
@@ -63,6 +67,7 @@ class Transaction {
     this.accountId = accountId;
     this.isExpense = isExpense;
     this.isRecurring = isRecurring;
+    recurrenceId = isRecurring ? (recurrenceId ?? id) : null;
     modifiedOn = DateTime.now();
   }
 
@@ -79,6 +84,7 @@ class Transaction {
       'modified_on': modifiedOn.toIso8601String(),
       'is_expense': isExpense ? 1 : 0,
       'is_recurring': isRecurring ? 1 : 0,
+      'recurrence_id': recurrenceId,
       'receipt_id': receiptId,
     };
   }
@@ -96,6 +102,7 @@ class Transaction {
       modifiedOn: DateTime.parse(map['modified_on']),
       isExpense: map['is_expense'] == 1,
       isRecurring: map['is_recurring'] == 1,
+      recurrenceId: map['recurrence_id'],
       receiptId: map['receipt_id'],
     );
   }

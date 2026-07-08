@@ -5,6 +5,7 @@ import '../providers/transaction_provider.dart';
 import '../widgets/transaction_item.dart';
 import '../providers/category_provider.dart';
 import '../providers/settings_provider.dart';
+import '../models/transaction.dart';
 import '../utilities/functions.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
@@ -28,13 +29,15 @@ class _TransactionListState extends State<TransactionList> {
   late List<DateTime> _months;
   int? _selectedCategoryFilter;
   bool _initialized = false;
+  bool _isJumpingToMonth = false;
+  VoidCallback? _pendingSettleListener;
 
   @override
   void initState() {
     super.initState();
     _selectedDate = DateTime.now();
     _months = _generateMonths();
-    _updateMonthDates(_selectedDate);
+    _setMonthDateBounds(_selectedDate);
 
     final initialIndex = _months.indexWhere(
         (m) => m.year == _selectedDate.year && m.month == _selectedDate.month);
@@ -85,24 +88,63 @@ class _TransactionListState extends State<TransactionList> {
 
   @override
   void dispose() {
+    _pendingSettleListener?.call();
     _pageController.dispose();
     _scrollController.dispose();
 
     super.dispose();
   }
 
-  void _updateMonthDates(DateTime date) {
+  void _setMonthDateBounds(DateTime date) {
     _startDate = DateTime(date.year, date.month, 1);
     _endDate = DateTime(date.year, date.month + 1, 0);
-    _loadTransactions();
   }
 
   // _loadTransactions is now called from didChangeDependencies and
   // _onPageChanged, never from inside build(). This avoids side-effects
   // during widget construction which caused jank.
-  void _loadTransactions() {
-    Provider.of<TransactionProvider>(context, listen: false)
-        .loadTransactionsFromDB(startDate: _startDate, endDate: _endDate);
+  //
+  // Loads the selected month plus one month on each side so that adjacent
+  // PageView pages already have data while the user is swiping — otherwise
+  // the incoming page renders empty until the DB query completes.
+  Future<void> _loadTransactions() {
+    final windowStart =
+        DateTime(_selectedDate.year, _selectedDate.month - 1, 1);
+    final windowEnd = DateTime(_selectedDate.year, _selectedDate.month + 2, 0);
+    return Provider.of<TransactionProvider>(context, listen: false)
+        .loadTransactionsFromDB(
+      startDate: windowStart,
+      endDate: windowEnd,
+      totalsStartDate: _startDate,
+      totalsEndDate: _endDate,
+    );
+  }
+
+  /// Defers the DB reload until the PageView settles so notifyListeners()
+  /// doesn't force a full rebuild mid-animation. The newly selected month is
+  /// already in the loaded window, so the visible page has data immediately;
+  /// this reload only prefetches the new neighbour month.
+  void _reloadWhenSettled() {
+    if (!_pageController.hasClients) {
+      _loadTransactions();
+      return;
+    }
+    final scrolling = _pageController.position.isScrollingNotifier;
+    if (!scrolling.value) {
+      _loadTransactions();
+      return;
+    }
+    _pendingSettleListener?.call();
+    void listener() {
+      if (!scrolling.value) {
+        scrolling.removeListener(listener);
+        _pendingSettleListener = null;
+        if (mounted) _loadTransactions();
+      }
+    }
+
+    _pendingSettleListener = () => scrolling.removeListener(listener);
+    scrolling.addListener(listener);
   }
 
   void _scrollToSelectedMonth(int index) {
@@ -121,17 +163,122 @@ class _TransactionListState extends State<TransactionList> {
   }
 
   void _onPageChanged(int index) {
+    // Programmatic jumps (month bar taps) handle selection themselves;
+    // reacting to every intermediate page here caused repeated setState +
+    // month-bar animateTo restarts, which janked distant jumps.
+    if (_isJumpingToMonth) return;
     setState(() {
       _selectedDate = _months[index];
-      _updateMonthDates(_selectedDate);
-      _scrollToSelectedMonth(index);
+      _setMonthDateBounds(_selectedDate);
     });
+    _scrollToSelectedMonth(index);
+    _reloadWhenSettled();
+  }
+
+  /// Called when a month is tapped in the month bar. For distant months,
+  /// animateToPage would scroll through and build every intermediate page,
+  /// firing _onPageChanged for each one. Instead: jump instantly next to the
+  /// target and animate a single page transition.
+  Future<void> _goToMonth(int index) async {
+    if (!_pageController.hasClients) return;
+    final currentIndex = _pageController.page?.round() ??
+        _months.indexWhere((m) =>
+            m.year == _selectedDate.year && m.month == _selectedDate.month);
+    if (index == currentIndex) return;
+
+    setState(() {
+      _selectedDate = _months[index];
+      _setMonthDateBounds(_selectedDate);
+    });
+    _scrollToSelectedMonth(index);
+    // Load right away so the target month's data is usually ready before the
+    // one-page animation below finishes.
+    _loadTransactions();
+
+    _isJumpingToMonth = true;
+    try {
+      if ((index - currentIndex).abs() > 1) {
+        _pageController.jumpToPage(index > currentIndex ? index - 1 : index + 1);
+      }
+      await _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    } finally {
+      _isJumpingToMonth = false;
+    }
+  }
+
+  DateTime _dateOnly(DateTime date) {
+    return DateTime(date.year, date.month, date.day);
+  }
+
+  List<Transaction> _filteredTransactionsForMonth(
+    List<Transaction> transactions,
+    DateTime month,
+  ) {
+    final startDate = DateTime(month.year, month.month, 1);
+    final nextMonth = DateTime(month.year, month.month + 1, 1);
+
+    return transactions.where((transaction) {
+      final inRange = !transaction.date.isBefore(startDate) &&
+          transaction.date.isBefore(nextMonth);
+      if (!inRange) return false;
+
+      if (_selectedCategoryFilter != null &&
+          transaction.categoryId != _selectedCategoryFilter) {
+        return false;
+      }
+
+      return true;
+    }).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  ({double income, double expense}) _totalsFor(
+    List<Transaction> transactions,
+  ) {
+    double income = 0;
+    double expense = 0;
+
+    for (final transaction in transactions) {
+      if (transaction.isExpense) {
+        expense += transaction.amount;
+      } else {
+        income += transaction.amount;
+      }
+    }
+
+    return (income: income, expense: expense);
+  }
+
+  Map<DateTime, ({double income, double expense})> _dailyTotalsFor(
+    List<Transaction> transactions,
+  ) {
+    final totals = <DateTime, ({double income, double expense})>{};
+
+    for (final transaction in transactions) {
+      final day = _dateOnly(transaction.date);
+      final current = totals[day] ?? (income: 0.0, expense: 0.0);
+      totals[day] = transaction.isExpense
+          ? (
+              income: current.income,
+              expense: current.expense + transaction.amount,
+            )
+          : (
+              income: current.income + transaction.amount,
+              expense: current.expense,
+            );
+    }
+
+    return totals;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<TransactionProvider>(
-        builder: (context, transactionProvider, child) {
+    return Consumer2<TransactionProvider, CategoryProvider>(
+        builder: (context, transactionProvider, categoryProvider, child) {
       // Show shimmer skeleton while first load is in progress.
       // This replaces the jarring empty → content flash.
       if (!transactionProvider.isTransactionsLoaded) {
@@ -147,40 +294,11 @@ class _TransactionListState extends State<TransactionList> {
       }
 
       final transactions = transactionProvider.transactions;
-
-      // Apply filters
-      final filteredTransactions = transactions.where((transaction) {
-        // Date filter
-        if (!transaction.date
-                .isAfter(_startDate.subtract(const Duration(days: 1))) ||
-            !transaction.date.isBefore(_endDate.add(const Duration(days: 1)))) {
-          return false;
-        }
-
-        // Category filter
-        if (_selectedCategoryFilter != null &&
-            transaction.categoryId != _selectedCategoryFilter) {
-          return false;
-        }
-
-        return true;
-      }).toList()
-        ..sort((a, b) {
-          // Sort by date descending
-          return b.date.compareTo(a.date);
-        });
-
-      // Calculate totals for visible transactions
-      double income = 0;
-      double expense = 0;
-      for (var t in filteredTransactions) {
-        if (t.isExpense) {
-          expense += t.amount;
-        } else {
-          income += t.amount;
-        }
-      }
-      double balance = income - expense;
+      final selectedTransactions =
+          _filteredTransactionsForMonth(transactions, _selectedDate);
+      final totals = _totalsFor(selectedTransactions);
+      final balance = totals.income - totals.expense;
+      final categoryMap = categoryProvider.categoryMap;
 
       return Column(
         children: [
@@ -192,7 +310,7 @@ class _TransactionListState extends State<TransactionList> {
           const SizedBox(height: AppDimensions.spacing8),
 
           // Compact Summary Card
-          _buildCompactSummary(income, expense, balance),
+          _buildCompactSummary(totals.income, totals.expense, balance),
 
           const SizedBox(height: AppDimensions.spacing16),
           Expanded(
@@ -201,41 +319,70 @@ class _TransactionListState extends State<TransactionList> {
               onPageChanged: _onPageChanged,
               itemCount: _months.length,
               itemBuilder: (context, pageIndex) {
+                final pageTransactions = _filteredTransactionsForMonth(
+                  transactions,
+                  _months[pageIndex],
+                );
+                final dailyTotals = _dailyTotalsFor(pageTransactions);
+
                 return RefreshIndicator(
                   onRefresh: () async {
-                    await Future.delayed(const Duration(milliseconds: 500));
-                    _loadTransactions();
+                    await _loadTransactions();
                   },
-                  color: AppColors.primary,
-                  child: filteredTransactions.isEmpty
-                      ? Stack(
-                          children: [
-                            ListView(
-                              physics: const AlwaysScrollableScrollPhysics(),
+                  color: context.appAccent,
+                  // Fades between empty state and list (e.g. when data for a
+                  // far month arrives just after a jump) instead of popping.
+                  // Cheap: animates the whole page once, not per row.
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeIn,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.015),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: pageTransactions.isEmpty
+                        ? Stack(
+                            key: ValueKey(
+                              'empty_${_months[pageIndex].year}_${_months[pageIndex].month}',
                             ),
-                            const Positioned.fill(
-                              child: EmptyTransactionState(),
-                            ),
-                          ],
-                        )
-                      : ListView.builder(
-                          key: const PageStorageKey('transaction_list'),
+                            children: [
+                              ListView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                              ),
+                              const Positioned.fill(
+                                child: EmptyTransactionState(),
+                              ),
+                            ],
+                          )
+                        : ListView.builder(
+                          key: PageStorageKey(
+                            'transaction_list_${_months[pageIndex].year}_${_months[pageIndex].month}',
+                          ),
                           padding: const EdgeInsets.fromLTRB(
                             AppDimensions.spacing16,
                             0,
                             AppDimensions.spacing16,
                             100, // Bottom padding for Nav Bar
                           ),
-                          itemCount: filteredTransactions.length,
+                          itemCount: pageTransactions.length,
                           physics: const AlwaysScrollableScrollPhysics(
                             parent: BouncingScrollPhysics(),
                           ),
                           cacheExtent: 500, // Pre-render items offscreen
                           itemBuilder: (context, index) {
-                            final transaction = filteredTransactions[index];
+                            final transaction = pageTransactions[index];
                             final showDate = index == 0 ||
                                 !UtilityFunction.isSameDate(transaction.date,
-                                    filteredTransactions[index - 1].date);
+                                    pageTransactions[index - 1].date);
+                            final dailyTotal =
+                                dailyTotals[_dateOnly(transaction.date)];
 
                             return Column(
                               key: ValueKey(transaction.id),
@@ -249,25 +396,12 @@ class _TransactionListState extends State<TransactionList> {
                                     ),
                                     child: Consumer<SettingsProvider>(
                                       builder: (context, settings, _) {
-                                        // Calculate daily total
-                                        final dailyTransactions =
-                                            filteredTransactions.where((t) =>
-                                                UtilityFunction.isSameDate(
-                                                    t.date, transaction.date));
-                                        double dailyIncome = 0;
-                                        double dailyExpense = 0;
-                                        for (var t in dailyTransactions) {
-                                          if (t.isExpense) {
-                                            dailyExpense += t.amount;
-                                          } else {
-                                            dailyIncome += t.amount;
-                                          }
-                                        }
-                                        final dailyTotal =
-                                            dailyIncome - dailyExpense;
-                                        final totalColor = dailyTotal > 0
+                                        final totalAmount =
+                                            (dailyTotal?.income ?? 0) -
+                                                (dailyTotal?.expense ?? 0);
+                                        final totalColor = totalAmount > 0
                                             ? AppColors.positive
-                                            : dailyTotal < 0
+                                            : totalAmount < 0
                                                 ? AppColors.negative
                                                 : context.textSecondary;
 
@@ -285,7 +419,7 @@ class _TransactionListState extends State<TransactionList> {
                                               ),
                                             ),
                                             Text(
-                                              '${dailyTotal >= 0 ? '+' : ''}${UtilityFunction.addCommaWithSign(dailyTotal.abs(), currencySymbol: settings.currencySymbol)}',
+                                              '${totalAmount >= 0 ? '+' : ''}${UtilityFunction.addCommaWithSign(totalAmount.abs(), currencySymbol: settings.currencySymbol, currencyCode: settings.currencyCode)}',
                                               style: AppTextStyles.bodyMedium
                                                   .copyWith(
                                                 color: totalColor,
@@ -297,23 +431,22 @@ class _TransactionListState extends State<TransactionList> {
                                       },
                                     ),
                                   ),
-                                // Use Consumer to get category without FutureBuilder
-                                Consumer<CategoryProvider>(
-                                  builder: (context, categoryProvider, _) {
-                                    final category = categoryProvider.categories
-                                        .where((cat) =>
-                                            cat.id == transaction.categoryId)
-                                        .firstOrNull;
-                                    return TransactionItem(
-                                        transaction, category,
-                                        key:
-                                            ValueKey('item_${transaction.id}'));
-                                  },
+                                // No entry animation here: PageView rebuilds
+                                // pages while swiping, so a staggered entry
+                                // animation replays on every swipe and leaves
+                                // rows invisible mid-drag.
+                                RepaintBoundary(
+                                  child: TransactionItem(
+                                    transaction,
+                                    categoryMap[transaction.categoryId],
+                                    key: ValueKey('item_${transaction.id}'),
+                                  ),
                                 ),
                               ],
                             );
                           },
                         ),
+                  ),
                 );
               },
             ),
@@ -343,7 +476,7 @@ class _TransactionListState extends State<TransactionList> {
                       ? Icons.filter_alt
                       : Icons.filter_alt_outlined,
                   color: _selectedCategoryFilter != null
-                      ? AppColors.primary
+                      ? context.appAccent
                       : context.textPrimary,
                 ),
                 onPressed: _showFilterCategorySheet,
@@ -399,8 +532,6 @@ class _TransactionListState extends State<TransactionList> {
         code: settings.currencyCode,
       ),
       builder: (context, currency, _) {
-        final formatted = UtilityFunction.formatMoney(amount.abs(),
-            symbol: currency.symbol, showDecimals: true);
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -411,13 +542,26 @@ class _TransactionListState extends State<TransactionList> {
                       fontWeight: FontWeight.bold))
             else
               Icon(icon, color: color, size: 20),
-            Text(
-              isBalance && amount < 0 ? '-$formatted' : formatted,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
-              ),
+            // Rolls the value to its new total when the month changes,
+            // instead of snapping.
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(end: amount),
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeOutCubic,
+              builder: (context, animatedAmount, _) {
+                final formatted = UtilityFunction.formatMoney(
+                    animatedAmount.abs(),
+                    symbol: currency.symbol,
+                    showDecimals: true);
+                return Text(
+                  isBalance && animatedAmount < 0 ? '-$formatted' : formatted,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                );
+              },
             ),
           ],
         );
@@ -444,56 +588,52 @@ class _TransactionListState extends State<TransactionList> {
           final now = DateTime.now();
           final isCurrentYear = monthDate.year == now.year;
 
+          final monthStyle = isSelected
+              ? TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: context.textPrimary)
+              : TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                  color: colorScheme.onSurface.withValues(alpha: 0.6));
+
           return GestureDetector(
-            onTap: () {
-              _pageController.animateToPage(
-                index,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-              );
-            },
-            child: Container(
+            onTap: () => _goToMonth(index),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
               margin: const EdgeInsets.only(right: 24),
               decoration: BoxDecoration(
-                border: isSelected
-                    ? Border(
-                        bottom:
-                            BorderSide(color: colorScheme.primary, width: 2))
-                    : null,
+                border: Border(
+                  bottom: BorderSide(
+                    color: isSelected
+                        ? colorScheme.primary
+                        : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
               ),
               child: Center(
                 child: isCurrentYear
-                    ? Text(
-                        DateFormat.MMMM().format(monthDate),
-                        style: isSelected
-                            ? TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: context.textPrimary)
-                            : TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w400,
-                                color: colorScheme.onSurface
-                                    .withValues(alpha: 0.6)),
+                    ? AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeOut,
+                        style: monthStyle,
+                        child: Text(DateFormat.MMMM().format(monthDate)),
                       )
                     : Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(
-                            DateFormat.MMMM().format(monthDate),
-                            style: isSelected
-                                ? TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: context.textPrimary)
-                                : TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w400,
-                                    color: colorScheme.onSurface
-                                        .withValues(alpha: 0.6)),
+                          AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeOut,
+                            style: monthStyle,
+                            child: Text(DateFormat.MMMM().format(monthDate)),
                           ),
-                          Text(
-                            DateFormat.y().format(monthDate),
+                          AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeOut,
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w400,
@@ -502,6 +642,7 @@ class _TransactionListState extends State<TransactionList> {
                                   : colorScheme.onSurface
                                       .withValues(alpha: 0.5),
                             ),
+                            child: Text(DateFormat.y().format(monthDate)),
                           ),
                         ],
                       ),
@@ -587,7 +728,7 @@ class _TransactionListState extends State<TransactionList> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: isSelected
-                ? AppColors.primary.withValues(
+                ? context.appAccent.withValues(
                     alpha: 0.15) // Changed .withValues to .withOpacity
                 : Theme.of(context)
                     .colorScheme
@@ -596,7 +737,7 @@ class _TransactionListState extends State<TransactionList> {
                         alpha: 0.5), // Changed .withValues to .withOpacity
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isSelected ? AppColors.primary : Colors.transparent,
+              color: isSelected ? context.appAccent : Colors.transparent,
               width: 1.5,
             ),
           ),
@@ -612,7 +753,7 @@ class _TransactionListState extends State<TransactionList> {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  color: isSelected ? AppColors.primary : context.textPrimary,
+                  color: isSelected ? context.appAccent : context.textPrimary,
                 ),
               ),
             ],
@@ -640,9 +781,7 @@ class _TransactionListState extends State<TransactionList> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ShimmerBox(
-                        height: 14,
-                        width: double.infinity,
-                        borderRadius: 8),
+                        height: 14, width: double.infinity, borderRadius: 8),
                     const SizedBox(height: 8),
                     ShimmerBox(height: 12, width: 120, borderRadius: 8),
                   ],

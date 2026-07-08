@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utilities/budget_period.dart';
+
 class MonthlyBudgetDBHelper {
   static final MonthlyBudgetDBHelper _instance =
       MonthlyBudgetDBHelper._internal();
@@ -50,6 +52,37 @@ class MonthlyBudgetDBHelper {
     ''');
   }
 
+  String? _legacyMonthKey(String month) {
+    final parts = month.split('-');
+    if (parts.length != 2) return null;
+
+    final legacyMonth = int.tryParse(parts[1]);
+    return legacyMonth?.toString();
+  }
+
+  Future<List<Map<String, dynamic>>> _queryBudgetRows(
+    String categoryName,
+    String month,
+  ) async {
+    final db = await database;
+    final maps = await db.query(
+      'budget_values',
+      where: 'category_name = ? AND month_key = ?',
+      whereArgs: [categoryName, month],
+    );
+
+    if (maps.isNotEmpty) return maps;
+
+    final legacyKey = _legacyMonthKey(month);
+    if (legacyKey == null) return maps;
+
+    return db.query(
+      'budget_values',
+      where: 'category_name = ? AND month_key = ?',
+      whereArgs: [categoryName, legacyKey],
+    );
+  }
+
   // Insert or Update Budget for a Category
   Future<void> setBudget(
       String categoryName, String month, double amount) async {
@@ -79,15 +112,10 @@ class MonthlyBudgetDBHelper {
 
   // Get Budget for a Category
   Future<double> getBudget(String categoryName, String month) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'budget_values',
-      where: 'category_name = ? AND month_key = ?',
-      whereArgs: [categoryName, month],
-    );
+    final maps = await _queryBudgetRows(categoryName, month);
 
     if (maps.isNotEmpty) {
-      return maps.first['amount'] as double;
+      return (maps.first['amount'] as num).toDouble();
     }
     return 0.0;
   }
@@ -105,14 +133,23 @@ class MonthlyBudgetDBHelper {
   // Get Total Monthly Budget
   Future<double> getTotalBudget(String month) async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
+    var maps = await db.query(
       'budget_totals',
       where: 'month_key = ?',
       whereArgs: [month],
     );
 
+    final legacyKey = _legacyMonthKey(month);
+    if (maps.isEmpty && legacyKey != null) {
+      maps = await db.query(
+        'budget_totals',
+        where: 'month_key = ?',
+        whereArgs: [legacyKey],
+      );
+    }
+
     if (maps.isNotEmpty) {
-      return maps.first['total_amount'] as double;
+      return (maps.first['total_amount'] as num).toDouble();
     }
     return 0.0;
   }
@@ -120,25 +157,40 @@ class MonthlyBudgetDBHelper {
   // Get All Budgets for a Month
   Future<Map<String, double>> getAllBudgetsForMonth(String month) async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
+    var maps = await db.query(
       'budget_values',
       where: 'month_key = ?',
       whereArgs: [month],
     );
 
-    Map<String, double> budgets = {};
+    final legacyKey = _legacyMonthKey(month);
+    if (maps.isEmpty && legacyKey != null) {
+      maps = await db.query(
+        'budget_values',
+        where: 'month_key = ?',
+        whereArgs: [legacyKey],
+      );
+    }
+
+    final budgets = <String, double>{};
     for (var map in maps) {
-      budgets[map['category_name'] as String] = map['amount'] as double;
+      budgets[map['category_name'] as String] =
+          (map['amount'] as num).toDouble();
     }
     return budgets;
   }
 
   // Copy Budget to Next Month
   Future<void> copyBudgetToNextMonth(String currentMonth) async {
-    // Calculate next month key
-    final currentMonthInt = int.parse(currentMonth);
-    final nextMonthInt = currentMonthInt == 12 ? 1 : currentMonthInt + 1;
-    final nextMonth = nextMonthInt.toString();
+    final currentParts = currentMonth.split('-');
+    final currentDate = currentParts.length == 2
+        ? DateTime(
+            int.parse(currentParts[0]),
+            int.parse(currentParts[1]),
+            1,
+          )
+        : DateTime(DateTime.now().year, int.parse(currentMonth), 1);
+    final nextMonth = BudgetPeriod.keyFor(BudgetPeriod.nextMonth(currentDate));
 
     // Get current month's total budget
     final totalBudget = await getTotalBudget(currentMonth);

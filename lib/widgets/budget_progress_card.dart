@@ -9,6 +9,8 @@ class BudgetProgressCard extends StatelessWidget {
   final double budgetAmount;
   final double spentAmount;
   final int daysRemaining;
+  final int daysElapsed;
+  final int periodDays;
   final String currencySymbol;
 
   const BudgetProgressCard({
@@ -18,6 +20,8 @@ class BudgetProgressCard extends StatelessWidget {
     required this.budgetAmount,
     required this.spentAmount,
     required this.daysRemaining,
+    required this.daysElapsed,
+    required this.periodDays,
     required this.currencySymbol,
   });
 
@@ -26,6 +30,11 @@ class BudgetProgressCard extends StatelessWidget {
     final percentSpent = budgetAmount > 0 ? (spentAmount / budgetAmount) : 0.0;
     final remaining = budgetAmount - spentAmount;
     final dailyBudget = daysRemaining > 0 ? remaining / daysRemaining : 0.0;
+    final elapsedBudget = budgetAmount > 0 && periodDays > 0
+        ? budgetAmount * (daysElapsed / periodDays)
+        : 0.0;
+    final paceDelta = spentAmount - elapsedBudget;
+    final isAheadOfPace = paceDelta > 0;
 
     // Determine color based on percentage spent
     Color progressColor;
@@ -301,6 +310,25 @@ class BudgetProgressCard extends StatelessWidget {
                         value: UtilityFunction.formatMoney(dailyBudget,
                             symbol: currencySymbol),
                         color: context.textSecondary,
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 30,
+                      color: AppColors.divider,
+                    ),
+                    Expanded(
+                      child: _buildStatItem(
+                        context: context,
+                        icon: Icons.speed,
+                        label: isAheadOfPace ? 'Fast Pace' : 'Under Pace',
+                        value: UtilityFunction.formatMoney(
+                          paceDelta.abs(),
+                          symbol: currencySymbol,
+                        ),
+                        color: isAheadOfPace
+                            ? AppColors.warning
+                            : AppColors.positive,
                       ),
                     ),
                   ],

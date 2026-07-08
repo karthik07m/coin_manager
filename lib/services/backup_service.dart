@@ -12,6 +12,7 @@ import '../db/category_db_helper.dart';
 import '../db/monthly_budget_db_helper.dart';
 import '../db/receipt_db_helper.dart';
 import '../db/debt_db_helper.dart';
+import '../db/goal_db_helper.dart';
 import '../models/backup_data.dart';
 
 class BackupService {
@@ -62,8 +63,7 @@ class BackupService {
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(backupPath)],
-          text:
-              'Coin Manager Backup - ${DateTime.now().toString().substring(0, 10)}',
+          text: 'Coinly Backup - ${DateTime.now().toString().substring(0, 10)}',
         ),
       );
     } catch (e) {
@@ -108,6 +108,8 @@ class BackupService {
       await _restoreReceipts(backupData.receipts);
       await _restoreDebts(backupData.debts);
       await _restoreDebtPayments(backupData.debtPayments);
+      await _restoreGoals(backupData.goals);
+      await _restoreGoalContributions(backupData.goalContributions);
       await _restoreAccounts(backupData.accounts);
       await _restoreSettings(backupData.settings);
 
@@ -153,6 +155,12 @@ class BackupService {
     final debts = await debtsDatabase.query('debts');
     final debtPayments = await debtsDatabase.query('debt_payments');
 
+    // Get all goals
+    final goalDb = GoalDBHelper();
+    final goalsDatabase = await goalDb.database;
+    final goals = await goalsDatabase.query('goals');
+    final goalContributions = await goalsDatabase.query('goal_contributions');
+
     // Get all accounts
     final accounts = await transactionsDb.query('accounts');
 
@@ -174,6 +182,8 @@ class BackupService {
       receipts: receiptsData,
       debts: debts,
       debtPayments: debtPayments,
+      goals: goals,
+      goalContributions: goalContributions,
       accounts: accounts,
       settings: settings,
     );
@@ -267,6 +277,11 @@ class BackupService {
     await debtDb.delete('debt_payments');
     await debtDb.delete('debts');
 
+    // Clear goals and contributions
+    final goalDb = await GoalDBHelper().database;
+    await goalDb.delete('goal_contributions');
+    await goalDb.delete('goals');
+
     // Clear accounts
     await transactionDb.delete('accounts');
   }
@@ -339,6 +354,26 @@ class BackupService {
     final batch = db.batch();
     for (final payment in debtPayments) {
       batch.insert('debt_payments', payment,
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> _restoreGoals(List<Map<String, dynamic>> goals) async {
+    final db = await GoalDBHelper().database;
+    final batch = db.batch();
+    for (final goal in goals) {
+      batch.insert('goals', goal, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> _restoreGoalContributions(
+      List<Map<String, dynamic>> goalContributions) async {
+    final db = await GoalDBHelper().database;
+    final batch = db.batch();
+    for (final contribution in goalContributions) {
+      batch.insert('goal_contributions', contribution,
           conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);

@@ -89,7 +89,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
         onPressed: () {
           Navigator.pushNamed(context, AccountFormScreen.routeName);
         },
-        backgroundColor: AppColors.primary,
+        backgroundColor: context.appAccent,
         icon: const Icon(Icons.add),
         label: const Text('Add Account'),
       ),
@@ -158,13 +158,13 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.1),
+                              color: context.appAccent.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
                               'DEFAULT',
                               style: AppTextStyles.caption.copyWith(
-                                color: AppColors.primary,
+                                color: context.appAccent,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 10,
                               ),

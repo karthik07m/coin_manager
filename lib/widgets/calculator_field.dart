@@ -264,7 +264,7 @@ class _CalculatorBottomSheetState extends State<_CalculatorBottomSheet> {
                   color: context.appSurface,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.2),
+                    color: context.appAccent.withValues(alpha: 0.2),
                     width: 1,
                   ),
                 ),
@@ -285,12 +285,12 @@ class _CalculatorBottomSheetState extends State<_CalculatorBottomSheet> {
               // Set Amount Button - Green accent
               SizedBox(
                 width: double.infinity,
-                height: 56,
+                height: AppDimensions.buttonHeight,
                 child: ElevatedButton(
                   onPressed: _onDone,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
+                    backgroundColor: context.appAccent,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -303,10 +303,8 @@ class _CalculatorBottomSheetState extends State<_CalculatorBottomSheet> {
                       const SizedBox(width: 8),
                       Text(
                         'Done',
-                        style: AppTextStyles.bodyLarge.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                          color: Colors.white,
+                        style: AppTextStyles.button.copyWith(
+                          color: Theme.of(context).colorScheme.onPrimary,
                         ),
                       ),
                     ],
@@ -338,7 +336,7 @@ class _CalculatorBottomSheetState extends State<_CalculatorBottomSheet> {
           aspectRatio: 1,
           child: Material(
             color: isOperator
-                ? AppColors.primary.withValues(alpha: 0.15)
+                ? context.appAccent.withValues(alpha: 0.15)
                 : context.appSurfaceLight,
             borderRadius: BorderRadius.circular(16),
             child: InkWell(
@@ -364,7 +362,7 @@ class _CalculatorBottomSheetState extends State<_CalculatorBottomSheet> {
                           fontSize: isOperator ? 28 : 24,
                           fontWeight: FontWeight.w500,
                           color: isOperator
-                              ? AppColors.primary
+                              ? context.appAccent
                               : context.textPrimary,
                         ),
                       ),

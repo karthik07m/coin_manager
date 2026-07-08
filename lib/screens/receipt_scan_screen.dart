@@ -142,7 +142,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                 borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
                 border: Border.all(
                   color: _scanResult != null
-                      ? AppColors.primary.withValues(alpha: 0.3)
+                      ? context.appAccent.withValues(alpha: 0.3)
                       : context.textSecondary.withValues(alpha: 0.2),
                   width: 2,
                 ),
@@ -160,7 +160,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           CircularProgressIndicator(
-                            color: AppColors.primary,
+                            color: context.appAccent,
                             strokeWidth: 3,
                           ),
                           const SizedBox(height: 16),
@@ -190,13 +190,13 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                                 padding: const EdgeInsets.all(20),
                                 decoration: BoxDecoration(
                                   color:
-                                      AppColors.primary.withValues(alpha: 0.1),
+                                      context.appAccent.withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   Icons.receipt_long,
                                   size: 64,
-                                  color: AppColors.primary,
+                                  color: context.appAccent,
                                 ),
                               ),
                               const SizedBox(height: 16),
@@ -229,7 +229,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                     icon: const Icon(Icons.camera_alt, size: 20),
                     label: const Text('Camera'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: context.appAccent,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       elevation: 2,
@@ -237,7 +237,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                       disabledBackgroundColor:
-                          AppColors.primary.withValues(alpha: 0.5),
+                          context.appAccent.withValues(alpha: 0.5),
                     ),
                   ),
                 ),
@@ -248,10 +248,10 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                     icon: const Icon(Icons.photo_library, size: 20),
                     label: const Text('Gallery'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
+                      foregroundColor: context.appAccent,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       side: BorderSide(
-                        color: AppColors.primary.withValues(alpha: 0.5),
+                        color: context.appAccent.withValues(alpha: 0.5),
                         width: 2,
                       ),
                       shape: RoundedRectangleBorder(
@@ -341,7 +341,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                     contentPadding: const EdgeInsets.all(16),
                     prefixIcon: Icon(
                       Icons.store,
-                      color: AppColors.primary,
+                      color: context.appAccent,
                     ),
                   ),
                 ),
@@ -372,7 +372,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                     contentPadding: const EdgeInsets.all(16),
                     prefixIcon: Icon(
                       Icons.attach_money,
-                      color: AppColors.primary,
+                      color: context.appAccent,
                     ),
                   ),
                 ),
@@ -403,7 +403,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                     contentPadding: const EdgeInsets.all(16),
                     prefixIcon: Icon(
                       Icons.calendar_today,
-                      color: AppColors.primary,
+                      color: context.appAccent,
                     ),
                   ),
                 ),
@@ -433,7 +433,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                   ),
                   leading: Icon(
                     Icons.text_snippet,
-                    color: AppColors.primary,
+                    color: context.appAccent,
                   ),
                   children: [
                     Container(
@@ -465,11 +465,11 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                 child: ElevatedButton(
                   onPressed: _confirmAndReturn,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: context.appAccent,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     elevation: 4,
-                    shadowColor: AppColors.primary.withValues(alpha: 0.3),
+                    shadowColor: context.appAccent.withValues(alpha: 0.3),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
@@ -481,8 +481,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                       const SizedBox(width: 8),
                       Text(
                         'Use This Receipt',
-                        style: AppTextStyles.bodyLarge.copyWith(
-                          fontWeight: FontWeight.bold,
+                        style: AppTextStyles.button.copyWith(
                           color: Colors.white,
                         ),
                       ),

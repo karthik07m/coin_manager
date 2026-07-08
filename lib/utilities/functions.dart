@@ -111,48 +111,52 @@ class UtilityFunction {
     return " $currency $finalAmount";
   }
 
-  /// Format number with Indian numbering system (lakhs/crores)
+  static bool isIndianCurrency({String? symbol, String? code}) {
+    return code == 'INR' || symbol == '₹';
+  }
+
+  /// Format number with Indian numbering system (thousands, lakhs, crores).
   /// Example: 1234567.89 => 12,34,567.89
-  static String formatIndianNumber(double value) {
-    final parts = value.toStringAsFixed(2).split('.');
+  static String formatIndianNumber(
+    double value, {
+    bool showDecimals = true,
+  }) {
+    final isNegative = value < 0;
+    final normalized = value.abs();
+    final parts = normalized.toStringAsFixed(showDecimals ? 2 : 0).split('.');
     final intPart = parts[0];
-    final decPart = parts[1];
+    final decPart = parts.length > 1 ? parts[1] : '';
 
     if (intPart.length <= 3) {
-      return '$intPart.$decPart';
+      final amount = showDecimals ? '$intPart.$decPart' : intPart;
+      return isNegative ? '-$amount' : amount;
     }
 
-    // Indian system: last 3 digits, then groups of 2
-    final buffer = StringBuffer();
-    final length = intPart.length;
+    final lastThree = intPart.substring(intPart.length - 3);
+    var leading = intPart.substring(0, intPart.length - 3);
+    final groups = <String>[];
 
-    // Add first group (rightmost 3 digits)
-    buffer.write(intPart.substring(length - 3));
-
-    // Add remaining groups of 2 from right to left
-    int pos = length - 3;
-    while (pos > 0) {
-      final start = pos - 2 >= 0 ? pos - 2 : 0;
-      final group = intPart.substring(start, pos);
-      buffer.write(',');
-      buffer.write(group);
-      pos = start;
+    while (leading.length > 2) {
+      groups.insert(0, leading.substring(leading.length - 2));
+      leading = leading.substring(0, leading.length - 2);
     }
 
-    // Reverse to get correct order
-    final reversed = buffer.toString().split('').reversed.join();
-    return '$reversed.$decPart';
+    if (leading.isNotEmpty) {
+      groups.insert(0, leading);
+    }
+
+    final formatted = '${groups.join(',')},$lastThree';
+    final amount = showDecimals ? '$formatted.$decPart' : formatted;
+    return isNegative ? '-$amount' : amount;
   }
 
   static String addCommaWithSign(double value,
       {String currencySymbol = '\$', String currencyCode = 'USD'}) {
     String formattedAmount;
 
-    // Use Indian numbering for INR
-    if (currencyCode == 'INR') {
+    if (isIndianCurrency(symbol: currencySymbol, code: currencyCode)) {
       formattedAmount = formatIndianNumber(value);
     } else {
-      // International numbering (groups of 3)
       String amount = value.toStringAsFixed(2);
       formattedAmount = amount.replaceAllMapped(
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => "${m[1]},");
@@ -163,13 +167,47 @@ class UtilityFunction {
 
   /// Format money with commas and optional decimals
   /// Example: 1234.56 => "$1,234" or "$1,234.56"
-  static String formatMoney(double value,
-      {bool showDecimals = false, String symbol = '\$'}) {
+  static String formatMoney(
+    double value, {
+    bool showDecimals = false,
+    String symbol = '\$',
+    String currencyCode = 'USD',
+  }) {
+    if (isIndianCurrency(symbol: symbol, code: currencyCode)) {
+      return '$symbol${formatIndianNumber(
+        value,
+        showDecimals: showDecimals,
+      )}';
+    }
+
     final formatter = NumberFormat.currency(
       symbol: symbol,
       decimalDigits: showDecimals ? 2 : 0,
     );
     return formatter.format(value);
+  }
+
+  static String formatIndianCompact(double value,
+      {String currencySymbol = '₹', bool showDecimals = false}) {
+    final absoluteValue = value.abs();
+    final sign = value < 0 ? '-' : '';
+
+    if (absoluteValue >= 10000000) {
+      final amount = absoluteValue / 10000000;
+      return '$sign$currencySymbol${amount.toStringAsFixed(amount >= 10 || !showDecimals ? 1 : 2)}Cr';
+    }
+
+    if (absoluteValue >= 100000) {
+      final amount = absoluteValue / 100000;
+      return '$sign$currencySymbol${amount.toStringAsFixed(amount >= 10 || !showDecimals ? 1 : 2)}L';
+    }
+
+    return '$sign${formatMoney(
+      absoluteValue,
+      symbol: currencySymbol,
+      currencyCode: 'INR',
+      showDecimals: showDecimals,
+    )}';
   }
 
   static String formatDate(DateTime date) {

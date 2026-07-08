@@ -2,29 +2,43 @@ import 'package:flutter/material.dart';
 
 /// Custom page transitions for smooth navigation
 class PageTransitions {
+  static const Curve _forwardCurve = Curves.easeOutCubic;
+  static const Curve _reverseCurve = Curves.easeInCubic;
+
   /// Slide transition from right (default for most screens)
   static Route<T> slideFromRight<T>(Widget page, {RouteSettings? settings}) {
     return PageRouteBuilder<T>(
       settings: settings,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const begin = Offset(1.0, 0.0);
+        const begin = Offset(0.08, 0.0);
         const end = Offset.zero;
-        const curve = Curves.fastOutSlowIn;
 
-        var tween = Tween(begin: begin, end: end).chain(
-          CurveTween(curve: curve),
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: _forwardCurve,
+          reverseCurve: _reverseCurve,
         );
-
-        var offsetAnimation = animation.drive(tween);
+        final offsetAnimation =
+            Tween(begin: begin, end: end).animate(curvedAnimation);
+        final fadeAnimation =
+            Tween<double>(begin: 0.0, end: 1.0).animate(curvedAnimation);
+        final scaleAnimation =
+            Tween<double>(begin: 0.985, end: 1.0).animate(curvedAnimation);
 
         return SlideTransition(
           position: offsetAnimation,
-          child: child,
+          child: FadeTransition(
+            opacity: fadeAnimation,
+            child: ScaleTransition(
+              scale: scaleAnimation,
+              child: child,
+            ),
+          ),
         );
       },
-      transitionDuration: const Duration(milliseconds: 250),
-      reverseTransitionDuration: const Duration(milliseconds: 200),
+      transitionDuration: const Duration(milliseconds: 240),
+      reverseTransitionDuration: const Duration(milliseconds: 180),
     );
   }
 
@@ -34,23 +48,29 @@ class PageTransitions {
       settings: settings,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const begin = Offset(0.0, 1.0);
+        const begin = Offset(0.0, 0.12);
         const end = Offset.zero;
-        const curve = Curves.fastOutSlowIn;
 
-        var tween = Tween(begin: begin, end: end).chain(
-          CurveTween(curve: curve),
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: _forwardCurve,
+          reverseCurve: _reverseCurve,
         );
-
-        var offsetAnimation = animation.drive(tween);
+        final offsetAnimation =
+            Tween(begin: begin, end: end).animate(curvedAnimation);
+        final fadeAnimation =
+            Tween<double>(begin: 0.0, end: 1.0).animate(curvedAnimation);
 
         return SlideTransition(
           position: offsetAnimation,
-          child: child,
+          child: FadeTransition(
+            opacity: fadeAnimation,
+            child: child,
+          ),
         );
       },
-      transitionDuration: const Duration(milliseconds: 300),
-      reverseTransitionDuration: const Duration(milliseconds: 250),
+      transitionDuration: const Duration(milliseconds: 260),
+      reverseTransitionDuration: const Duration(milliseconds: 190),
     );
   }
 
@@ -60,11 +80,10 @@ class PageTransitions {
       settings: settings,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const curve = Curves.easeInOut;
-
-        var curvedAnimation = CurvedAnimation(
+        final curvedAnimation = CurvedAnimation(
           parent: animation,
-          curve: curve,
+          curve: _forwardCurve,
+          reverseCurve: _reverseCurve,
         );
 
         return FadeTransition(
@@ -72,8 +91,8 @@ class PageTransitions {
           child: child,
         );
       },
-      transitionDuration: const Duration(milliseconds: 250),
-      reverseTransitionDuration: const Duration(milliseconds: 200),
+      transitionDuration: const Duration(milliseconds: 220),
+      reverseTransitionDuration: const Duration(milliseconds: 170),
     );
   }
 
@@ -83,11 +102,10 @@ class PageTransitions {
       settings: settings,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const curve = Curves.fastOutSlowIn;
-
-        var curvedAnimation = CurvedAnimation(
+        final curvedAnimation = CurvedAnimation(
           parent: animation,
-          curve: curve,
+          curve: _forwardCurve,
+          reverseCurve: _reverseCurve,
         );
 
         return ScaleTransition(
@@ -98,8 +116,8 @@ class PageTransitions {
           ),
         );
       },
-      transitionDuration: const Duration(milliseconds: 250),
-      reverseTransitionDuration: const Duration(milliseconds: 200),
+      transitionDuration: const Duration(milliseconds: 220),
+      reverseTransitionDuration: const Duration(milliseconds: 170),
     );
   }
 
@@ -110,22 +128,22 @@ class PageTransitions {
       settings: settings,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const curve = Curves.fastOutSlowIn;
-
-        var slideAnimation = Tween<Offset>(
+        final slideAnimation = Tween<Offset>(
           begin: const Offset(0.0, 0.03),
           end: Offset.zero,
         ).animate(CurvedAnimation(
           parent: animation,
-          curve: curve,
+          curve: _forwardCurve,
+          reverseCurve: _reverseCurve,
         ));
 
-        var fadeAnimation = Tween<double>(
+        final fadeAnimation = Tween<double>(
           begin: 0.0,
           end: 1.0,
         ).animate(CurvedAnimation(
           parent: animation,
-          curve: curve,
+          curve: _forwardCurve,
+          reverseCurve: _reverseCurve,
         ));
 
         return SlideTransition(

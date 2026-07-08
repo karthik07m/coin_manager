@@ -9,8 +9,14 @@ class AccountProvider extends ChangeNotifier {
 
   List<Account> get accounts => _accounts;
   Account? get selectedAccount => _selectedAccount;
-  Account? get defaultAccount => _accounts.firstWhere((acc) => acc.isDefault,
-      orElse: () => _accounts.first);
+  Account? get defaultAccount {
+    if (_accounts.isEmpty) return null;
+    return _accounts.firstWhere(
+      (acc) => acc.isDefault,
+      orElse: () => _accounts.first,
+    );
+  }
+
   bool get isLoaded => _isLoaded;
 
   final AccountDBHelper _dbHelper = AccountDBHelper();

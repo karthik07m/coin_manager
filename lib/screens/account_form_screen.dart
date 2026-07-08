@@ -294,12 +294,12 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? AppColors.primary.withValues(alpha: 0.1)
+                              ? context.appAccent.withValues(alpha: 0.1)
                               : context.appSurface,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: isSelected
-                                ? AppColors.primary
+                                ? context.appAccent
                                 : context.textSecondary.withValues(alpha: 0.2),
                             width: isSelected ? 2 : 1,
                           ),
@@ -310,7 +310,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                             Icon(
                               option['data'] as IconData,
                               color: isSelected
-                                  ? AppColors.primary
+                                  ? context.appAccent
                                   : context.textSecondary,
                               size: 28,
                             ),
@@ -319,7 +319,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                               option['name'] as String,
                               style: AppTextStyles.caption.copyWith(
                                 color: isSelected
-                                    ? AppColors.primary
+                                    ? context.appAccent
                                     : context.textSecondary,
                                 fontWeight: isSelected
                                     ? FontWeight.bold
@@ -400,7 +400,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                       Icon(
                         Icons.star,
                         color: _isDefault
-                            ? AppColors.primary
+                            ? context.appAccent
                             : context.textSecondary,
                       ),
                       const SizedBox(width: AppDimensions.spacing12),
@@ -430,7 +430,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                             _isDefault = value;
                           });
                         },
-                        activeColor: AppColors.primary,
+                        activeColor: context.appAccent,
                       ),
                     ],
                   ),
@@ -445,7 +445,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                   child: ElevatedButton(
                     onPressed: _saveAccount,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: context.appAccent,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius:
@@ -456,10 +456,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                       _existingAccount != null
                           ? 'Update Account'
                           : 'Save Account',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: AppTextStyles.button,
                     ),
                   ),
                 ),

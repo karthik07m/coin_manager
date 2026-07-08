@@ -5,13 +5,17 @@ import 'transaction_list.dart';
 import 'charts_screen.dart';
 import 'monthly_budget_screen.dart';
 import 'setting.dart';
+import 'ai_assistant_screen.dart';
 import 'transaction_form.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/monthly_budget_provider.dart';
 import '../providers/transaction_provider.dart';
+import '../providers/account_provider.dart';
 import '../models/transaction.dart';
 import '../utilities/constants.dart';
+import '../utilities/theme_helper.dart';
+import '../utilities/budget_period.dart';
 
 class MenuScrn extends StatefulWidget {
   const MenuScrn({super.key});
@@ -20,8 +24,13 @@ class MenuScrn extends StatefulWidget {
   State<MenuScrn> createState() => BottomNavBarState();
 }
 
-class BottomNavBarState extends State<MenuScrn> {
+class BottomNavBarState extends State<MenuScrn>
+    with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
+  int _tabDirection = 1;
+  final ValueNotifier<int> _chartsActivationSignal = ValueNotifier<int>(0);
+  late final AnimationController _tabAnimationController;
+  late final Animation<double> _tabAnimation;
 
   // Cached so widgets are built ONCE and kept alive across tab switches.
   // Previously a getter — this was creating new widget instances on every
@@ -31,17 +40,35 @@ class BottomNavBarState extends State<MenuScrn> {
   @override
   void initState() {
     super.initState();
+    _tabAnimationController = AnimationController(
+      vsync: this,
+      duration: AppDurations.fast,
+    );
+    _tabAnimation = CurvedAnimation(
+      parent: _tabAnimationController,
+      curve: Curves.easeOutCubic,
+    );
+    _tabAnimationController.value = 1;
+
     // Initialize screens once — never recreated.
     _screens = [
       HomePage(onTabSelected: _onItemTapped),
       const TransactionList(),
       const MonthlyBudgetScreen(),
-      const ChartsScreen(),
+      ChartsScreen(activationSignal: _chartsActivationSignal),
+      const AiAssistantScreen(reserveBottomNavigationSpace: true),
       const SettingsScreen(),
     ];
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAndCheckRecurring();
     });
+  }
+
+  @override
+  void dispose() {
+    _tabAnimationController.dispose();
+    _chartsActivationSignal.dispose();
+    super.dispose();
   }
 
   Future<void> _loadAndCheckRecurring() async {
@@ -50,8 +77,10 @@ class BottomNavBarState extends State<MenuScrn> {
     final settings = Provider.of<SettingsProvider>(context, listen: false);
     final transactionProvider =
         Provider.of<TransactionProvider>(context, listen: false);
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
 
-    final currentMonth = DateTime.now().month.toString();
+    final currentMonth = BudgetPeriod.keyFor(DateTime.now());
 
     // Load persisted data first
     await monthlyBudgetProvider.loadMonthlyData(currentMonth);
@@ -82,14 +111,16 @@ class BottomNavBarState extends State<MenuScrn> {
       startDate: firstDayOfMonth,
       endDate: lastDayOfMonth,
     );
+    if (!accountProvider.isLoaded) {
+      await accountProvider.loadAccounts();
+    }
 
     // Auto-add monthly income ONCE per calendar month.
     // We use a persisted flag (lastAutoIncomeMonth) rather than checking the
     // in-memory transaction list. This prevents the income from being
     // re-inserted every time the app launches after the user deletes it.
     final autoIncomeKey = '${now.year}-${now.month}';
-    final alreadyAddedThisMonth =
-        settings.lastAutoIncomeMonth == autoIncomeKey;
+    final alreadyAddedThisMonth = settings.lastAutoIncomeMonth == autoIncomeKey;
 
     if (!alreadyAddedThisMonth &&
         settings.recurIncome &&
@@ -98,7 +129,7 @@ class BottomNavBarState extends State<MenuScrn> {
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         amount: settings.monthlyIncome,
         categoryId: defaultIncomeCat,
-        accountId: 1, // Default to Cash account
+        accountId: accountProvider.defaultAccount?.id ?? 1,
         title: 'Monthly Income',
         date: firstDayOfMonth,
         isExpense: false,
@@ -119,9 +150,16 @@ class BottomNavBarState extends State<MenuScrn> {
   }
 
   void _onItemTapped(int index) {
+    if (index == _selectedIndex) return;
+
     setState(() {
+      _tabDirection = index > _selectedIndex ? 1 : -1;
+      if (index == 3) {
+        _chartsActivationSignal.value++;
+      }
       _selectedIndex = index;
     });
+    _tabAnimationController.forward(from: 0);
   }
 
   @override
@@ -133,40 +171,72 @@ class BottomNavBarState extends State<MenuScrn> {
           SafeArea(
             // IndexedStack keeps all screens alive and simply shows/hides them.
             // This eliminates the rebuild cost entirely on tab switch.
-            child: IndexedStack(
-              index: _selectedIndex,
-              children: _screens,
+            child: AnimatedBuilder(
+              animation: _tabAnimation,
+              child: IndexedStack(
+                index: _selectedIndex,
+                children: List.generate(
+                  _screens.length,
+                  (index) => TickerMode(
+                    enabled: index == _selectedIndex,
+                    child: RepaintBoundary(
+                      child: _screens[index],
+                    ),
+                  ),
+                ),
+              ),
+              builder: (context, child) {
+                final offset = Tween<Offset>(
+                  begin: Offset(0.035 * _tabDirection, 0),
+                  end: Offset.zero,
+                ).evaluate(_tabAnimation);
+                final opacity = Tween<double>(
+                  begin: 0.92,
+                  end: 1,
+                ).evaluate(_tabAnimation);
+
+                return FadeTransition(
+                  opacity: AlwaysStoppedAnimation(opacity),
+                  child: FractionalTranslation(
+                    translation: offset,
+                    child: child,
+                  ),
+                );
+              },
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () =>
-            Navigator.of(context).pushNamed(TransactionForm.routeName),
-        backgroundColor: AppColors.primary,
-        elevation: AppDimensions.elevationLarge,
-        shape: const CircleBorder(),
-        child: Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              colors: [
-                AppColors.primary,
-                AppColors.primary.withAlpha(200),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+      floatingActionButton: _selectedIndex == 4
+          ? null
+          : FloatingActionButton(
+              onPressed: () => Navigator.of(context).pushNamed(
+                TransactionForm.routeName,
+              ),
+              backgroundColor: context.appAccent,
+              elevation: AppDimensions.elevationLarge,
+              shape: const CircleBorder(),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      context.appAccent,
+                      context.appAccent.withAlpha(200),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.add,
+                    size: 28,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+              ),
             ),
-          ),
-          child: const Center(
-            child: Icon(
-              Icons.add,
-              size: 28,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: CustomNavBar(
         selectedIndex: _selectedIndex,

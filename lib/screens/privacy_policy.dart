@@ -19,7 +19,7 @@ Privacy Policy
 Last Updated: January 4, 2026
 
 1. Introduction
-Welcome to Coin Manager. We are committed to protecting your personal information and your right to privacy.
+Welcome to Coinly. We are committed to protecting your personal information and your right to privacy.
 
 2. Data Collection
 We do not collect any personal information. All your data, including transactions and categories, is stored locally on your device.

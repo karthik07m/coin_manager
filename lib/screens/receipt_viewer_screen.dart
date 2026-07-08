@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 class ReceiptViewerScreen extends StatelessWidget {
   final String imagePath;
@@ -20,11 +21,23 @@ class ReceiptViewerScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.share),
-            onPressed: () {
-              // TODO: Add share functionality
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Share coming soon')),
-              );
+            tooltip: 'Share receipt',
+            onPressed: () async {
+              try {
+                final file = XFile(imagePath);
+                await SharePlus.instance.share(
+                  ShareParams(
+                    files: [file],
+                    subject: title ?? 'Receipt',
+                  ),
+                );
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Could not share receipt: $e')),
+                  );
+                }
+              }
             },
           ),
         ],

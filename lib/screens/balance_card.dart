@@ -50,6 +50,7 @@ class BalanceCard extends StatelessWidget {
     double balance = totalIncome - totalExpenses;
     bool isPositive = balance >= 0;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accentColor = context.appAccent;
     final currencySymbol =
         Provider.of<SettingsProvider>(context).currencySymbol;
 
@@ -72,7 +73,7 @@ class BalanceCard extends StatelessWidget {
             end: Alignment.bottomRight,
             colors: isDark
                 ? [
-                    AppColors.primary.withValues(alpha: 0.15),
+                    accentColor.withValues(alpha: 0.15),
                     AppColors.accentBlue.withValues(alpha: 0.1),
                     AppColors.surfaceLight,
                   ]
@@ -85,14 +86,14 @@ class BalanceCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
           border: Border.all(
             color: isDark
-                ? AppColors.primary.withValues(alpha: 0.2)
-                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                ? accentColor.withValues(alpha: 0.2)
+                : accentColor.withValues(alpha: 0.15),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
               color: isDark
-                  ? AppColors.primary.withValues(alpha: 0.1)
+                  ? accentColor.withValues(alpha: 0.1)
                   : Colors.black.withValues(alpha: 0.05),
               blurRadius: isDark ? 20 : 10,
               offset: const Offset(0, 4),
@@ -125,13 +126,13 @@ class BalanceCard extends StatelessWidget {
                           Icon(
                             Icons.account_balance_wallet_outlined,
                             size: 16,
-                            color: AppColors.primary,
+                            color: accentColor,
                           ),
                           const SizedBox(width: 6),
                           Text(
                             DateFormat('MMMM yyyy').format(selectedMonth),
                             style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.primary,
+                              color: accentColor,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -160,14 +161,14 @@ class BalanceCard extends StatelessWidget {
                         children: [
                           Icon(
                             Icons.calendar_month,
-                            color: AppColors.primary,
+                            color: accentColor,
                             size: 16,
                           ),
                           const SizedBox(width: 6),
                           Text(
                             DateFormat('MMM').format(selectedMonth),
                             style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.primary,
+                              color: accentColor,
                               fontWeight: FontWeight.w600,
                               fontSize: 13,
                             ),
@@ -175,7 +176,7 @@ class BalanceCard extends StatelessWidget {
                           const SizedBox(width: 4),
                           Icon(
                             Icons.arrow_drop_down,
-                            color: AppColors.primary,
+                            color: accentColor,
                             size: 18,
                           ),
                         ],
@@ -594,7 +595,7 @@ class _MonthPickerDialogState extends State<_MonthPickerDialog> {
                     child: Container(
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? AppColors.primary
+                            ? context.appAccent
                             : context.appBackground,
                         borderRadius:
                             BorderRadius.circular(AppDimensions.radiusMedium),

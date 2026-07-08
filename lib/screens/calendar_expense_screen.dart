@@ -184,7 +184,7 @@ class _CalendarExpenseScreenState extends State<CalendarExpenseScreen>
                       borderRadius:
                           BorderRadius.circular(AppDimensions.radiusLarge),
                       border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.2),
+                        color: context.appAccent.withValues(alpha: 0.2),
                         width: 1,
                       ),
                     ),
@@ -206,11 +206,11 @@ class _CalendarExpenseScreenState extends State<CalendarExpenseScreen>
                         ),
                         leftChevronIcon: Icon(
                           Icons.chevron_left,
-                          color: AppColors.primary,
+                          color: context.appAccent,
                         ),
                         rightChevronIcon: Icon(
                           Icons.chevron_right,
-                          color: AppColors.primary,
+                          color: context.appAccent,
                         ),
                       ),
                       daysOfWeekStyle: DaysOfWeekStyle(
@@ -225,15 +225,15 @@ class _CalendarExpenseScreenState extends State<CalendarExpenseScreen>
                       ),
                       calendarStyle: CalendarStyle(
                         todayDecoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.3),
+                          color: context.appAccent.withValues(alpha: 0.3),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: AppColors.primary,
+                            color: context.appAccent,
                             width: 2,
                           ),
                         ),
                         selectedDecoration: BoxDecoration(
-                          color: AppColors.primary,
+                          color: context.appAccent,
                           shape: BoxShape.circle,
                         ),
                         defaultTextStyle: AppTextStyles.bodyMedium.copyWith(
@@ -338,7 +338,7 @@ class _CalendarExpenseScreenState extends State<CalendarExpenseScreen>
                       borderRadius:
                           BorderRadius.circular(AppDimensions.radiusLarge),
                       border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.2),
+                        color: context.appAccent.withValues(alpha: 0.2),
                         width: 1,
                       ),
                     ),
@@ -376,7 +376,7 @@ class _CalendarExpenseScreenState extends State<CalendarExpenseScreen>
                                     .currencySymbol,
                           ),
                           Icons.calendar_today,
-                          AppColors.primary,
+                          context.appAccent,
                         ),
                         if (highestDay != null) ...[
                           const SizedBox(height: AppDimensions.spacing12),
@@ -420,12 +420,12 @@ class _CalendarExpenseScreenState extends State<CalendarExpenseScreen>
       margin: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: isSelected
-            ? AppColors.primary
+            ? context.appAccent
             : (expense > 0 ? backgroundColor : Colors.transparent),
         borderRadius: BorderRadius.circular(AppDimensions.radiusSmall),
         border: isToday
             ? Border.all(
-                color: AppColors.primary,
+                color: context.appAccent,
                 width: 2,
               )
             : null,
@@ -470,7 +470,7 @@ class _CalendarExpenseScreenState extends State<CalendarExpenseScreen>
                 width: 4,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
+                  color: context.appAccent,
                   shape: BoxShape.circle,
                 ),
               ),

@@ -106,7 +106,7 @@ class CalculatorKeyboard extends StatelessWidget {
                   _ActionButton(
                     text: '=',
                     onTap: onEvaluate,
-                    color: AppColors.primary,
+                    color: context.appAccent,
                     isPrimary: true,
                   ),
                   _DoneButton(onTap: onDone),
@@ -184,15 +184,15 @@ class _OperatorButton extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  AppColors.primary.withValues(alpha: 0.15),
-                  AppColors.primary.withValues(alpha: 0.08),
+                  context.appAccent.withValues(alpha: 0.15),
+                  context.appAccent.withValues(alpha: 0.08),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: AppColors.primary.withValues(alpha: 0.3),
+                color: context.appAccent.withValues(alpha: 0.3),
               ),
             ),
             child: Center(
@@ -201,7 +201,7 @@ class _OperatorButton extends StatelessWidget {
                 style: AppTextStyles.h2.copyWith(
                   fontSize: 26,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
+                  color: context.appAccent,
                 ),
               ),
             ),

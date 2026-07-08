@@ -25,6 +25,7 @@ class TransactionDBHelper {
   final String columnIsExpense = 'is_expense';
 
   final String columnIsRecurring = 'is_recurring';
+  final String columnRecurrenceId = 'recurrence_id';
   final String columnReceiptId = 'receipt_id';
 
   Future<Database> get database async {
@@ -40,7 +41,7 @@ class TransactionDBHelper {
     String path = join(documentsDirectory.path, 'transactions.db');
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -60,6 +61,7 @@ class TransactionDBHelper {
         $columnModifiedOn TEXT,
         $columnIsExpense INTEGER,
         $columnIsRecurring INTEGER,
+        $columnRecurrenceId TEXT,
         $columnReceiptId TEXT
       )
     ''');
@@ -161,6 +163,37 @@ class TransactionDBHelper {
         debugPrint('Error migrating balance column: $e');
       }
     }
+
+    if (oldVersion < 6) {
+      try {
+        await db.execute(
+            'ALTER TABLE $tableName ADD COLUMN $columnRecurrenceId TEXT');
+      } catch (e) {
+        debugPrint('Note: recurrence_id column might already exist');
+      }
+
+      await _backfillRecurrenceIds(db);
+    }
+  }
+
+  Future<void> _backfillRecurrenceIds(Database db) async {
+    await db.execute('''
+      UPDATE $tableName
+      SET $columnRecurrenceId = (
+        SELECT seed.$columnId
+        FROM $tableName seed
+        WHERE seed.$columnIsRecurring = 1
+          AND seed.$columnTitle = $tableName.$columnTitle
+          AND seed.$columnCategoryId = $tableName.$columnCategoryId
+          AND seed.account_id = $tableName.account_id
+          AND seed.$columnAmount = $tableName.$columnAmount
+          AND seed.$columnIsExpense = $tableName.$columnIsExpense
+        ORDER BY seed.$columnDate ASC, seed.$columnCreatedOn ASC, seed.$columnId ASC
+        LIMIT 1
+      )
+      WHERE $columnIsRecurring = 1
+        AND $columnRecurrenceId IS NULL
+    ''');
   }
 
   Future<int> insertTransaction(trans_model.Transaction transaction) async {
@@ -222,32 +255,119 @@ class TransactionDBHelper {
     }
   }
 
-  /// Delete all future recurring instances of a transaction
-  /// This finds all recurring transactions that match the given transaction's
-  /// title, category, and amount, and deletes those with future dates
-  Future<int> deleteFutureRecurringInstances(
-      trans_model.Transaction transaction) async {
-    var dbClient = await database;
+  Future<int> deactivateRecurringSeries(
+    trans_model.Transaction transaction, {
+    String? deleteTransactionId,
+  }) async {
+    final dbClient = await database;
+    final recurrenceId = transaction.recurrenceId ?? transaction.id;
+
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
 
-      // Delete all recurring transactions that match this one and are in the future
+      return await dbClient.transaction((txn) async {
+        int affected = 0;
+
+        affected += await txn.delete(
+          tableName,
+          where: '''
+            $columnIsRecurring = 1
+            AND ($columnDate > ? ${deleteTransactionId == null ? '' : 'OR $columnId = ?'})
+            AND ${_recurringSeriesWhereClause()}
+          ''',
+          whereArgs: [
+            today.toIso8601String(),
+            if (deleteTransactionId != null) deleteTransactionId,
+            ..._recurringSeriesWhereArgs(transaction, recurrenceId),
+          ],
+        );
+
+        affected += await txn.update(
+          tableName,
+          {
+            columnIsRecurring: 0,
+            columnRecurrenceId: null,
+            columnModifiedOn: DateTime.now().toIso8601String(),
+          },
+          where: '''
+            $columnIsRecurring = 1
+            AND ${_recurringSeriesWhereClause()}
+          ''',
+          whereArgs: _recurringSeriesWhereArgs(transaction, recurrenceId),
+        );
+
+        return affected;
+      });
+    } catch (e) {
+      debugPrint('Error deactivating recurring series: $e');
+      return -1;
+    }
+  }
+
+  /// Delete all future recurring instances of a transaction series.
+  /// Historical instances are preserved. The edited row can be excluded so its
+  /// update does not delete itself when the edited instance is dated in future.
+  Future<int> deleteFutureRecurringInstances(
+    trans_model.Transaction transaction, {
+    String? excludeId,
+  }) async {
+    var dbClient = await database;
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final recurrenceId = transaction.recurrenceId ?? transaction.id;
+
       return await dbClient.delete(
         tableName,
-        where:
-            '$columnIsRecurring = 1 AND $columnTitle = ? AND $columnCategoryId = ? AND $columnAmount = ? AND $columnDate > ?',
+        where: '''
+            $columnIsRecurring = 1
+            AND $columnDate > ?
+            ${excludeId == null ? '' : 'AND $columnId != ?'}
+            AND ${_recurringSeriesWhereClause()}
+            ''',
         whereArgs: [
-          transaction.title,
-          transaction.categoryId,
-          transaction.amount,
           today.toIso8601String(),
+          if (excludeId != null) excludeId,
+          ..._recurringSeriesWhereArgs(transaction, recurrenceId),
         ],
       );
     } catch (e) {
       debugPrint('Error deleting future recurring instances: $e');
       return -1;
     }
+  }
+
+  String _recurringSeriesWhereClause() {
+    return '''
+      (
+        $columnRecurrenceId = ?
+        OR $columnId = ?
+        OR (
+          $columnRecurrenceId IS NULL
+          AND $columnTitle = ?
+          AND $columnCategoryId = ?
+          AND account_id = ?
+          AND $columnAmount = ?
+          AND $columnIsExpense = ?
+        )
+      )
+    ''';
+  }
+
+  List<Object?> _recurringSeriesWhereArgs(
+    trans_model.Transaction transaction,
+    String recurrenceId,
+  ) {
+    return [
+      recurrenceId,
+      recurrenceId,
+      transaction.title,
+      transaction.categoryId,
+      transaction.accountId,
+      transaction.amount,
+      transaction.isExpense ? 1 : 0,
+    ];
   }
 
   Future<double> _getTotalAmountByPeriod({
@@ -349,21 +469,58 @@ class TransactionDBHelper {
     }
   }
 
+  /// Returns the category most recently used for a transaction with the
+  /// exact same (case-insensitive) title and expense/income type, so the
+  /// form can auto-suggest it when the user re-types a familiar title.
+  Future<int?> getLastCategoryIdForTitle(String title, bool isExpense) async {
+    final trimmed = title.trim();
+    if (trimmed.isEmpty) return null;
+
+    var dbClient = await database;
+    try {
+      final List<Map<String, dynamic>> result = await dbClient.query(
+        tableName,
+        columns: [columnCategoryId],
+        where: 'LOWER($columnTitle) = ? AND $columnIsExpense = ?',
+        whereArgs: [trimmed.toLowerCase(), isExpense ? 1 : 0],
+        orderBy: '$columnDate DESC',
+        limit: 1,
+      );
+      if (result.isNotEmpty && result.first[columnCategoryId] != null) {
+        return result.first[columnCategoryId] as int;
+      }
+    } catch (e) {
+      // ignore, fall through to null
+    }
+    return null;
+  }
+
   Future<List<trans_model.Transaction>> getRecurringTransactions() async {
     var dbClient = await database;
     try {
-      // Return only the OLDEST (seed/template) recurring transaction per unique
-      // (title, categoryId, amount, isExpense) group.
-      // If we returned all clones, deleting one generated instance would cause
-      // checkAndGenerateRecurring to recreate it from a surviving sibling clone.
-      final List<Map<String, dynamic>> transactions = await dbClient.rawQuery('''
-        SELECT * FROM $tableName
-        WHERE $columnIsRecurring = 1
-          AND $columnId IN (
-            SELECT $columnId FROM $tableName
-            WHERE $columnIsRecurring = 1
-            GROUP BY $columnTitle, $columnCategoryId, $columnAmount, $columnIsExpense
-            HAVING $columnId = MIN($columnId)
+      // Return the oldest template row for each recurrence series. Generated
+      // future instances share recurrence_id and must not become separate seeds.
+      final List<Map<String, dynamic>> transactions =
+          await dbClient.rawQuery('''
+        SELECT t.* FROM $tableName t
+        WHERE t.$columnIsRecurring = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM $tableName older
+            WHERE older.$columnIsRecurring = 1
+              AND COALESCE(older.$columnRecurrenceId, older.$columnId) =
+                  COALESCE(t.$columnRecurrenceId, t.$columnId)
+              AND (
+                older.$columnDate < t.$columnDate
+                OR (
+                  older.$columnDate = t.$columnDate
+                  AND older.$columnCreatedOn < t.$columnCreatedOn
+                )
+                OR (
+                  older.$columnDate = t.$columnDate
+                  AND older.$columnCreatedOn = t.$columnCreatedOn
+                  AND older.$columnId < t.$columnId
+                )
+              )
           )
       ''');
       return transactions
@@ -378,23 +535,20 @@ class TransactionDBHelper {
       getUpcomingRecurringTransactions() async {
     var dbClient = await database;
     try {
-      // Get current date range to show upcoming transactions from tomorrow through next month
       final now = DateTime.now();
-      final tomorrow = DateTime(now.year, now.month, now.day + 1);
-
-      // Show upcoming from tomorrow through end of next month
-      final endOfNextMonth = DateTime(now.year, now.month + 2, 0);
+      final today = DateTime(now.year, now.month, now.day);
+      final firstDayOfNextMonth = DateTime(now.year, now.month + 1, 1);
 
       final List<Map<String, dynamic>> transactions = await dbClient.query(
         tableName,
         where:
-            '$columnIsRecurring = 1 AND $columnIsExpense = 1 AND $columnDate >= ? AND $columnDate <= ?',
+            '$columnIsRecurring = 1 AND $columnIsExpense = 1 AND $columnDate >= ? AND $columnDate < ?',
         whereArgs: [
-          tomorrow.toIso8601String(),
-          endOfNextMonth.toIso8601String()
+          today.toIso8601String(),
+          firstDayOfNextMonth.toIso8601String()
         ],
         orderBy: '$columnDate ASC',
-        limit: 5, // Limit to top 5 upcoming payments
+        limit: 5,
       );
       return transactions
           .map((map) => trans_model.Transaction.fromMap(map))
@@ -410,21 +564,18 @@ class TransactionDBHelper {
     var dbClient = await database;
     try {
       final now = DateTime.now();
-      final tomorrow = DateTime(now.year, now.month, now.day + 1);
-
-      // Show upcoming from tomorrow through end of next month
-      final endOfNextMonth = DateTime(now.year, now.month + 2, 0);
+      final today = DateTime(now.year, now.month, now.day);
+      final firstDayOfNextMonth = DateTime(now.year, now.month + 1, 1);
 
       final List<Map<String, dynamic>> transactions = await dbClient.query(
         tableName,
         where:
-            '$columnIsRecurring = 1 AND $columnIsExpense = 1 AND $columnDate >= ? AND $columnDate <= ?',
+            '$columnIsRecurring = 1 AND $columnIsExpense = 1 AND $columnDate >= ? AND $columnDate < ?',
         whereArgs: [
-          tomorrow.toIso8601String(),
-          endOfNextMonth.toIso8601String()
+          today.toIso8601String(),
+          firstDayOfNextMonth.toIso8601String()
         ],
         orderBy: '$columnDate ASC',
-        // No limit - return all upcoming transactions
       );
       return transactions
           .map((map) => trans_model.Transaction.fromMap(map))

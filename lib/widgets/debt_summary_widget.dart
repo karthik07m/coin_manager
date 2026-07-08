@@ -37,7 +37,7 @@ class DebtSummaryWidget extends StatelessWidget {
               color: context.appSurface,
               borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
               border: Border.all(
-                color: AppColors.primary.withValues(alpha: 0.2),
+                color: context.appAccent.withValues(alpha: 0.2),
                 width: 1,
               ),
               boxShadow: [
@@ -60,12 +60,12 @@ class DebtSummaryWidget extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.15),
+                            color: context.appAccent.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
                             Icons.account_balance_wallet,
-                            color: AppColors.primary,
+                            color: context.appAccent,
                             size: 20,
                           ),
                         ),
@@ -87,7 +87,7 @@ class DebtSummaryWidget extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: overdueCount > 0
                               ? AppColors.negative.withValues(alpha: 0.15)
-                              : AppColors.primary.withValues(alpha: 0.15),
+                              : context.appAccent.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -95,7 +95,7 @@ class DebtSummaryWidget extends StatelessWidget {
                           style: AppTextStyles.caption.copyWith(
                             color: overdueCount > 0
                                 ? AppColors.negative
-                                : AppColors.primary,
+                                : context.appAccent,
                             fontWeight: FontWeight.w600,
                             fontSize: 11,
                           ),

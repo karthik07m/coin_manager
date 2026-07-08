@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../utilities/constants.dart';
+import '../utilities/theme_helper.dart';
 
 /// Animated Floating Action Button with rotation
 class AnimatedFAB extends StatefulWidget {
@@ -71,12 +71,12 @@ class _AnimatedFABState extends State<AnimatedFAB>
       scale: _scaleAnimation,
       child: FloatingActionButton(
         onPressed: widget.onPressed,
-        backgroundColor: AppColors.primary,
+        backgroundColor: context.appAccent,
         child: RotationTransition(
           turns: _rotationAnimation,
           child: Icon(
             widget.isExpanded ? Icons.close : Icons.add,
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onPrimary,
           ),
         ),
       ),

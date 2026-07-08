@@ -1,6 +1,6 @@
-# coin_manager
+# Coinly: Budget Tracker
 
-A new Flutter project.
+Coinly is a budget tracker for income, expenses, budgets, and recurring payments.
 
 ## Getting Started
 

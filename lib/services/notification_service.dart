@@ -159,6 +159,8 @@ class NotificationService {
     required int minute,
   }) async {
     try {
+      await cancelDailyReminder();
+
       // Check if we can schedule exact alarms
       final bool canScheduleExact = await canScheduleExactAlarms();
 
@@ -185,8 +187,16 @@ class NotificationService {
             importance: fln.Importance.max,
             priority: fln.Priority.high,
           ),
-          iOS: fln.DarwinNotificationDetails(),
-          macOS: fln.DarwinNotificationDetails(),
+          iOS: fln.DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+          macOS: fln.DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
         ),
         androidScheduleMode: scheduleMode,
         matchDateTimeComponents: fln.DateTimeComponents.time,
@@ -217,8 +227,16 @@ class NotificationService {
             enableVibration: true,
             playSound: true,
           ),
-          iOS: fln.DarwinNotificationDetails(),
-          macOS: fln.DarwinNotificationDetails(),
+          iOS: fln.DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+          macOS: fln.DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
         ),
       );
       debugPrint('Test notification shown successfully');

@@ -21,100 +21,98 @@ class TransactionItem extends StatefulWidget {
   State<TransactionItem> createState() => _TransactionItemState();
 }
 
-class _TransactionItemState extends State<TransactionItem>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _pressController;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _pressController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 120),
-      reverseDuration: const Duration(milliseconds: 200),
-    );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.97).animate(
-      CurvedAnimation(parent: _pressController, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _pressController.dispose();
-    super.dispose();
-  }
+class _TransactionItemState extends State<TransactionItem> {
+  bool _isPressed = false;
 
   void _handleTapDown(TapDownDetails _) {
-    _pressController.forward();
+    setState(() {
+      _isPressed = true;
+    });
   }
 
   void _handleTapUp(TapUpDetails _) {
-    _pressController.reverse();
+    setState(() {
+      _isPressed = false;
+    });
   }
 
   void _handleTapCancel() {
-    _pressController.reverse();
+    setState(() {
+      _isPressed = false;
+    });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _scaleAnimation,
+  void _openTransaction() {
+    HapticFeedback.lightImpact();
+    Navigator.pushNamed(
+      context,
+      TransactionForm.routeName,
+      arguments: widget.transaction.id,
+    );
+  }
+
+  Widget _buildTappableCard(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: _handleTapDown,
+      onTapUp: _handleTapUp,
+      onTapCancel: _handleTapCancel,
+      onTap: _openTransaction,
       child: Container(
-        margin: const EdgeInsets.only(bottom: AppDimensions.spacing16),
+        width: double.infinity,
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
           boxShadow: AppShadows.card,
           border: Border.all(
-            color:
-                Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
             width: 0.5,
           ),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-          child: !widget.enableDel
-              ? GestureDetector(
-                  onTapDown: _handleTapDown,
-                  onTapUp: _handleTapUp,
-                  onTapCancel: _handleTapCancel,
-                  onTap: () {
-                    // Light haptic for transaction tap
-                    HapticFeedback.lightImpact();
-                    Navigator.pushNamed(context, TransactionForm.routeName,
-                        arguments: widget.transaction.id);
-                  },
-                  child: _buildListTile(context),
-                )
-              : Dismissible(
-                  key: Key(widget.transaction.id),
-                  direction: DismissDirection.endToStart,
-                  confirmDismiss: (direction) => _showConfirmDialog(context),
-                  onDismissed: (_) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        backgroundColor: context.appSurface,
-                        content: Text(
-                          "Transaction '${widget.transaction.title}' removed",
-                          style: AppTextStyles.bodyMedium,
-                        ),
-                      ),
-                    );
-                  },
-                  movementDuration: const Duration(milliseconds: 200),
-                  resizeDuration: const Duration(milliseconds: 150),
-                  background: Container(
-                    color: AppColors.negative,
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    child:
-                        const Icon(Icons.delete, color: Colors.white, size: 28),
-                  ),
-                  child: _buildListTile(context),
-                ),
+          child: _buildListTile(context),
         ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedScale(
+      scale: _isPressed ? 0.985 : 1,
+      duration: AppDurations.fastest,
+      curve: Curves.easeOutCubic,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: AppDimensions.spacing16),
+        child: !widget.enableDel
+            ? _buildTappableCard(context)
+            : Dismissible(
+                key: Key(widget.transaction.id),
+                direction: DismissDirection.endToStart,
+                confirmDismiss: (direction) => _showConfirmDialog(context),
+                onDismissed: (_) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: context.appSurface,
+                      content: Text(
+                        "Transaction '${widget.transaction.title}' removed",
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                    ),
+                  );
+                },
+                movementDuration: const Duration(milliseconds: 200),
+                resizeDuration: const Duration(milliseconds: 150),
+                background: Container(
+                  color: AppColors.negative,
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 20),
+                  child:
+                      const Icon(Icons.delete, color: Colors.white, size: 28),
+                ),
+                child: _buildTappableCard(context),
+              ),
       ),
     );
   }
@@ -210,22 +208,25 @@ class _TransactionItemState extends State<TransactionItem>
                 },
               ),
               const SizedBox(height: 4),
-              Text(
-                _formatTime(context, widget.transaction.date),
-                style: AppTextStyles.caption.copyWith(
-                  fontSize: 10,
-                ),
+              Selector<SettingsProvider, bool>(
+                selector: (_, settings) => settings.use24HourFormat,
+                builder: (context, use24Hour, _) {
+                  return Text(
+                    UtilityFunction.formatTime(
+                      widget.transaction.date,
+                      use24Hour: use24Hour,
+                    ),
+                    style: AppTextStyles.caption.copyWith(
+                      fontSize: 10,
+                    ),
+                  );
+                },
               ),
             ],
           ),
         ],
       ),
     );
-  }
-
-  String _formatTime(BuildContext context, DateTime date) {
-    final use24Hour = context.watch<SettingsProvider>().use24HourFormat;
-    return UtilityFunction.formatTime(date, use24Hour: use24Hour);
   }
 
   Future<bool?> _showConfirmDialog(BuildContext context) {

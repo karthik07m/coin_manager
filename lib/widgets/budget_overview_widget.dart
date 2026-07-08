@@ -8,23 +8,26 @@ import '../widgets/budget_progress_card.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
+import '../utilities/budget_period.dart';
+import '../screens/manage_budget.dart';
+import 'package:intl/intl.dart';
 
 class BudgetOverviewWidget extends StatelessWidget {
-  const BudgetOverviewWidget({super.key});
+  final DateTime selectedMonth;
 
-  int _getDaysRemainingInMonth() {
-    final now = DateTime.now();
-    final lastDayOfMonth = DateTime(now.year, now.month + 1, 0);
-    return lastDayOfMonth.day - now.day + 1;
-  }
+  const BudgetOverviewWidget({
+    super.key,
+    required this.selectedMonth,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final startDate = DateTime(now.year, now.month, 1);
-    final endDate = DateTime(now.year, now.month + 1, 0);
-    final currentMonth = now.month.toString();
-    final daysRemaining = _getDaysRemainingInMonth();
+    final startDate = BudgetPeriod.startOfMonth(selectedMonth);
+    final endDate = BudgetPeriod.endOfMonth(selectedMonth);
+    final currentMonth = BudgetPeriod.keyFor(selectedMonth);
+    final daysRemaining = BudgetPeriod.daysRemaining(selectedMonth);
+    final periodDays = BudgetPeriod.daysInMonth(selectedMonth);
+    final daysElapsed = BudgetPeriod.daysElapsed(selectedMonth);
 
     return Consumer3<CategoryProvider, MonthlyBudgetProvider,
         TransactionProvider>(
@@ -49,13 +52,13 @@ class BudgetOverviewWidget extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  AppColors.primary.withValues(alpha: 0.05),
+                  context.appAccent.withValues(alpha: 0.05),
                   AppColors.secondary.withValues(alpha: 0.05),
                 ],
               ),
               borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
               border: Border.all(
-                color: AppColors.primary.withValues(alpha: 0.2),
+                color: context.appAccent.withValues(alpha: 0.2),
                 width: 1.5,
               ),
             ),
@@ -65,13 +68,13 @@ class BudgetOverviewWidget extends StatelessWidget {
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
+                    color: context.appAccent.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    Icons.account_balance_wallet_outlined,
+                    Icons.auto_awesome,
                     size: 40,
-                    color: AppColors.primary,
+                    color: context.appAccent,
                   ),
                 ),
                 const SizedBox(height: AppDimensions.spacing20),
@@ -84,7 +87,7 @@ class BudgetOverviewWidget extends StatelessWidget {
                 ),
                 const SizedBox(height: AppDimensions.spacing8),
                 Text(
-                  'Set category budgets to track your spending\nand achieve your financial goals',
+                  'Create smart category budgets from your\nincome and monthly budget, then adjust if needed.',
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: context.textSecondary,
                   ),
@@ -93,12 +96,19 @@ class BudgetOverviewWidget extends StatelessWidget {
                 const SizedBox(height: AppDimensions.spacing20),
                 ElevatedButton.icon(
                   onPressed: () {
-                    Navigator.pushNamed(context, '/manageBudget');
+                    Navigator.pushNamed(
+                      context,
+                      '/manageBudget',
+                      arguments: ManageBudgetArgs(
+                        initialMonth: selectedMonth,
+                        autoAllocate: true,
+                      ),
+                    );
                   },
-                  icon: const Icon(Icons.add, size: 20),
+                  icon: const Icon(Icons.auto_awesome, size: 20),
                   label: const Text('Set Budgets'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: context.appAccent,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
@@ -191,7 +201,6 @@ class BudgetOverviewWidget extends StatelessWidget {
                                 symbol: currencySymbol),
                             style: AppTextStyles.h2.copyWith(
                               fontWeight: FontWeight.bold,
-                              fontSize: 28,
                             ),
                           ),
                         ],
@@ -210,10 +219,8 @@ class BudgetOverviewWidget extends StatelessWidget {
                         ),
                         child: Text(
                           '${(totalPercent * 100).toStringAsFixed(0)}%',
-                          style: TextStyle(
+                          style: AppTextStyles.amount.copyWith(
                             color: statusColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
                           ),
                         ),
                       ),
@@ -264,7 +271,7 @@ class BudgetOverviewWidget extends StatelessWidget {
                           icon: Icons.calendar_today,
                           label: 'Categories',
                           value: '${categoriesWithBudgets.length}',
-                          color: AppColors.primary,
+                          color: context.appAccent,
                         ),
                       ),
                       const SizedBox(width: AppDimensions.spacing12),
@@ -285,6 +292,10 @@ class BudgetOverviewWidget extends StatelessWidget {
 
             const SizedBox(height: AppDimensions.spacing24),
 
+            _BudgetPeriodHistoryStrip(selectedMonth: selectedMonth),
+
+            const SizedBox(height: AppDimensions.spacing24),
+
             // Section header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -301,23 +312,26 @@ class BudgetOverviewWidget extends StatelessWidget {
                     Text(
                       '$daysRemaining days left',
                       style: AppTextStyles.caption.copyWith(
-                        color: AppColors.primary,
+                        color: context.appAccent,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(width: 8),
                     TextButton.icon(
                       onPressed: () {
-                        Navigator.pushNamed(context, '/manageBudget');
+                        Navigator.pushNamed(
+                          context,
+                          '/manageBudget',
+                          arguments: ManageBudgetArgs(
+                            initialMonth: selectedMonth,
+                          ),
+                        );
                       },
                       icon: const Icon(Icons.edit, size: 16),
-                      label:
-                          const Text('Manage', style: TextStyle(fontSize: 12)),
+                      label: const Text('Manage'),
                       style: TextButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        minimumSize: Size.zero,
+                        foregroundColor: context.appAccent,
+                        minimumSize: const Size(44, 36),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     ),
@@ -343,6 +357,8 @@ class BudgetOverviewWidget extends StatelessWidget {
                 budgetAmount: budget,
                 spentAmount: spent,
                 daysRemaining: daysRemaining,
+                daysElapsed: daysElapsed,
+                periodDays: periodDays,
                 currencySymbol: currencySymbol,
               );
             }),
@@ -384,6 +400,247 @@ class BudgetOverviewWidget extends StatelessWidget {
               color: color,
               fontSize: 16,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BudgetHistoryItem {
+  final DateTime month;
+  final double budget;
+  final double spent;
+
+  const _BudgetHistoryItem({
+    required this.month,
+    required this.budget,
+    required this.spent,
+  });
+
+  double get percent => budget > 0 ? spent / budget : 0.0;
+
+  Color get statusColor {
+    if (budget <= 0) return AppColors.accentBlue;
+    if (percent >= 1.0) return AppColors.negative;
+    if (percent >= 0.8) return AppColors.warning;
+    return AppColors.positive;
+  }
+}
+
+class _BudgetPeriodHistoryStrip extends StatefulWidget {
+  final DateTime selectedMonth;
+
+  const _BudgetPeriodHistoryStrip({required this.selectedMonth});
+
+  @override
+  State<_BudgetPeriodHistoryStrip> createState() =>
+      _BudgetPeriodHistoryStripState();
+}
+
+class _BudgetPeriodHistoryStripState extends State<_BudgetPeriodHistoryStrip> {
+  Future<List<_BudgetHistoryItem>>? _historyFuture;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _historyFuture ??= _loadHistory();
+  }
+
+  @override
+  void didUpdateWidget(covariant _BudgetPeriodHistoryStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedMonth.year != widget.selectedMonth.year ||
+        oldWidget.selectedMonth.month != widget.selectedMonth.month) {
+      _historyFuture = _loadHistory();
+    }
+  }
+
+  Future<List<_BudgetHistoryItem>> _loadHistory() async {
+    final budgetProvider =
+        Provider.of<MonthlyBudgetProvider>(context, listen: false);
+    final transactionProvider =
+        Provider.of<TransactionProvider>(context, listen: false);
+
+    final months = List.generate(
+      4,
+      (index) => DateTime(
+        widget.selectedMonth.year,
+        widget.selectedMonth.month - (3 - index),
+        1,
+      ),
+    );
+
+    final history = <_BudgetHistoryItem>[];
+    for (final month in months) {
+      final startDate = BudgetPeriod.startOfMonth(month);
+      final endDate = BudgetPeriod.endOfMonth(month);
+      final budget = await budgetProvider.fetchTotalBudget(
+        BudgetPeriod.keyFor(month),
+      );
+      final spent = await transactionProvider.getExpenseTotalForRange(
+        startDate: startDate,
+        endDate: endDate,
+      );
+
+      history.add(
+        _BudgetHistoryItem(month: month, budget: budget, spent: spent),
+      );
+    }
+
+    return history;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currencySymbol = Provider.of<SettingsProvider>(
+      context,
+      listen: false,
+    ).currencySymbol;
+
+    return FutureBuilder<List<_BudgetHistoryItem>>(
+      future: _historyFuture,
+      builder: (context, snapshot) {
+        final items = snapshot.data ?? const <_BudgetHistoryItem>[];
+
+        if (items.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final hasAnyData =
+            items.any((item) => item.budget > 0 || item.spent > 0);
+        if (!hasAnyData) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'PERIOD HISTORY',
+              style: AppTextStyles.caption.copyWith(
+                color: context.textSecondary,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacing12),
+            SizedBox(
+              height: 138,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                separatorBuilder: (_, __) =>
+                    const SizedBox(width: AppDimensions.spacing12),
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final isSelected =
+                      item.month.year == widget.selectedMonth.year &&
+                          item.month.month == widget.selectedMonth.month;
+
+                  return _buildHistoryCard(
+                    context,
+                    item: item,
+                    isSelected: isSelected,
+                    currencySymbol: currencySymbol,
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHistoryCard(
+    BuildContext context, {
+    required _BudgetHistoryItem item,
+    required bool isSelected,
+    required String currencySymbol,
+  }) {
+    final progress = item.percent.clamp(0.0, 1.0);
+    final statusColor = item.statusColor;
+    final statusText = item.budget <= 0
+        ? 'No budget'
+        : item.percent >= 1
+            ? 'Over'
+            : item.percent >= 0.8
+                ? 'Close'
+                : 'Good';
+
+    return Container(
+      width: 132,
+      padding: const EdgeInsets.all(AppDimensions.spacing12),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusSmall),
+        border: Border.all(
+          color: isSelected
+              ? context.appAccent
+              : statusColor.withValues(alpha: 0.25),
+          width: isSelected ? 1.4 : 1,
+        ),
+        boxShadow: AppShadows.card,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                DateFormat('MMM').format(item.month),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: context.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacing8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              backgroundColor: AppColors.divider.withValues(alpha: 0.25),
+              valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spacing8),
+          Text(
+            statusText,
+            style: AppTextStyles.caption.copyWith(
+              color: statusColor,
+              fontSize: 10,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            UtilityFunction.formatMoney(item.spent, symbol: currencySymbol),
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: context.textPrimary,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'of ${UtilityFunction.formatMoney(item.budget, symbol: currencySymbol)}',
+            style: AppTextStyles.caption.copyWith(
+              color: context.textSecondary,
+              fontSize: 10,
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

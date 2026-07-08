@@ -6,6 +6,9 @@ extension ThemeColors on BuildContext {
   /// Returns true if current theme is dark
   bool get isDark => Theme.of(this).brightness == Brightness.dark;
 
+  /// Current user-selected accent color.
+  Color get appAccent => Theme.of(this).colorScheme.primary;
+
   /// Primary text color - adapts to theme
   Color get textPrimary => isDark
       ? AppColors.textPrimary // White in dark

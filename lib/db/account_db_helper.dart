@@ -103,7 +103,7 @@ class AccountDBHelper {
   Future<int> insertAccount(Account account) async {
     await _detectBalanceColumn(); // Ensure we have the right column name
     final db = await database;
-    return await db.insert(tableName, account.toMap());
+    return await db.insert(tableName, _accountMapForDb(account));
   }
 
   // Update an account
@@ -112,7 +112,7 @@ class AccountDBHelper {
     final db = await database;
     return await db.update(
       tableName,
-      account.toMap(),
+      _accountMapForDb(account),
       where: '$columnId = ?',
       whereArgs: [account.id],
     );
@@ -228,6 +228,7 @@ class AccountDBHelper {
 
   // Update account balance (now updates initial_balance)
   Future<int> updateAccountBalance(int id, double newBalance) async {
+    await _detectBalanceColumn();
     final db = await database;
     return await db.update(
       tableName,
@@ -238,6 +239,16 @@ class AccountDBHelper {
       where: '$columnId = ?',
       whereArgs: [id],
     );
+  }
+
+  Map<String, dynamic> _accountMapForDb(Account account) {
+    final data = Map<String, dynamic>.from(account.toMap());
+    if (columnBalance == 'initial_balance') {
+      data.remove('balance');
+    } else {
+      data.remove('initial_balance');
+    }
+    return data;
   }
 
   // Check if account has transactions

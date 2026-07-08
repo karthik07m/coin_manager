@@ -28,6 +28,8 @@ class _AnimatedProgressBarState extends State<AnimatedProgressBar>
   late Animation<double> _progressAnimation;
   late Animation<Color?> _colorAnimation;
 
+  bool _animationsReady = false;
+
   @override
   void initState() {
     super.initState();
@@ -35,9 +37,18 @@ class _AnimatedProgressBarState extends State<AnimatedProgressBar>
       vsync: this,
       duration: widget.duration,
     );
+  }
 
-    _updateAnimations();
-    _controller.forward();
+  // Animation colors come from the theme (user-selected accent), so they are
+  // resolved here rather than initState, where Theme.of isn't available yet.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_animationsReady) {
+      _animationsReady = true;
+      _updateAnimations();
+      _controller.forward();
+    }
   }
 
   @override
@@ -58,8 +69,10 @@ class _AnimatedProgressBarState extends State<AnimatedProgressBar>
       curve: Curves.easeOutCubic,
     ));
 
+    final accent = widget.color ?? Theme.of(context).colorScheme.primary;
+
     // Color transition based on value
-    Color targetColor = widget.color ?? AppColors.primary;
+    Color targetColor = accent;
     if (widget.value > 1.0) {
       targetColor = AppColors.negative; // Over budget
     } else if (widget.value > 0.8) {
@@ -67,7 +80,7 @@ class _AnimatedProgressBarState extends State<AnimatedProgressBar>
     }
 
     _colorAnimation = ColorTween(
-      begin: AppColors.primary.withValues(alpha: 0.3),
+      begin: accent.withValues(alpha: 0.3),
       end: targetColor,
     ).animate(CurvedAnimation(
       parent: _controller,
@@ -105,7 +118,8 @@ class _AnimatedProgressBarState extends State<AnimatedProgressBar>
                 borderRadius: BorderRadius.circular(widget.height / 2),
                 boxShadow: [
                   BoxShadow(
-                    color: (_colorAnimation.value ?? AppColors.primary)
+                    color: (_colorAnimation.value ??
+                            Theme.of(context).colorScheme.primary)
                         .withValues(alpha: 0.3),
                     blurRadius: 4,
                     offset: const Offset(0, 2),

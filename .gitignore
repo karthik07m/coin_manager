@@ -11,6 +11,7 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+supabase/.temp/
 
 # IntelliJ related
 *.iml
@@ -43,3 +44,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# iCloud sync duplicates (this project previously lived in an iCloud-synced
+# folder; these "name 2.ext" copies corrupt builds and must never be tracked)
+* 2
+* 2.*
+**/* 2
+**/* 2.*

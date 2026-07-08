@@ -165,17 +165,17 @@ class _AccountsPieChartState extends State<AccountsPieChart>
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.15),
+                      color: context.appAccent.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.3),
+                        color: context.appAccent.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Text(
                       UtilityFunction.addCommaWithSign(widget.totalExpenses,
                           currencySymbol: currencySymbol),
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.primary,
+                        color: context.appAccent,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
@@ -354,7 +354,7 @@ class _AccountsPieChartState extends State<AccountsPieChart>
                                           widget.totalExpenses,
                                           currencySymbol: currencySymbol),
                                   style: AppTextStyles.h2.copyWith(
-                                    color: AppColors.primary,
+                                    color: context.appAccent,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 26,
                                   ),
@@ -367,7 +367,7 @@ class _AccountsPieChartState extends State<AccountsPieChart>
                                     vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary
+                                    color: context.appAccent
                                         .withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
@@ -377,13 +377,13 @@ class _AccountsPieChartState extends State<AccountsPieChart>
                                       Icon(
                                         Icons.touch_app,
                                         size: 14,
-                                        color: AppColors.primary,
+                                        color: context.appAccent,
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
                                         'View Details',
                                         style: AppTextStyles.bodySmall.copyWith(
-                                          color: AppColors.primary,
+                                          color: context.appAccent,
                                           fontWeight: FontWeight.w600,
                                           fontSize: 11,
                                         ),

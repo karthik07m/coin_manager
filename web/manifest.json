@@ -1,11 +1,11 @@
 {
-    "name": "coin_manager",
-    "short_name": "coin_manager",
+    "name": "Coinly: Budget Tracker",
+    "short_name": "Coinly",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#101316",
+    "theme_color": "#101316",
+    "description": "Track income, expenses, budgets, and recurring payments.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

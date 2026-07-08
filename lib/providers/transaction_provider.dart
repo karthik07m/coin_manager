@@ -26,6 +26,10 @@ class TransactionProvider extends ChangeNotifier {
     bool? isExpense,
     DateTime? startDate,
     DateTime? endDate,
+    // Totals can be scoped narrower than the loaded range, so a screen can
+    // prefetch adjacent months without skewing month totals for consumers.
+    DateTime? totalsStartDate,
+    DateTime? totalsEndDate,
   }) async {
     List<Transaction> transactionsFromDB =
         await _dbHelper.getTransactionsByType(
@@ -46,23 +50,21 @@ class TransactionProvider extends ChangeNotifier {
     _transactions.addAll(filteredTransactions);
 
     _updateTotalsForMonth(
-        startDate ?? DateTime.now(), endDate ?? DateTime.now());
+        totalsStartDate ?? startDate ?? DateTime.now(),
+        totalsEndDate ?? endDate ?? DateTime.now());
     _calculateCategoryAmounts();
     isTransactionsLoaded = true; // Set to true after loading
     notifyListeners();
   }
 
-  Future<void> loadUpcomingTransactions() async {
+  Future<void> loadUpcomingTransactions({bool notify = true}) async {
     _upcomingTransactions = await _dbHelper.getUpcomingRecurringTransactions();
     // Also load all transactions to ensure total is accurate
     _allUpcomingTransactions =
         await _dbHelper.getAllUpcomingRecurringTransactions();
-    debugPrint(
-        '📅 loadUpcomingTransactions: Loaded ${_upcomingTransactions.length} for widget, ${_allUpcomingTransactions.length} total');
-    for (var tx in _upcomingTransactions) {
-      debugPrint('  → ${tx.title} on ${tx.date}');
+    if (notify) {
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   // For full-screen view - all upcoming transactions
@@ -77,19 +79,31 @@ class TransactionProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> loadAllUpcomingTransactions() async {
+  Future<void> loadAllUpcomingTransactions({bool notify = true}) async {
     _allUpcomingTransactions =
         await _dbHelper.getAllUpcomingRecurringTransactions();
     debugPrint(
         '📅 loadAllUpcomingTransactions: Loaded ${_allUpcomingTransactions.length} transactions');
-    notifyListeners();
+    if (notify) {
+      notifyListeners();
+    }
   }
 
   Future<Transaction?> getTransactionById(String id) async {
     return await _dbHelper.getTransactionById(id);
   }
 
+  /// Category most recently used for a transaction with this exact title,
+  /// so the form can auto-suggest it for repeated titles (e.g. "Starbucks").
+  Future<int?> getLastCategoryForTitle(String title, bool isExpense) async {
+    return await _dbHelper.getLastCategoryIdForTitle(title, isExpense);
+  }
+
   Future<void> addTransaction(Transaction transaction) async {
+    if (transaction.isRecurring) {
+      transaction.recurrenceId ??= transaction.id;
+    }
+
     await _dbHelper.insertTransaction(transaction);
     _transactions.add(transaction);
 
@@ -100,30 +114,93 @@ class TransactionProvider extends ChangeNotifier {
 
     _updateTotalsForMonth(startDate, endDate);
     await _calculateCategoryAmounts(); // Await to avoid double-notify race
-    await loadUpcomingTransactions(); // Refresh upcoming payments
+    await loadUpcomingTransactions(notify: false); // Refresh upcoming payments
     notifyListeners(); // Single notify after ALL data is ready
   }
 
   Future<void> updateTransaction(Transaction transaction) async {
+    final existingTransaction =
+        await _dbHelper.getTransactionById(transaction.id);
+    final shouldRefreshRecurringSeries = existingTransaction != null &&
+        _shouldRefreshRecurringSeries(existingTransaction, transaction);
+
+    if (transaction.isRecurring) {
+      transaction.recurrenceId ??=
+          existingTransaction?.recurrenceId ?? transaction.id;
+    } else {
+      transaction.recurrenceId = null;
+    }
+
+    if (shouldRefreshRecurringSeries) {
+      await _dbHelper.deleteFutureRecurringInstances(
+        existingTransaction,
+        excludeId: transaction.id,
+      );
+    }
+
+    await _dbHelper.updateTransaction(transaction);
+
     int index = _transactions.indexWhere((t) => t.id == transaction.id);
     if (index != -1) {
       _transactions[index] = transaction;
-      await _dbHelper.updateTransaction(transaction);
-
-      DateTime startDate =
-          DateTime(transaction.date.year, transaction.date.month, 1);
-      DateTime endDate =
-          DateTime(transaction.date.year, transaction.date.month + 1, 0);
-
-      _updateTotalsForMonth(startDate, endDate);
-      await _calculateCategoryAmounts(); // Await to avoid double-notify race
-      await loadUpcomingTransactions(); // Refresh upcoming payments
-      notifyListeners(); // Single notify after ALL data is ready
     }
+
+    if (transaction.isRecurring && shouldRefreshRecurringSeries) {
+      await checkAndGenerateRecurringTransactions();
+    }
+
+    DateTime startDate =
+        DateTime(transaction.date.year, transaction.date.month, 1);
+    DateTime endDate =
+        DateTime(transaction.date.year, transaction.date.month + 1, 0);
+
+    _updateTotalsForMonth(startDate, endDate);
+    await _calculateCategoryAmounts(); // Await to avoid double-notify race
+    await loadUpcomingTransactions(notify: false); // Refresh upcoming payments
+    notifyListeners(); // Single notify after ALL data is ready
+  }
+
+  bool _shouldRefreshRecurringSeries(
+    Transaction existingTransaction,
+    Transaction updatedTransaction,
+  ) {
+    if (!existingTransaction.isRecurring) {
+      return false;
+    }
+
+    if (!updatedTransaction.isRecurring) {
+      return true;
+    }
+
+    return existingTransaction.date.day != updatedTransaction.date.day ||
+        existingTransaction.title != updatedTransaction.title ||
+        existingTransaction.amount != updatedTransaction.amount ||
+        existingTransaction.categoryId != updatedTransaction.categoryId ||
+        existingTransaction.accountId != updatedTransaction.accountId ||
+        existingTransaction.isExpense != updatedTransaction.isExpense;
   }
 
   Future<void> deleteTransaction(String id) async {
-    final transaction = _transactions.firstWhere((t) => t.id == id);
+    final transactionIndex = _transactions.indexWhere((t) => t.id == id);
+    final transaction = transactionIndex == -1
+        ? await _dbHelper.getTransactionById(id)
+        : _transactions[transactionIndex];
+
+    if (transaction == null) return;
+
+    if (transaction.isRecurring) {
+      final nextMonth = DateTime(
+        transaction.date.year,
+        transaction.date.month + 1,
+        1,
+      );
+      await _generateRecurringInstance(
+        transaction,
+        nextMonth.year,
+        nextMonth.month,
+      );
+    }
+
     _transactions.removeWhere((t) => t.id == id);
     await _dbHelper.deleteTransaction(id);
 
@@ -134,30 +211,32 @@ class TransactionProvider extends ChangeNotifier {
 
     _updateTotalsForMonth(startDate, endDate);
     await _calculateCategoryAmounts(); // Await to avoid double-notify race
-    await loadUpcomingTransactions(); // Refresh upcoming payments
+    await loadUpcomingTransactions(notify: false); // Refresh upcoming payments
     notifyListeners(); // Single notify after ALL data is ready
   }
 
   /// Stop a recurring payment by disabling its recurring flag and deleting all future instances
   Future<void> stopRecurringPayment(Transaction transaction) async {
-    // Set isRecurring to false
-    transaction.isRecurring = false;
-    transaction.modifiedOn = DateTime.now();
-
-    // Update the transaction in database
-    await _dbHelper.updateTransaction(transaction);
-
-    // Delete all future recurring instances
-    await _dbHelper.deleteFutureRecurringInstances(transaction);
+    final recurrenceId = transaction.recurrenceId ?? transaction.id;
+    await _dbHelper.deactivateRecurringSeries(transaction);
 
     // Update local state
-    int index = _transactions.indexWhere((t) => t.id == transaction.id);
-    if (index != -1) {
-      _transactions[index] = transaction;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    _transactions.removeWhere((t) =>
+        t.isRecurring &&
+        (t.recurrenceId ?? t.id) == recurrenceId &&
+        t.date.isAfter(today));
+    for (final item in _transactions) {
+      if (item.isRecurring && (item.recurrenceId ?? item.id) == recurrenceId) {
+        item.isRecurring = false;
+        item.recurrenceId = null;
+        item.modifiedOn = DateTime.now();
+      }
     }
 
     // Refresh upcoming transactions
-    await loadUpcomingTransactions();
+    await loadUpcomingTransactions(notify: false);
 
     notifyListeners();
   }
@@ -198,16 +277,19 @@ class TransactionProvider extends ChangeNotifier {
       }
     }
 
-    // Fetch category details (name and icon) for each category ID
+    // Fetch all category details in one query instead of one per category —
+    // the per-id loop ran N sequential DB queries on every save/load.
+    final allCategories = await DBHelper().getAllCategories();
+    final detailsById = {
+      for (final row in allCategories) row['id'] as int: row,
+    };
+
     List<CategoryAmount> categoryList = [];
 
     for (var entry in categoryTotals.entries) {
       int categoryId = entry.key;
       double amount = entry.value;
-
-      // Fetch category details from DB
-      final categoryDetails =
-          await DBHelper().getCategoryDetailsById(categoryId);
+      final categoryDetails = detailsById[categoryId];
 
       if (categoryDetails != null) {
         categoryList.add(CategoryAmount(
@@ -252,7 +334,17 @@ class TransactionProvider extends ChangeNotifier {
 
   Future<void> checkAndGenerateRecurringTransactions() async {
     final recurringTransactions = await _dbHelper.getRecurringTransactions();
+    if (recurringTransactions.isEmpty) return;
+
     final now = DateTime.now();
+    final nextMonth = DateTime(now.year, now.month + 1, 1);
+
+    // Prefetch which series already have an instance in each target month,
+    // so we don't re-query the whole month once per recurring series.
+    final existingCurrentMonth =
+        await _recurrenceIdsForMonth(now.year, now.month);
+    final existingNextMonth =
+        await _recurrenceIdsForMonth(nextMonth.year, nextMonth.month);
 
     debugPrint(
         '🔄 checkAndGenerateRecurringTransactions: Found ${recurringTransactions.length} recurring transactions');
@@ -264,31 +356,28 @@ class TransactionProvider extends ChangeNotifier {
           (originalTransaction.date.year == now.year &&
               originalTransaction.date.month < now.month);
 
-      debugPrint(
-          '  📋 Processing: ${originalTransaction.title}, Date: ${originalTransaction.date}, isCurrentMonth: $isCurrentMonth, isPreviousMonth: $isPreviousMonth');
-
       if (isPreviousMonth) {
         // For previous month transactions: generate current + next month
         await _generateRecurringInstance(
           originalTransaction,
           now.year,
           now.month,
+          existingRecurrenceIds: existingCurrentMonth,
         );
-
-        final nextMonth = DateTime(now.year, now.month + 1, 1);
         await _generateRecurringInstance(
           originalTransaction,
           nextMonth.year,
           nextMonth.month,
+          existingRecurrenceIds: existingNextMonth,
         );
       } else if (isCurrentMonth) {
         // For current month transactions: only generate next month
         // (current month instance already exists as the original)
-        final nextMonth = DateTime(now.year, now.month + 1, 1);
         await _generateRecurringInstance(
           originalTransaction,
           nextMonth.year,
           nextMonth.month,
+          existingRecurrenceIds: existingNextMonth,
         );
       }
     }
@@ -296,12 +385,28 @@ class TransactionProvider extends ChangeNotifier {
     debugPrint('✅ checkAndGenerateRecurringTransactions: Completed');
   }
 
-  /// Helper method to generate a recurring transaction instance for a specific month
+  /// Recurrence ids that already have an instance in the given month.
+  Future<Set<String>> _recurrenceIdsForMonth(int year, int month) async {
+    final transactions = await _dbHelper.getTransactionsByType(
+      startDate: DateTime(year, month, 1),
+      endDate: DateTime(year, month + 1, 0),
+    );
+    return transactions
+        .where((t) => t.isRecurring)
+        .map((t) => t.recurrenceId ?? t.id)
+        .toSet();
+  }
+
+  /// Helper method to generate a recurring transaction instance for a specific
+  /// month. Inserts directly into the DB — callers are responsible for
+  /// reloading state afterwards, so generating N instances doesn't trigger N
+  /// full recomputes and UI rebuilds.
   Future<void> _generateRecurringInstance(
     Transaction originalTransaction,
     int targetYear,
-    int targetMonth,
-  ) async {
+    int targetMonth, {
+    Set<String>? existingRecurrenceIds,
+  }) async {
     // Calculate the target day for the specified month
     // Handle edge cases like Feb 30th -> Feb 28th/29th
     int targetDay = originalTransaction.date.day;
@@ -309,36 +414,31 @@ class TransactionProvider extends ChangeNotifier {
     int actualDay = targetDay > lastDayOfMonth ? lastDayOfMonth : targetDay;
 
     DateTime targetDate = DateTime(targetYear, targetMonth, actualDay);
+    final recurrenceId =
+        originalTransaction.recurrenceId ?? originalTransaction.id;
 
     // Check if this recurrence has already been processed for this month
-    // Check against DB for the target month to avoid duplicates
-    final transactionsThisMonth = await _dbHelper.getTransactionsByType(
-      startDate: DateTime(targetYear, targetMonth, 1),
-      endDate: DateTime(targetYear, targetMonth + 1, 0),
+    final existing = existingRecurrenceIds ??
+        await _recurrenceIdsForMonth(targetYear, targetMonth);
+
+    if (existing.contains(recurrenceId)) return;
+    existing.add(recurrenceId);
+
+    // Clone and Create
+    Transaction newTransaction = Transaction.createNew(
+      id: DateTime.now().millisecondsSinceEpoch.toString() +
+          originalTransaction.id.substring(0, 5), // Ensure unique ID
+      title: originalTransaction.title,
+      amount: originalTransaction.amount,
+      categoryId: originalTransaction.categoryId,
+      accountId: originalTransaction.accountId,
+      date: targetDate,
+      isExpense: originalTransaction.isExpense,
+      isRecurring: true,
+      recurrenceId: recurrenceId,
     );
 
-    bool existsForThisMonth = transactionsThisMonth.any((t) =>
-        t.title == originalTransaction.title &&
-        t.categoryId == originalTransaction.categoryId &&
-        t.amount == originalTransaction.amount &&
-        t.isRecurring);
-
-    if (!existsForThisMonth) {
-      // Clone and Create
-      Transaction newTransaction = Transaction.createNew(
-        id: DateTime.now().millisecondsSinceEpoch.toString() +
-            originalTransaction.id.substring(0, 5), // Ensure unique ID
-        title: originalTransaction.title,
-        amount: originalTransaction.amount,
-        categoryId: originalTransaction.categoryId,
-        accountId: originalTransaction.accountId,
-        date: targetDate,
-        isExpense: originalTransaction.isExpense,
-        isRecurring: true,
-      );
-
-      await addTransaction(newTransaction);
-    }
+    await _dbHelper.insertTransaction(newTransaction);
   }
 
   /// Fetch previous month's total expenses for comparison
@@ -371,6 +471,16 @@ class TransactionProvider extends ChangeNotifier {
 
     _cachedPreviousMonth = prevMonth;
     notifyListeners();
+  }
+
+  Future<double> getExpenseTotalForRange({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) {
+    return _dbHelper.getTotalExpensesByPeriod(
+      startDate: startDate,
+      endDate: endDate,
+    );
   }
 
   /// Group transactions by day for calendar view

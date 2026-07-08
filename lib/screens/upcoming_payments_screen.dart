@@ -34,7 +34,7 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
     return Scaffold(
       backgroundColor: context.appBackground,
       appBar: AppBar(
-        title: const Text('Recurring Transactions'),
+        title: const Text('This Month Payments'),
         backgroundColor: context.appSurface,
         elevation: 0,
       ),
@@ -56,14 +56,14 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No Recurring Transactions',
+                    'No Upcoming Payments This Month',
                     style: AppTextStyles.bodyLarge.copyWith(
                       color: context.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Mark a transaction as recurring to see it here',
+                    'Recurring expenses due this month will appear here',
                     style: AppTextStyles.bodySmall.copyWith(
                       color: context.textSecondary,
                     ),
@@ -91,7 +91,7 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                   borderRadius:
                       BorderRadius.circular(AppDimensions.radiusLarge),
                   border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.2),
+                    color: context.appAccent.withValues(alpha: 0.2),
                     width: 1,
                   ),
                 ),
@@ -165,13 +165,13 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
+                        color: context.appAccent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         '${upcomingList.length} Total',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.primary,
+                          color: context.appAccent,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -372,7 +372,7 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                   _ActionChip(
                     icon: Icons.edit_outlined,
                     label: 'Edit',
-                    color: AppColors.primary,
+                    color: context.appAccent,
                     onTap: () => _editTransaction(context, transaction),
                   ),
                   const SizedBox(width: 6),

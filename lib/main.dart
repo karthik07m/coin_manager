@@ -8,8 +8,11 @@ import 'providers/transaction_provider.dart';
 import 'providers/monthly_budget_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/debt_provider.dart';
+import 'providers/goal_provider.dart';
 import 'providers/account_provider.dart';
+import 'providers/ai_assistant_provider.dart';
 
+import 'screens/ai_assistant_screen.dart';
 import 'screens/category_manger.dart';
 import 'screens/create_category.dart';
 import 'screens/menu_scrn.dart';
@@ -21,11 +24,15 @@ import 'screens/backup_management_screen.dart';
 import 'screens/debt_list_screen.dart';
 import 'screens/debt_form_screen.dart';
 import 'screens/debt_detail_screen.dart';
+import 'screens/goal_list_screen.dart';
+import 'screens/goal_form_screen.dart';
+import 'screens/goal_detail_screen.dart';
 import 'screens/all_transactions_screen.dart';
 import 'screens/account_management_screen.dart';
 import 'screens/account_form_screen.dart';
 import 'screens/upcoming_payments_screen.dart';
 import 'utilities/page_transitions.dart';
+import 'widgets/app_lock_gate.dart';
 
 import 'services/notification_service.dart';
 
@@ -58,24 +65,52 @@ class MyApp extends StatelessWidget {
           create: (context) => DebtProvider(),
         ),
         ChangeNotifierProvider(
+          create: (context) => GoalProvider(),
+        ),
+        ChangeNotifierProvider(
           create: (context) => AccountProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => AiAssistantProvider(),
         ),
       ],
       child: Consumer<SettingsProvider>(
         builder: (context, settings, child) {
+          final accentColor = settings.accentColor;
+          final onAccentColor =
+              ThemeData.estimateBrightnessForColor(accentColor) ==
+                      Brightness.dark
+                  ? Colors.white
+                  : Colors.black;
+          final lightColorScheme = ColorScheme.fromSeed(
+            seedColor: accentColor,
+            brightness: Brightness.light,
+            surface: const Color(0xFFFEFEFE),
+          ).copyWith(
+            primary: accentColor,
+            secondary: const Color(0xFF2196F3),
+            onPrimary: onAccentColor,
+            onSecondary: Colors.white,
+            onSurface: const Color(0xFF1F2937),
+          );
+          final darkColorScheme = ColorScheme.fromSeed(
+            seedColor: accentColor,
+            brightness: Brightness.dark,
+            surface: AppColors.surface,
+          ).copyWith(
+            primary: accentColor,
+            secondary: AppColors.secondary,
+            onPrimary: onAccentColor,
+            onSecondary: AppColors.textPrimary,
+            onSurface: AppColors.textPrimary,
+          );
+
           return MaterialApp(
-            title: 'Coin Manager',
+            title: 'Coinly',
             themeMode: settings.themeMode,
             theme: ThemeData(
               brightness: Brightness.light,
-              colorScheme: ColorScheme.light(
-                primary: const Color(0xFF4CAF50), // Softer green for light mode
-                secondary: const Color(0xFF2196F3), // Blue instead of gold
-                surface: const Color(0xFFFEFEFE), // Off-white
-                onPrimary: Colors.white,
-                onSecondary: Colors.white,
-                onSurface: const Color(0xFF1F2937), // Softer dark text
-              ),
+              colorScheme: lightColorScheme,
               scaffoldBackgroundColor:
                   const Color(0xFFF6F7F9), // Warmer, softer gray
               cardTheme: CardThemeData(
@@ -90,7 +125,7 @@ class MyApp extends StatelessWidget {
                 backgroundColor: const Color(0xFFFEFEFE), // Off-white
                 elevation: 0.5, // Subtle elevation for depth
                 centerTitle: true,
-                titleTextStyle: AppTextStyles.h2.copyWith(
+                titleTextStyle: AppTextStyles.h3.copyWith(
                   color: const Color(0xFF1F2937), // Softer dark
                 ),
                 iconTheme: const IconThemeData(
@@ -109,11 +144,75 @@ class MyApp extends StatelessWidget {
                 bodyLarge: AppTextStyles.bodyLarge,
                 bodyMedium: AppTextStyles.bodyMedium,
                 bodySmall: AppTextStyles.bodySmall,
-                labelLarge: AppTextStyles.amount,
+                labelLarge: AppTextStyles.button,
+                labelMedium: AppTextStyles.bodySmall,
                 labelSmall: AppTextStyles.caption,
               ).apply(
                 bodyColor: const Color(0xFF1F2937), // Softer dark
                 displayColor: const Color(0xFF1F2937), // Softer dark
+              ),
+              elevatedButtonTheme: ElevatedButtonThemeData(
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(64, AppDimensions.buttonHeight),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  textStyle: AppTextStyles.button,
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(AppDimensions.radiusMedium),
+                  ),
+                ),
+              ),
+              outlinedButtonTheme: OutlinedButtonThemeData(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(64, AppDimensions.buttonHeight),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  textStyle: AppTextStyles.button,
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(AppDimensions.radiusMedium),
+                  ),
+                ),
+              ),
+              textButtonTheme: TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(44, 40),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  textStyle: AppTextStyles.button,
+                ),
+              ),
+              iconButtonTheme: IconButtonThemeData(
+                style: IconButton.styleFrom(
+                  minimumSize: const Size.square(44),
+                  iconSize: AppDimensions.iconMedium,
+                ),
+              ),
+              inputDecorationTheme: InputDecorationTheme(
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                hintStyle: AppTextStyles.bodyMedium.copyWith(
+                  color: const Color(0xFF6B7280),
+                ),
+                labelStyle: AppTextStyles.bodyMedium.copyWith(
+                  color: const Color(0xFF6B7280),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius:
+                      BorderRadius.circular(AppDimensions.radiusMedium),
+                ),
+              ),
+              listTileTheme: ListTileThemeData(
+                titleTextStyle: AppTextStyles.bodyLarge.copyWith(
+                  color: const Color(0xFF1F2937),
+                  fontWeight: FontWeight.w600,
+                ),
+                subtitleTextStyle: AppTextStyles.bodySmall.copyWith(
+                  color: const Color(0xFF6B7280),
+                ),
+                minVerticalPadding: 12,
               ),
               useMaterial3: true,
               // Smooth slide transitions globally for push/pop routes
@@ -126,14 +225,7 @@ class MyApp extends StatelessWidget {
             ),
             darkTheme: ThemeData(
               brightness: Brightness.dark,
-              colorScheme: ColorScheme.dark(
-                primary: AppColors.primary,
-                secondary: AppColors.secondary,
-                surface: AppColors.surface,
-                onPrimary: AppColors.textPrimary,
-                onSecondary: AppColors.textPrimary,
-                onSurface: AppColors.textPrimary,
-              ),
+              colorScheme: darkColorScheme,
               scaffoldBackgroundColor: AppColors.background,
               cardTheme: CardThemeData(
                 color: AppColors.surface,
@@ -148,7 +240,7 @@ class MyApp extends StatelessWidget {
                 elevation: 0,
                 centerTitle: true,
                 titleTextStyle:
-                    AppTextStyles.h2.copyWith(color: AppColors.textPrimary),
+                    AppTextStyles.h3.copyWith(color: AppColors.textPrimary),
                 iconTheme: IconThemeData(
                   color: AppColors.textPrimary,
                   size: AppDimensions.iconMedium,
@@ -165,11 +257,75 @@ class MyApp extends StatelessWidget {
                 bodyLarge: AppTextStyles.bodyLarge,
                 bodyMedium: AppTextStyles.bodyMedium,
                 bodySmall: AppTextStyles.bodySmall,
-                labelLarge: AppTextStyles.amount,
+                labelLarge: AppTextStyles.button,
+                labelMedium: AppTextStyles.bodySmall,
                 labelSmall: AppTextStyles.caption,
               ).apply(
                 bodyColor: AppColors.textPrimary,
                 displayColor: AppColors.textPrimary,
+              ),
+              elevatedButtonTheme: ElevatedButtonThemeData(
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(64, AppDimensions.buttonHeight),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  textStyle: AppTextStyles.button,
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(AppDimensions.radiusMedium),
+                  ),
+                ),
+              ),
+              outlinedButtonTheme: OutlinedButtonThemeData(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(64, AppDimensions.buttonHeight),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  textStyle: AppTextStyles.button,
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(AppDimensions.radiusMedium),
+                  ),
+                ),
+              ),
+              textButtonTheme: TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(44, 40),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  textStyle: AppTextStyles.button,
+                ),
+              ),
+              iconButtonTheme: IconButtonThemeData(
+                style: IconButton.styleFrom(
+                  minimumSize: const Size.square(44),
+                  iconSize: AppDimensions.iconMedium,
+                ),
+              ),
+              inputDecorationTheme: InputDecorationTheme(
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                hintStyle: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+                labelStyle: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius:
+                      BorderRadius.circular(AppDimensions.radiusMedium),
+                ),
+              ),
+              listTileTheme: ListTileThemeData(
+                titleTextStyle: AppTextStyles.bodyLarge.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+                subtitleTextStyle: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+                minVerticalPadding: 12,
               ),
               useMaterial3: true,
               // Smooth slide transitions globally for push/pop routes
@@ -184,6 +340,8 @@ class MyApp extends StatelessWidget {
                 ? const OnboardingScreen()
                 : const MenuScrn(),
             debugShowCheckedModeBanner: false,
+            builder: (context, child) =>
+                AppLockGate(child: child ?? const SizedBox.shrink()),
             // onGenerateRoute provides context-aware transitions:
             // form screens slide up from bottom, detail screens scale+fade,
             // all others slide from right. Falls back to named routes table.
@@ -191,52 +349,90 @@ class MyApp extends StatelessWidget {
               switch (settings.name) {
                 case TransactionForm.routeName:
                   return PageTransitions.slideFromBottom(
-                      const TransactionForm(), settings: settings);
+                      const TransactionForm(),
+                      settings: settings);
+                case AiAssistantScreen.routeName:
+                  return PageTransitions.slideFromBottom(
+                      const AiAssistantScreen(),
+                      settings: settings);
                 case CreateCategoryScreen.routeName:
                   return PageTransitions.slideFromBottom(
-                      const CreateCategoryScreen(), settings: settings);
+                      const CreateCategoryScreen(),
+                      settings: settings);
                 case CategoryManagementScreen.routeName:
                   return PageTransitions.slideFromRight(
-                      const CategoryManagementScreen(), settings: settings);
+                      const CategoryManagementScreen(),
+                      settings: settings);
                 case PrivacyPolicyScreen.routeName:
                   return PageTransitions.slideFromRight(
-                      const PrivacyPolicyScreen(), settings: settings);
+                      const PrivacyPolicyScreen(),
+                      settings: settings);
                 case OnboardingScreen.routeName:
-                  return PageTransitions.fade(
-                      const OnboardingScreen(), settings: settings);
+                  return PageTransitions.fade(const OnboardingScreen(),
+                      settings: settings);
                 case '/manageBudget':
+                  final manageBudgetArgs =
+                      settings.arguments is ManageBudgetArgs
+                          ? settings.arguments as ManageBudgetArgs
+                          : null;
+                  final selectedMonth = manageBudgetArgs?.initialMonth ??
+                      (settings.arguments is DateTime
+                          ? settings.arguments as DateTime
+                          : null);
                   return PageTransitions.slideFromRight(
-                      const ManageBudgetScreen(), settings: settings);
+                      ManageBudgetScreen(
+                        initialMonth: selectedMonth,
+                        autoAllocateOnOpen:
+                            manageBudgetArgs?.autoAllocate ?? false,
+                      ),
+                      settings: settings);
                 case BackupManagementScreen.routeName:
                   return PageTransitions.slideFromRight(
-                      const BackupManagementScreen(), settings: settings);
+                      const BackupManagementScreen(),
+                      settings: settings);
                 case DebtListScreen.routeName:
-                  return PageTransitions.slideFromRight(
-                      const DebtListScreen(), settings: settings);
+                  return PageTransitions.slideFromRight(const DebtListScreen(),
+                      settings: settings);
                 case DebtFormScreen.routeName:
-                  return PageTransitions.slideFromBottom(
-                      const DebtFormScreen(), settings: settings);
+                  return PageTransitions.slideFromBottom(const DebtFormScreen(),
+                      settings: settings);
                 case DebtDetailScreen.routeName:
                   return PageTransitions.scaleWithFade(
-                      const DebtDetailScreen(debtId: ''), settings: settings);
+                      const DebtDetailScreen(debtId: ''),
+                      settings: settings);
+                case GoalListScreen.routeName:
+                  return PageTransitions.slideFromRight(const GoalListScreen(),
+                      settings: settings);
+                case GoalFormScreen.routeName:
+                  return PageTransitions.slideFromBottom(const GoalFormScreen(),
+                      settings: settings);
+                case GoalDetailScreen.routeName:
+                  return PageTransitions.scaleWithFade(
+                      const GoalDetailScreen(goalId: ''),
+                      settings: settings);
                 case AllTransactionsScreen.routeName:
                   return PageTransitions.slideFromRight(
-                      const AllTransactionsScreen(), settings: settings);
+                      const AllTransactionsScreen(),
+                      settings: settings);
                 case AccountManagementScreen.routeName:
                   return PageTransitions.slideFromRight(
-                      const AccountManagementScreen(), settings: settings);
+                      const AccountManagementScreen(),
+                      settings: settings);
                 case AccountFormScreen.routeName:
                   return PageTransitions.slideFromBottom(
-                      const AccountFormScreen(), settings: settings);
+                      const AccountFormScreen(),
+                      settings: settings);
                 case UpcomingPaymentsScreen.routeName:
                   return PageTransitions.slideFromRight(
-                      const UpcomingPaymentsScreen(), settings: settings);
+                      const UpcomingPaymentsScreen(),
+                      settings: settings);
                 default:
                   return null; // Fall through to routes table
               }
             },
             routes: {
               TransactionForm.routeName: (ctx) => const TransactionForm(),
+              AiAssistantScreen.routeName: (ctx) => const AiAssistantScreen(),
               CreateCategoryScreen.routeName: (ctx) =>
                   const CreateCategoryScreen(),
               CategoryManagementScreen.routeName: (ctx) =>
@@ -251,6 +447,10 @@ class MyApp extends StatelessWidget {
               DebtFormScreen.routeName: (ctx) => const DebtFormScreen(),
               DebtDetailScreen.routeName: (ctx) =>
                   const DebtDetailScreen(debtId: ''),
+              GoalListScreen.routeName: (ctx) => const GoalListScreen(),
+              GoalFormScreen.routeName: (ctx) => const GoalFormScreen(),
+              GoalDetailScreen.routeName: (ctx) =>
+                  const GoalDetailScreen(goalId: ''),
               AllTransactionsScreen.routeName: (ctx) =>
                   const AllTransactionsScreen(),
               AccountManagementScreen.routeName: (ctx) =>

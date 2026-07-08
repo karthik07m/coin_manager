@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-String appName = "Coin Manager";
+String appName = "Coinly";
 
 int defaultExpenseCat = 1;
 int defaultIncomeCat = 9;
@@ -60,21 +60,21 @@ class AppTextStyles {
   static const TextStyle h1 = TextStyle(
     fontSize: 32,
     fontWeight: FontWeight.bold,
-    letterSpacing: -1.0,
+    letterSpacing: 0,
     height: 1.2,
   );
 
   static const TextStyle h2 = TextStyle(
     fontSize: 24,
     fontWeight: FontWeight.w700,
-    letterSpacing: -0.5,
+    letterSpacing: 0,
     height: 1.3,
   );
 
   static const TextStyle h3 = TextStyle(
     fontSize: 20,
     fontWeight: FontWeight.w600,
-    letterSpacing: -0.25,
+    letterSpacing: 0,
     height: 1.4,
   );
 
@@ -113,6 +113,20 @@ class AppTextStyles {
     fontWeight: FontWeight.w600,
     letterSpacing: 1.0,
     height: 1.3,
+  );
+
+  static const TextStyle button = TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0,
+    height: 1.25,
+  );
+
+  static const TextStyle input = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0,
+    height: 1.25,
   );
 }
 

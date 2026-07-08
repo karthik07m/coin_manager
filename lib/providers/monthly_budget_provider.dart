@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/monthly_budget.dart';
 import '../db/monthly_budget_db_helper.dart';
+import '../utilities/budget_period.dart';
 
 class MonthlyBudgetProvider with ChangeNotifier {
   final List<MonthlyBudget> _monthlyBudgets =
@@ -12,6 +13,16 @@ class MonthlyBudgetProvider with ChangeNotifier {
   final Map<String, double> _totalBudgets = {};
 
   double getTotalBudget(String month) => _totalBudgets[month] ?? 0.0;
+
+  Future<double> fetchTotalBudget(String month) async {
+    if (_totalBudgets.containsKey(month)) {
+      return _totalBudgets[month] ?? 0.0;
+    }
+
+    final total = await _dbHelper.getTotalBudget(month);
+    _totalBudgets[month] = total;
+    return total;
+  }
 
   // Initialize and load data for the current month
   Future<void> loadMonthlyData(String month) async {
@@ -75,10 +86,15 @@ class MonthlyBudgetProvider with ChangeNotifier {
   Future<void> copyBudgetToNextMonth(String currentMonth) async {
     await _dbHelper.copyBudgetToNextMonth(currentMonth);
 
-    // Calculate next month and load its data
-    final currentMonthInt = int.parse(currentMonth);
-    final nextMonthInt = currentMonthInt == 12 ? 1 : currentMonthInt + 1;
-    final nextMonth = nextMonthInt.toString();
+    final currentParts = currentMonth.split('-');
+    final currentDate = currentParts.length == 2
+        ? DateTime(
+            int.parse(currentParts[0]),
+            int.parse(currentParts[1]),
+            1,
+          )
+        : DateTime(DateTime.now().year, int.parse(currentMonth), 1);
+    final nextMonth = BudgetPeriod.keyFor(BudgetPeriod.nextMonth(currentDate));
 
     // Load the next month's data to update the UI
     await loadMonthlyData(nextMonth);
