@@ -22,7 +22,7 @@ class DebtListScreen extends StatefulWidget {
 class _DebtListScreenState extends State<DebtListScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  DebtStatus _selectedStatus = DebtStatus.active;
+  DebtStatus? _selectedStatus = DebtStatus.active;
 
   @override
   void initState() {
@@ -65,13 +65,13 @@ class _DebtListScreenState extends State<DebtListScreen>
                 child: TabBar(
                   controller: _tabController,
                   indicator: BoxDecoration(
-                    color: AppColors.primary,
+                    color: context.appAccent,
                     borderRadius:
                         BorderRadius.circular(AppDimensions.radiusLarge),
                   ),
                   indicatorSize: TabBarIndicatorSize.tab,
                   dividerColor: Colors.transparent,
-                  labelColor: Colors.white,
+                  labelColor: Theme.of(context).colorScheme.onPrimary,
                   unselectedLabelColor: context.textSecondary,
                   labelStyle: AppTextStyles.bodyMedium.copyWith(
                     fontWeight: FontWeight.bold,
@@ -114,14 +114,15 @@ class _DebtListScreenState extends State<DebtListScreen>
             ),
           );
         },
-        backgroundColor: AppColors.primary,
+        backgroundColor: context.appAccent,
         elevation: 4,
         highlightElevation: 2,
-        icon: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
-        label: const Text(
+        icon: Icon(Icons.add_rounded,
+            color: Theme.of(context).colorScheme.onPrimary, size: 22),
+        label: Text(
           'Add Debt',
           style: TextStyle(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onPrimary,
             fontWeight: FontWeight.bold,
             fontSize: 14,
             letterSpacing: 0.5,
@@ -138,7 +139,9 @@ class _DebtListScreenState extends State<DebtListScreen>
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          _buildStatusChip('Active', DebtStatus.active, AppColors.primary),
+          _buildStatusChip('All', null, context.appAccent),
+          const SizedBox(width: 8),
+          _buildStatusChip('Active', DebtStatus.active, context.appAccent),
           const SizedBox(width: 8),
           _buildStatusChip('Overdue', DebtStatus.overdue, AppColors.negative),
           const SizedBox(width: 8),
@@ -148,7 +151,7 @@ class _DebtListScreenState extends State<DebtListScreen>
     );
   }
 
-  Widget _buildStatusChip(String label, DebtStatus status, Color color) {
+  Widget _buildStatusChip(String label, DebtStatus? status, Color color) {
     final isSelected = _selectedStatus == status;
     return FilterChip(
       label: Text(
@@ -203,7 +206,7 @@ class _DebtListScreenState extends State<DebtListScreen>
       onRefresh: () async {
         await debtProvider.loadDebtsFromDB();
       },
-      color: AppColors.primary,
+      color: context.appAccent,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(
           AppDimensions.spacing16,
@@ -232,7 +235,7 @@ class _DebtListScreenState extends State<DebtListScreen>
     } else if (progress >= 80) {
       statusColor = AppColors.warning;
     } else {
-      statusColor = AppColors.primary;
+      statusColor = context.appAccent;
     }
 
     final isPastDue = debt.dueDate != null &&
@@ -312,7 +315,7 @@ class _DebtListScreenState extends State<DebtListScreen>
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.1),
+                              color: context.appAccent.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Row(
@@ -321,7 +324,7 @@ class _DebtListScreenState extends State<DebtListScreen>
                                 Icon(
                                   Icons.repeat_rounded,
                                   size: 12,
-                                  color: AppColors.primary,
+                                  color: context.appAccent,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
@@ -329,7 +332,7 @@ class _DebtListScreenState extends State<DebtListScreen>
                                   style: AppTextStyles.caption.copyWith(
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
-                                    color: AppColors.primary,
+                                    color: context.appAccent,
                                     letterSpacing: 0.5,
                                   ),
                                 ),
@@ -402,37 +405,59 @@ class _DebtListScreenState extends State<DebtListScreen>
                   ),
                   // Due date or status
                   if (debt.dueDate != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isPastDue
-                            ? AppColors.negative.withValues(alpha: 0.15)
-                            : AppColors.primary.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.calendar_today,
-                            size: 12,
-                            color: isPastDue ? AppColors.negative : statusColor,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
                           ),
-                          const SizedBox(width: 4),
+                          decoration: BoxDecoration(
+                            color: isPastDue
+                                ? AppColors.negative.withValues(alpha: 0.15)
+                                : context.appAccent.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.calendar_today,
+                                size: 12,
+                                color: isPastDue
+                                    ? AppColors.negative
+                                    : statusColor,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                DateFormat('MMM dd, yyyy')
+                                    .format(debt.dueDate!),
+                                style: AppTextStyles.caption.copyWith(
+                                  color: isPastDue
+                                      ? AppColors.negative
+                                      : statusColor,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_dueRelativeLabel(debt) != null) ...[
+                          const SizedBox(height: 4),
                           Text(
-                            DateFormat('MMM dd, yyyy').format(debt.dueDate!),
+                            _dueRelativeLabel(debt)!,
                             style: AppTextStyles.caption.copyWith(
-                              color:
-                                  isPastDue ? AppColors.negative : statusColor,
-                              fontSize: 11,
+                              color: isPastDue
+                                  ? AppColors.negative
+                                  : context.textSecondary,
+                              fontSize: 10,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
-                      ),
+                      ],
                     )
                   else
                     Container(
@@ -462,6 +487,23 @@ class _DebtListScreenState extends State<DebtListScreen>
     );
   }
 
+  String? _dueRelativeLabel(Debt debt) {
+    if (debt.status == DebtStatus.paid) return null;
+    final days = debt.getDaysUntilDue();
+    if (days == null) return null;
+    if (days < 0) {
+      final n = -days;
+      return '$n ${n == 1 ? 'day' : 'days'} overdue';
+    } else if (days == 0) {
+      return 'Due today';
+    } else if (days == 1) {
+      return 'Due tomorrow';
+    } else if (days <= 7) {
+      return 'Due in $days days';
+    }
+    return null;
+  }
+
   Widget _buildEmptyState(bool isLiability) {
     return Center(
       child: Padding(
@@ -476,7 +518,9 @@ class _DebtListScreenState extends State<DebtListScreen>
             ),
             const SizedBox(height: AppDimensions.spacing20),
             Text(
-              'No ${_selectedStatus.name} debts',
+              _selectedStatus == null
+                  ? 'No debts yet'
+                  : 'No ${_selectedStatus!.name} debts',
               style: AppTextStyles.h3.copyWith(
                 color: context.textSecondary,
               ),

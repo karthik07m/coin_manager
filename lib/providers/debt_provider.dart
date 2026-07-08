@@ -46,10 +46,12 @@ class DebtProvider with ChangeNotifier {
   Future<void> loadDebtsFromDB() async {
     try {
       _debts = await _dbHelper.getDebts();
-      // Update statuses for all debts
+      // Recompute status (e.g. active -> overdue) and persist any changes
       for (var debt in _debts) {
+        final previousStatus = debt.status;
         debt.updateStatus();
-        if (debt.status != DebtStatus.values[debt.status.index]) {
+        if (debt.status != previousStatus) {
+          debt.modifiedOn = DateTime.now();
           await _dbHelper.updateDebt(debt);
         }
       }
@@ -154,8 +156,9 @@ class DebtProvider with ChangeNotifier {
     }
   }
 
-  // Mark debt as fully paid
-  Future<bool> markAsPaid(String debtId) async {
+  // Mark debt as fully paid. [transactionId] links the settlement to a
+  // transaction the caller created for it, if any.
+  Future<bool> markAsPaid(String debtId, {String? transactionId}) async {
     try {
       final debt = getDebtById(debtId);
       if (debt == null) return false;
@@ -169,6 +172,7 @@ class DebtProvider with ChangeNotifier {
           amount: remaining,
           paymentDate: DateTime.now(),
           notes: 'Final payment',
+          transactionId: transactionId,
         );
         return await recordPayment(debtId, payment);
       } else {

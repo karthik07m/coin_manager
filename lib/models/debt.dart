@@ -12,6 +12,9 @@ class Debt {
   String? notes;
   bool isRecurring; // true if this is a monthly recurring payment
   double? recurringAmount; // fixed monthly amount for recurring debts
+  // The transaction that created this debt (loan logged from the
+  // transaction form), if any.
+  String? transactionId;
   DebtStatus status;
   final DateTime createdOn;
   late DateTime modifiedOn;
@@ -28,6 +31,7 @@ class Debt {
     this.notes,
     this.isRecurring = false,
     this.recurringAmount,
+    this.transactionId,
     required this.status,
     required this.createdOn,
     required this.modifiedOn,
@@ -45,6 +49,7 @@ class Debt {
     String? notes,
     bool isRecurring = false,
     double? recurringAmount,
+    String? transactionId,
   }) {
     DateTime now = DateTime.now();
     return Debt(
@@ -59,6 +64,7 @@ class Debt {
       notes: notes,
       isRecurring: isRecurring,
       recurringAmount: recurringAmount,
+      transactionId: transactionId,
       status: DebtStatus.active,
       createdOn: now,
       modifiedOn: now,
@@ -110,6 +116,16 @@ class Debt {
     return (amountPaid / amount * 100).clamp(0, 100);
   }
 
+  // Days until dueDate (date-only, ignoring time of day).
+  // Negative means overdue by that many days, 0 means due today.
+  int? getDaysUntilDue() {
+    if (dueDate == null) return null;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final due = DateTime(dueDate!.year, dueDate!.month, dueDate!.day);
+    return due.difference(today).inDays;
+  }
+
   void updateStatus() {
     if (amountPaid >= amount) {
       status = DebtStatus.paid;
@@ -136,6 +152,7 @@ class Debt {
       'notes': notes,
       'is_recurring': isRecurring ? 1 : 0,
       'recurring_amount': recurringAmount,
+      'transaction_id': transactionId,
       'status': status.index,
       'created_on': createdOn.toIso8601String(),
       'modified_on': modifiedOn.toIso8601String(),
@@ -156,6 +173,7 @@ class Debt {
       notes: map['notes'],
       isRecurring: (map['is_recurring'] ?? 0) == 1,
       recurringAmount: map['recurring_amount'],
+      transactionId: map['transaction_id'],
       status: DebtStatus.values[map['status']],
       createdOn: DateTime.parse(map['created_on']),
       modifiedOn: DateTime.parse(map['modified_on']),

@@ -105,7 +105,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _dueDate ?? DateTime.now().add(const Duration(days: 30)),
-      firstDate: DateTime.now(),
+      firstDate: DateTime(2000),
       lastDate: DateTime(2101),
       builder: (context, child) {
         return Theme(
@@ -123,84 +123,110 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
     }
   }
 
+  void _showFormError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.negative,
+      ),
+    );
+  }
+
   Future<void> _saveDebt() async {
-    if (_formKey.currentState!.validate()) {
-      final debtProvider = Provider.of<DebtProvider>(context, listen: false);
+    if (!_formKey.currentState!.validate()) return;
 
-      final amount = double.parse(_amountController.text.replaceAll(',', ''));
-      final amountPaid =
-          double.parse(_amountPaidController.text.replaceAll(',', ''));
+    final amount =
+        double.tryParse(_amountController.text.replaceAll(',', '').trim());
+    if (amount == null || amount <= 0) {
+      _showFormError('Please enter a valid total amount');
+      return;
+    }
 
-      if (amountPaid > amount) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Amount paid cannot be greater than total amount'),
-            backgroundColor: AppColors.negative,
-          ),
-        );
+    final amountPaidText =
+        _amountPaidController.text.replaceAll(',', '').trim();
+    final amountPaid =
+        amountPaidText.isEmpty ? 0.0 : double.tryParse(amountPaidText);
+    if (amountPaid == null || amountPaid < 0) {
+      _showFormError('Please enter a valid amount paid');
+      return;
+    }
+
+    if (amountPaid > amount) {
+      _showFormError('Amount paid cannot be greater than total amount');
+      return;
+    }
+
+    double? interestRate;
+    if (_interestRateController.text.trim().isNotEmpty) {
+      interestRate = double.tryParse(_interestRateController.text.trim());
+      if (interestRate == null || interestRate < 0) {
+        _showFormError('Please enter a valid interest rate');
         return;
       }
-
-      Debt debt;
-      if (_existingDebt != null) {
-        // Update existing debt
-        _existingDebt!.update(
-          title: _titleController.text,
-          amount: amount,
-          amountPaid: amountPaid,
-          debtorName: _debtorNameController.text,
-          isLiability: _isLiability,
-          dueDate: _dueDate,
-          interestRate: _interestRateController.text.isNotEmpty
-              ? double.parse(_interestRateController.text)
-              : null,
-          notes:
-              _notesController.text.isNotEmpty ? _notesController.text : null,
-          isRecurring: _isRecurring,
-          recurringAmount: _recurringAmountController.text.isNotEmpty
-              ? double.parse(
-                  _recurringAmountController.text.replaceAll(',', ''))
-              : null,
-        );
-        debt = _existingDebt!;
-        await debtProvider.updateDebt(debt);
-      } else {
-        // Create new debt
-        debt = Debt.createNew(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          title: _titleController.text,
-          amount: amount,
-          amountPaid: amountPaid,
-          debtorName: _debtorNameController.text,
-          isLiability: _isLiability,
-          dueDate: _dueDate,
-          interestRate: _interestRateController.text.isNotEmpty
-              ? double.parse(_interestRateController.text)
-              : null,
-          notes:
-              _notesController.text.isNotEmpty ? _notesController.text : null,
-          isRecurring: _isRecurring,
-          recurringAmount: _recurringAmountController.text.isNotEmpty
-              ? double.parse(
-                  _recurringAmountController.text.replaceAll(',', ''))
-              : null,
-        );
-        await debtProvider.addDebt(debt);
-      }
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _existingDebt != null
-                ? 'Debt updated successfully'
-                : 'Debt added successfully',
-          ),
-          backgroundColor: AppColors.positive,
-        ),
-      );
-      Navigator.pop(context);
     }
+
+    double? recurringAmount;
+    if (_isRecurring) {
+      recurringAmount = double.tryParse(
+          _recurringAmountController.text.replaceAll(',', '').trim());
+      if (recurringAmount == null || recurringAmount <= 0) {
+        _showFormError('Please enter a valid monthly recurring amount');
+        return;
+      }
+    }
+
+    final debtProvider = Provider.of<DebtProvider>(context, listen: false);
+    final notes = _notesController.text.trim().isNotEmpty
+        ? _notesController.text.trim()
+        : null;
+
+    Debt debt;
+    if (_existingDebt != null) {
+      // Update existing debt
+      _existingDebt!.update(
+        title: _titleController.text.trim(),
+        amount: amount,
+        amountPaid: amountPaid,
+        debtorName: _debtorNameController.text.trim(),
+        isLiability: _isLiability,
+        dueDate: _dueDate,
+        interestRate: interestRate,
+        notes: notes,
+        isRecurring: _isRecurring,
+        recurringAmount: recurringAmount,
+      );
+      debt = _existingDebt!;
+      await debtProvider.updateDebt(debt);
+    } else {
+      // Create new debt
+      debt = Debt.createNew(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: _titleController.text.trim(),
+        amount: amount,
+        amountPaid: amountPaid,
+        debtorName: _debtorNameController.text.trim(),
+        isLiability: _isLiability,
+        dueDate: _dueDate,
+        interestRate: interestRate,
+        notes: notes,
+        isRecurring: _isRecurring,
+        recurringAmount: recurringAmount,
+      );
+      await debtProvider.addDebt(debt);
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _existingDebt != null
+              ? 'Debt updated successfully'
+              : 'Debt added successfully',
+        ),
+        backgroundColor: AppColors.positive,
+      ),
+    );
+    Navigator.pop(context);
   }
 
   Future<void> _deleteDebt() async {
@@ -417,7 +443,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                       children: [
                         Icon(
                           Icons.calendar_today,
-                          color: AppColors.primary,
+                          color: context.appAccent,
                         ),
                         const SizedBox(width: AppDimensions.spacing12),
                         Expanded(
@@ -506,7 +532,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                         BorderRadius.circular(AppDimensions.radiusMedium),
                     border: Border.all(
                       color: _isRecurring
-                          ? AppColors.primary.withValues(alpha: 0.3)
+                          ? context.appAccent.withValues(alpha: 0.3)
                           : context.textSecondary.withValues(alpha: 0.1),
                     ),
                   ),
@@ -518,7 +544,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                           Icon(
                             Icons.repeat_rounded,
                             color: _isRecurring
-                                ? AppColors.primary
+                                ? context.appAccent
                                 : context.textSecondary,
                             size: 20,
                           ),
@@ -549,7 +575,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                                 _isRecurring = value;
                               });
                             },
-                            activeColor: AppColors.primary,
+                            activeColor: context.appAccent,
                           ),
                         ],
                       ),
@@ -580,8 +606,8 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                   child: ElevatedButton(
                     onPressed: _saveDebt,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
+                      backgroundColor: context.appAccent,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
                       shape: RoundedRectangleBorder(
                         borderRadius:
                             BorderRadius.circular(AppDimensions.radiusMedium),
@@ -589,10 +615,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                     ),
                     child: Text(
                       _existingDebt != null ? 'Update Debt' : 'Save Debt',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: AppTextStyles.button,
                     ),
                   ),
                 ),
@@ -620,7 +643,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
             vertical: AppDimensions.spacing12,
           ),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary : Colors.transparent,
+            color: isSelected ? context.appAccent : Colors.transparent,
             borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
           ),
           child: Row(
@@ -628,14 +651,18 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
             children: [
               Icon(
                 icon,
-                color: isSelected ? Colors.white : context.textSecondary,
+                color: isSelected
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : context.textSecondary,
                 size: 18,
               ),
               const SizedBox(width: 8),
               Text(
                 label,
                 style: AppTextStyles.bodyMedium.copyWith(
-                  color: isSelected ? Colors.white : context.textSecondary,
+                  color: isSelected
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : context.textSecondary,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
                 textAlign: TextAlign.center,
