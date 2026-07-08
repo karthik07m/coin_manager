@@ -4,6 +4,9 @@ class DebtPayment {
   double amount;
   DateTime paymentDate;
   String? notes;
+  // The transaction created for this settlement, if the user chose to
+  // record it in their spending too.
+  String? transactionId;
   final DateTime createdOn;
 
   DebtPayment({
@@ -12,6 +15,7 @@ class DebtPayment {
     required this.amount,
     required this.paymentDate,
     this.notes,
+    this.transactionId,
     required this.createdOn,
   });
 
@@ -21,6 +25,7 @@ class DebtPayment {
     required double amount,
     required DateTime paymentDate,
     String? notes,
+    String? transactionId,
   }) {
     return DebtPayment(
       id: id,
@@ -28,6 +33,7 @@ class DebtPayment {
       amount: amount,
       paymentDate: paymentDate,
       notes: notes,
+      transactionId: transactionId,
       createdOn: DateTime.now(),
     );
   }
@@ -40,6 +46,7 @@ class DebtPayment {
       'amount': amount,
       'payment_date': paymentDate.toIso8601String(),
       'notes': notes,
+      'transaction_id': transactionId,
       'created_on': createdOn.toIso8601String(),
     };
   }
@@ -52,6 +59,7 @@ class DebtPayment {
       amount: map['amount'],
       paymentDate: DateTime.parse(map['payment_date']),
       notes: map['notes'],
+      transactionId: map['transaction_id'],
       createdOn: DateTime.parse(map['created_on']),
     );
   }

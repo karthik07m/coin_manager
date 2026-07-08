@@ -27,6 +27,7 @@ class DebtDBHelper {
   final String columnNotes = 'notes';
   final String columnIsRecurring = 'is_recurring';
   final String columnRecurringAmount = 'recurring_amount';
+  final String columnTransactionId = 'transaction_id';
   final String columnStatus = 'status';
   final String columnCreatedOn = 'created_on';
   final String columnModifiedOn = 'modified_on';
@@ -38,6 +39,7 @@ class DebtDBHelper {
   final String paymentColumnAmount = 'amount';
   final String paymentColumnPaymentDate = 'payment_date';
   final String paymentColumnNotes = 'notes';
+  final String paymentColumnTransactionId = 'transaction_id';
   final String paymentColumnCreatedOn = 'created_on';
 
   Future<Database> get database async {
@@ -53,7 +55,7 @@ class DebtDBHelper {
     String path = join(documentsDirectory.path, 'debts.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -74,6 +76,7 @@ class DebtDBHelper {
         $columnNotes TEXT,
         $columnIsRecurring INTEGER DEFAULT 0,
         $columnRecurringAmount REAL,
+        $columnTransactionId TEXT,
         $columnStatus INTEGER NOT NULL,
         $columnCreatedOn TEXT NOT NULL,
         $columnModifiedOn TEXT NOT NULL
@@ -88,6 +91,7 @@ class DebtDBHelper {
         $paymentColumnAmount REAL NOT NULL,
         $paymentColumnPaymentDate TEXT NOT NULL,
         $paymentColumnNotes TEXT,
+        $paymentColumnTransactionId TEXT,
         $paymentColumnCreatedOn TEXT NOT NULL,
         FOREIGN KEY ($paymentColumnDebtId) REFERENCES $debtsTable($columnId) ON DELETE CASCADE
       )
@@ -117,6 +121,23 @@ class DebtDBHelper {
       } catch (e) {
         // Column might already exist, check and continue
         debugPrint('Note: $columnRecurringAmount column might already exist');
+      }
+    }
+
+    if (oldVersion < 3) {
+      // Link debts and settlements to transactions (Cashew-style loans).
+      try {
+        await db.execute(
+            'ALTER TABLE $debtsTable ADD COLUMN $columnTransactionId TEXT');
+      } catch (e) {
+        debugPrint('Note: $columnTransactionId column might already exist');
+      }
+      try {
+        await db.execute(
+            'ALTER TABLE $paymentsTable ADD COLUMN $paymentColumnTransactionId TEXT');
+      } catch (e) {
+        debugPrint(
+            'Note: payment $paymentColumnTransactionId column might already exist');
       }
     }
   }

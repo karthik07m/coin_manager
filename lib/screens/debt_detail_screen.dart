@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../providers/account_provider.dart';
+import '../providers/category_provider.dart';
 import '../providers/debt_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/transaction_provider.dart';
+import '../models/account.dart';
 import '../models/debt.dart';
 import '../models/debt_payment.dart';
+import '../models/transaction.dart';
 import '../utilities/constants.dart';
 import '../utilities/functions.dart';
 import '../utilities/theme_helper.dart';
@@ -40,10 +45,87 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
     });
   }
 
+  /// Category for auto-created settlement transactions: "Miscellaneous" of
+  /// the right type, with safe fallbacks if the user renamed/deleted it.
+  Future<int> _miscCategoryId(bool isExpense) async {
+    final categoryProvider =
+        Provider.of<CategoryProvider>(context, listen: false);
+    if (categoryProvider.categoryMap.isEmpty) {
+      await categoryProvider.fetchAllCategories();
+    }
+    for (final category in categoryProvider.categoryMap.values) {
+      if (category.isExpense == isExpense &&
+          category.name.toLowerCase() == 'miscellaneous') {
+        return category.id!;
+      }
+    }
+    return isExpense ? defaultExpenseCat : defaultIncomeCat;
+  }
+
+  /// Creates the spending/income transaction for a settlement and returns
+  /// its id, so the debt payment can link back to it.
+  Future<String> _createSettlementTransaction(
+    Debt debt,
+    double amount,
+    DateTime date, {
+    int accountId = 1,
+  }) async {
+    final transactionProvider =
+        Provider.of<TransactionProvider>(context, listen: false);
+    // Paying off my debt = money out; getting repaid = money in.
+    final isExpense = debt.isLiability;
+    final categoryId = await _miscCategoryId(isExpense);
+
+    final transaction = Transaction.createNew(
+      id: UniqueKey().toString(),
+      title: isExpense
+          ? 'Paid ${debt.debtorName} · ${debt.title}'
+          : 'Repayment from ${debt.debtorName} · ${debt.title}',
+      amount: amount,
+      categoryId: categoryId,
+      accountId: accountId,
+      date: date,
+      isExpense: isExpense,
+    );
+    await transactionProvider.addTransaction(transaction);
+    return transaction.id;
+  }
+
+  IconData _accountIcon(Account account) {
+    switch (account.icon) {
+      case 'wallet':
+        return Icons.account_balance_wallet;
+      case 'account_balance':
+        return Icons.account_balance;
+      case 'credit_card':
+        return Icons.credit_card;
+      case 'payment':
+        return Icons.payment;
+      case 'savings':
+        return Icons.savings;
+      default:
+        return Icons.account_balance_wallet;
+    }
+  }
+
   Future<void> _showRecordPaymentDialog(Debt debt) async {
     final amountController = TextEditingController();
     final notesController = TextEditingController();
     DateTime paymentDate = DateTime.now();
+    bool addAsTransaction = true;
+
+    // Accounts for the settlement transaction's account picker.
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
+    if (!accountProvider.isLoaded) {
+      await accountProvider.loadAccounts();
+    }
+    if (!mounted) return;
+    final accounts = List<Account>.from(accountProvider.accounts)
+      ..sort((a, b) => a.name.compareTo(b.name));
+    int selectedAccountId = accounts.any((a) => a.id == 1)
+        ? 1
+        : (accounts.isNotEmpty ? accounts.first.id! : 1);
 
     await showModalBottomSheet(
       context: context,
@@ -132,7 +214,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                           child: Row(
                             children: [
                               Icon(Icons.calendar_today_rounded,
-                                  color: AppColors.primary, size: 20),
+                                  color: context.appAccent, size: 20),
                               const SizedBox(width: 12),
                               Text(
                                 DateFormat('MMM dd, yyyy').format(paymentDate),
@@ -182,15 +264,123 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(
-                              color: AppColors.primary,
+                            borderSide: BorderSide(
+                              color: context.appAccent,
                               width: 1.5,
                             ),
                           ),
                         ),
                         maxLines: 2,
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 20),
+
+                      // Mirror the settlement into transactions (Cashew-style)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: context.appBackground,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color:
+                                context.textSecondary.withValues(alpha: 0.1),
+                          ),
+                        ),
+                        child: SwitchListTile(
+                          value: addAsTransaction,
+                          onChanged: (v) =>
+                              setModalState(() => addAsTransaction = v),
+                          activeColor: context.appAccent,
+                          title: Text(
+                            'Add to transactions',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(
+                            debt.isLiability
+                                ? 'Records an expense to ${debt.debtorName}'
+                                : 'Records income from ${debt.debtorName}',
+                            style: AppTextStyles.caption.copyWith(
+                              color: context.textSecondary,
+                              fontSize: 11,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Which account the settlement hits.
+                      if (addAsTransaction && accounts.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          debt.isLiability ? 'Pay from' : 'Receive into',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: accounts.map((account) {
+                            final isSelected =
+                                selectedAccountId == account.id;
+                            final colorScheme =
+                                Theme.of(context).colorScheme;
+                            return GestureDetector(
+                              onTap: () => setModalState(
+                                  () => selectedAccountId = account.id!),
+                              child: AnimatedContainer(
+                                duration:
+                                    const Duration(milliseconds: 180),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 9),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? colorScheme.primary
+                                          .withValues(alpha: 0.12)
+                                      : context.appBackground,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? colorScheme.primary
+                                        : context.textSecondary
+                                            .withValues(alpha: 0.15),
+                                    width: isSelected ? 1.5 : 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _accountIcon(account),
+                                      size: 16,
+                                      color: isSelected
+                                          ? colorScheme.primary
+                                          : context.textSecondary,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      account.name,
+                                      style:
+                                          AppTextStyles.bodyMedium.copyWith(
+                                        fontSize: 13,
+                                        color: isSelected
+                                            ? colorScheme.primary
+                                            : context.textPrimary,
+                                        fontWeight: isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
 
                       // Action Buttons
                       Row(
@@ -262,6 +452,25 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                   return;
                                 }
 
+                                final debtProvider = Provider.of<DebtProvider>(
+                                    this.context,
+                                    listen: false);
+                                final messenger = ScaffoldMessenger.of(context);
+                                final navigator = Navigator.of(context);
+
+                                // Optionally mirror into transactions first,
+                                // so the payment can link back to it.
+                                String? settlementTransactionId;
+                                if (addAsTransaction) {
+                                  settlementTransactionId =
+                                      await _createSettlementTransaction(
+                                    debt,
+                                    amount,
+                                    paymentDate,
+                                    accountId: selectedAccountId,
+                                  );
+                                }
+
                                 final payment = DebtPayment.createNew(
                                   id: DateTime.now()
                                       .millisecondsSinceEpoch
@@ -272,13 +481,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                   notes: notesController.text.isNotEmpty
                                       ? notesController.text
                                       : null,
+                                  transactionId: settlementTransactionId,
                                 );
-
-                                final debtProvider = Provider.of<DebtProvider>(
-                                    this.context,
-                                    listen: false);
-                                final messenger = ScaffoldMessenger.of(context);
-                                final navigator = Navigator.of(context);
 
                                 final success = await debtProvider
                                     .recordPayment(debt.id, payment);
@@ -304,8 +508,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                 }
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
+                                backgroundColor: context.appAccent,
+                                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 16),
                                 elevation: 0,
@@ -315,10 +519,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                               ),
                               child: const Text(
                                 'Record Payment',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
+                                style: AppTextStyles.button,
                               ),
                             ),
                           ),
@@ -337,43 +538,78 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
   }
 
   Future<void> _markAsPaid() async {
+    bool addAsTransaction = true;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: context.appSurface,
-        title: Text('Mark as Paid', style: AppTextStyles.h3),
-        content: Text(
-          'Are you sure you want to mark this debt as fully paid?',
-          style: AppTextStyles.bodyMedium,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: context.appSurface,
+          title: Text('Mark as Paid', style: AppTextStyles.h3),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Are you sure you want to mark this debt as fully paid?',
+                style: AppTextStyles.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              CheckboxListTile(
+                value: addAsTransaction,
+                onChanged: (v) =>
+                    setDialogState(() => addAsTransaction = v ?? true),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                activeColor: context.appAccent,
+                title: Text(
+                  'Add the final payment to transactions',
+                  style: AppTextStyles.bodySmall,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(
+                'Cancel',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: context.textSecondary,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(
+                'Mark as Paid',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.positive,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              'Cancel',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: context.textSecondary,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              'Mark as Paid',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.positive,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
       ),
     );
 
     if (confirmed == true) {
       if (!mounted) return;
       final debtProvider = Provider.of<DebtProvider>(context, listen: false);
-      final success = await debtProvider.markAsPaid(widget.debtId);
+
+      // Mirror the final payment into transactions before settling, so the
+      // payment record can link back to it.
+      String? settlementTransactionId;
+      final debt = debtProvider.getDebtById(widget.debtId);
+      final remaining = debt?.getRemainingAmount() ?? 0;
+      if (addAsTransaction && debt != null && remaining > 0) {
+        settlementTransactionId = await _createSettlementTransaction(
+            debt, remaining, DateTime.now());
+      }
+      if (!mounted) return;
+
+      final success = await debtProvider.markAsPaid(widget.debtId,
+          transactionId: settlementTransactionId);
 
       if (!mounted) return;
 
@@ -450,7 +686,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
           } else if (progress >= 80) {
             statusColor = AppColors.warning;
           } else {
-            statusColor = AppColors.primary;
+            statusColor = context.appAccent;
           }
 
           return SingleChildScrollView(
@@ -594,7 +830,10 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                         if (debt.dueDate != null)
                           _buildDetailRow(
                             'Due Date',
-                            DateFormat('MMM dd, yyyy').format(debt.dueDate!),
+                            _dueRelativeLabel(debt) != null
+                                ? '${DateFormat('MMM dd, yyyy').format(debt.dueDate!)} (${_dueRelativeLabel(debt)})'
+                                : DateFormat('MMM dd, yyyy')
+                                    .format(debt.dueDate!),
                             Icons.calendar_today,
                           ),
                         _buildDetailRow(
@@ -619,7 +858,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                 ),
                                 decoration: BoxDecoration(
                                   color:
-                                      AppColors.primary.withValues(alpha: 0.1),
+                                      context.appAccent.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
@@ -628,7 +867,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                     Icon(
                                       Icons.repeat_rounded,
                                       size: 16,
-                                      color: AppColors.primary,
+                                      color: context.appAccent,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
@@ -636,7 +875,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                       style: AppTextStyles.caption.copyWith(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
-                                        color: AppColors.primary,
+                                        color: context.appAccent,
                                         letterSpacing: 0.5,
                                       ),
                                     ),
@@ -784,14 +1023,35 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                         ),
                                         if (payment.notes != null) ...[
                                           const SizedBox(width: 8),
-                                          Text(
-                                            '• ${payment.notes}',
-                                            style:
-                                                AppTextStyles.caption.copyWith(
-                                              color: context.textSecondary,
+                                          Flexible(
+                                            child: Text(
+                                              '• ${payment.notes}',
+                                              style: AppTextStyles.caption
+                                                  .copyWith(
+                                                color: context.textSecondary,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                        if (payment.transactionId !=
+                                            null) ...[
+                                          const SizedBox(width: 8),
+                                          Icon(
+                                            Icons.link_rounded,
+                                            size: 13,
+                                            color: context.appAccent,
+                                          ),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            'in transactions',
+                                            style: AppTextStyles.caption
+                                                .copyWith(
+                                              color: context.appAccent,
+                                              fontSize: 10,
+                                              letterSpacing: 0,
+                                            ),
                                           ),
                                         ],
                                       ],
@@ -852,8 +1112,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                     child: ElevatedButton.icon(
                       onPressed: () => _showRecordPaymentDialog(debt),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
+                        backgroundColor: context.appAccent,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -863,10 +1123,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                       icon: const Icon(Icons.payment_rounded, size: 18),
                       label: const Text(
                         'Record Payment',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                        style: AppTextStyles.button,
                       ),
                     ),
                   ),
@@ -894,6 +1151,23 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
         },
       ),
     );
+  }
+
+  String? _dueRelativeLabel(Debt debt) {
+    if (debt.status == DebtStatus.paid) return null;
+    final days = debt.getDaysUntilDue();
+    if (days == null) return null;
+    if (days < 0) {
+      final n = -days;
+      return '$n ${n == 1 ? 'day' : 'days'} overdue';
+    } else if (days == 0) {
+      return 'due today';
+    } else if (days == 1) {
+      return 'due tomorrow';
+    } else if (days <= 7) {
+      return 'due in $days days';
+    }
+    return null;
   }
 
   Widget _buildDetailRow(String label, String value, IconData icon) {
