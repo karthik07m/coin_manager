@@ -7,6 +7,7 @@ import 'package:math_expressions/math_expressions.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/category.dart';
+import '../utilities/id_generator.dart';
 import '../models/debt.dart';
 import '../models/transaction.dart';
 import '../models/receipt.dart';
@@ -886,14 +887,14 @@ class TransactionFormState extends State<TransactionForm> {
       return;
     }
 
-    String id = _transaction?.id ?? UniqueKey().toString();
+    String id = _transaction?.id ?? newId();
 
     // Save receipt if we have a new one
     String? receiptIdToSave = _receiptId;
     if (_receiptImagePath != null && _receiptId == null) {
       final receiptDbHelper = ReceiptDBHelper();
       final newReceipt = Receipt(
-        id: UniqueKey().toString(),
+        id: newId(),
         transactionId: id,
         imagePath: _receiptImagePath!,
         extractedText: _receiptRawText,
@@ -960,7 +961,7 @@ class TransactionFormState extends State<TransactionForm> {
     if (!isUpdate && _loanKind != null && loanPerson.isNotEmpty) {
       final note = _titleController.text.trim();
       await debtProvider.addDebt(Debt.createNew(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: newId(),
         title: note.isNotEmpty
             ? note
             : (_loanKind == _LoanKind.lent

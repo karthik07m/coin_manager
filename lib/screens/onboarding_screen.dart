@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
+import '../utilities/id_generator.dart';
 import '../providers/monthly_budget_provider.dart';
 import '../providers/category_provider.dart';
 import '../providers/transaction_provider.dart';
@@ -291,7 +292,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
     // Create Income transaction
     final incomeTransaction = Transaction.createNew(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: newId(),
       amount: income,
       categoryId: defaultIncomeCat,
       accountId: 1, // Default to Cash account

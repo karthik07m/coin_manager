@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/debt_provider.dart';
+import '../utilities/id_generator.dart';
 import '../models/debt.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
@@ -200,7 +201,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
     } else {
       // Create new debt
       debt = Debt.createNew(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: newId(),
         title: _titleController.text.trim(),
         amount: amount,
         amountPaid: amountPaid,

@@ -55,6 +55,7 @@ dependencies:
   table_calendar: ^3.1.2
   http: ^1.6.0
   local_auth: ^2.3.0
+  uuid: ^4.5.1
 
 dev_dependencies:
   flutter_test:

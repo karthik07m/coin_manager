@@ -111,6 +111,7 @@ class DebtDBHelper {
         await db.execute(
             'ALTER TABLE $debtsTable ADD COLUMN $columnIsRecurring INTEGER DEFAULT 0');
       } catch (e) {
+        debugPrint('DebtDB error: $e');
         // Column might already exist, check and continue
         debugPrint('Note: $columnIsRecurring column might already exist');
       }
@@ -119,6 +120,7 @@ class DebtDBHelper {
         await db.execute(
             'ALTER TABLE $debtsTable ADD COLUMN $columnRecurringAmount REAL');
       } catch (e) {
+        debugPrint('DebtDB error: $e');
         // Column might already exist, check and continue
         debugPrint('Note: $columnRecurringAmount column might already exist');
       }
@@ -149,6 +151,7 @@ class DebtDBHelper {
     try {
       return await dbClient.insert(debtsTable, debt.toMap());
     } catch (e) {
+      debugPrint('DebtDB error: $e');
       return -1;
     }
   }
@@ -160,6 +163,7 @@ class DebtDBHelper {
           await dbClient.query(debtsTable, orderBy: '$columnModifiedOn DESC');
       return debts.map((map) => Debt.fromMap(map)).toList();
     } catch (e) {
+      debugPrint('DebtDB error: $e');
       return [];
     }
   }
@@ -176,6 +180,7 @@ class DebtDBHelper {
         return Debt.fromMap(maps.first);
       }
     } catch (e) {
+      debugPrint('DebtDB error: $e');
       // Return null if something goes wrong
     }
     return null;
@@ -187,6 +192,7 @@ class DebtDBHelper {
       return await dbClient.update(debtsTable, debt.toMap(),
           where: '$columnId = ?', whereArgs: [debt.id]);
     } catch (e) {
+      debugPrint('DebtDB error: $e');
       return -1;
     }
   }
@@ -201,6 +207,7 @@ class DebtDBHelper {
       return await dbClient
           .delete(debtsTable, where: '$columnId = ?', whereArgs: [id]);
     } catch (e) {
+      debugPrint('DebtDB error: $e');
       return -1;
     }
   }
@@ -216,6 +223,7 @@ class DebtDBHelper {
       );
       return debts.map((map) => Debt.fromMap(map)).toList();
     } catch (e) {
+      debugPrint('DebtDB error: $e');
       return [];
     }
   }
@@ -231,6 +239,7 @@ class DebtDBHelper {
       );
       return debts.map((map) => Debt.fromMap(map)).toList();
     } catch (e) {
+      debugPrint('DebtDB error: $e');
       return [];
     }
   }
@@ -250,6 +259,7 @@ class DebtDBHelper {
     try {
       return await dbClient.insert(paymentsTable, payment.toMap());
     } catch (e) {
+      debugPrint('DebtDB error: $e');
       return -1;
     }
   }
@@ -265,6 +275,7 @@ class DebtDBHelper {
       );
       return payments.map((map) => DebtPayment.fromMap(map)).toList();
     } catch (e) {
+      debugPrint('DebtDB error: $e');
       return [];
     }
   }
@@ -275,6 +286,7 @@ class DebtDBHelper {
       return await dbClient.delete(paymentsTable,
           where: '$paymentColumnId = ?', whereArgs: [id]);
     } catch (e) {
+      debugPrint('DebtDB error: $e');
       return -1;
     }
   }
@@ -297,6 +309,7 @@ class DebtDBHelper {
       }
       return 0.0;
     } catch (e) {
+      debugPrint('DebtDB error: $e');
       return 0.0;
     }
   }
@@ -325,6 +338,7 @@ class DebtDBHelper {
       }
       return 0;
     } catch (e) {
+      debugPrint('DebtDB error: $e');
       return 0;
     }
   }
@@ -334,6 +348,7 @@ class DebtDBHelper {
     try {
       await dbClient.close();
     } catch (e) {
+      debugPrint('DebtDB error: $e');
       // Ignore errors on close
     }
   }

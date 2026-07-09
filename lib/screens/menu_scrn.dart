@@ -9,6 +9,7 @@ import 'ai_assistant_screen.dart';
 import 'transaction_form.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
+import '../utilities/id_generator.dart';
 import '../providers/monthly_budget_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/account_provider.dart';
@@ -126,7 +127,7 @@ class BottomNavBarState extends State<MenuScrn>
         settings.recurIncome &&
         settings.monthlyIncome > 0) {
       final incomeTransaction = Transaction.createNew(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: newId(),
         amount: settings.monthlyIncome,
         categoryId: defaultIncomeCat,
         accountId: accountProvider.defaultAccount?.id ?? 1,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/goal_provider.dart';
+import '../utilities/id_generator.dart';
 import '../models/goal.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
@@ -142,7 +143,7 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
       await goalProvider.updateGoal(goal);
     } else {
       goal = Goal.createNew(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: newId(),
         title: _titleController.text.trim(),
         targetAmount: targetAmount,
         currentAmount: currentAmount,

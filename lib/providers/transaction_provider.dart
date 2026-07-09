@@ -1,5 +1,9 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../db/category_db_helper.dart';
+import '../db/receipt_db_helper.dart';
+import '../utilities/id_generator.dart';
 import '../models/category_amount.dart';
 import '../models/transaction.dart';
 import '../db/transaction_db_helper.dart';
@@ -180,6 +184,24 @@ class TransactionProvider extends ChangeNotifier {
         existingTransaction.isExpense != updatedTransaction.isExpense;
   }
 
+  /// Deletes a receipt's DB row and its image file. Failures are logged but
+  /// never abort the caller — a missing file must not block a delete.
+  Future<void> _deleteReceipt(String receiptId) async {
+    try {
+      final receiptDb = ReceiptDBHelper();
+      final receipt = await receiptDb.getReceiptById(receiptId);
+      if (receipt != null) {
+        final file = File(receipt.imagePath);
+        if (await file.exists()) {
+          await file.delete();
+        }
+        await receiptDb.deleteReceipt(receiptId);
+      }
+    } catch (e) {
+      debugPrint('Receipt cleanup failed for $receiptId: $e');
+    }
+  }
+
   Future<void> deleteTransaction(String id) async {
     final transactionIndex = _transactions.indexWhere((t) => t.id == id);
     final transaction = transactionIndex == -1
@@ -203,6 +225,12 @@ class TransactionProvider extends ChangeNotifier {
 
     _transactions.removeWhere((t) => t.id == id);
     await _dbHelper.deleteTransaction(id);
+
+    // Clean up the attached receipt (row + image file) so deleting a
+    // transaction never leaves an orphaned receipt behind.
+    if (transaction.receiptId != null) {
+      await _deleteReceipt(transaction.receiptId!);
+    }
 
     DateTime startDate =
         DateTime(transaction.date.year, transaction.date.month, 1);
@@ -426,8 +454,7 @@ class TransactionProvider extends ChangeNotifier {
 
     // Clone and Create
     Transaction newTransaction = Transaction.createNew(
-      id: DateTime.now().millisecondsSinceEpoch.toString() +
-          originalTransaction.id.substring(0, 5), // Ensure unique ID
+      id: newId(),
       title: originalTransaction.title,
       amount: originalTransaction.amount,
       categoryId: originalTransaction.categoryId,

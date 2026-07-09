@@ -99,6 +99,7 @@ class TransactionDBHelper {
         await db.execute(
             'ALTER TABLE $tableName ADD COLUMN account_id INTEGER DEFAULT 1');
       } catch (e) {
+        debugPrint('TransactionDB error: $e');
         // Column might already exist
         debugPrint('Note: account_id column might already exist');
       }
@@ -201,6 +202,7 @@ class TransactionDBHelper {
     try {
       return await dbClient.insert(tableName, transaction.toMap());
     } catch (e) {
+      debugPrint('TransactionDB error: $e');
       return -1;
     }
   }
@@ -214,6 +216,7 @@ class TransactionDBHelper {
           .map((map) => trans_model.Transaction.fromMap(map))
           .toList();
     } catch (e) {
+      debugPrint('TransactionDB error: $e');
       return [];
     }
   }
@@ -230,6 +233,7 @@ class TransactionDBHelper {
         return trans_model.Transaction.fromMap(maps.first);
       }
     } catch (e) {
+      debugPrint('TransactionDB error: $e');
       // Return null if something goes wrong
     }
     return null;
@@ -241,6 +245,7 @@ class TransactionDBHelper {
       return await dbClient.update(tableName, transaction.toMap(),
           where: '$columnId = ?', whereArgs: [transaction.id]);
     } catch (e) {
+      debugPrint('TransactionDB error: $e');
       return -1;
     }
   }
@@ -251,6 +256,7 @@ class TransactionDBHelper {
       return await dbClient
           .delete(tableName, where: '$columnId = ?', whereArgs: [id]);
     } catch (e) {
+      debugPrint('TransactionDB error: $e');
       return -1;
     }
   }
@@ -402,6 +408,7 @@ class TransactionDBHelper {
 
       return 0.0;
     } catch (e) {
+      debugPrint('TransactionDB error: $e');
       return 0.0;
     }
   }
@@ -465,6 +472,7 @@ class TransactionDBHelper {
           .map((map) => trans_model.Transaction.fromMap(map))
           .toList();
     } catch (e) {
+      debugPrint('TransactionDB error: $e');
       return [];
     }
   }
@@ -490,6 +498,7 @@ class TransactionDBHelper {
         return result.first[columnCategoryId] as int;
       }
     } catch (e) {
+      debugPrint('TransactionDB error: $e');
       // ignore, fall through to null
     }
     return null;
@@ -527,6 +536,7 @@ class TransactionDBHelper {
           .map((map) => trans_model.Transaction.fromMap(map))
           .toList();
     } catch (e) {
+      debugPrint('TransactionDB error: $e');
       return [];
     }
   }
@@ -554,6 +564,7 @@ class TransactionDBHelper {
           .map((map) => trans_model.Transaction.fromMap(map))
           .toList();
     } catch (e) {
+      debugPrint('TransactionDB error: $e');
       return [];
     }
   }
@@ -581,6 +592,7 @@ class TransactionDBHelper {
           .map((map) => trans_model.Transaction.fromMap(map))
           .toList();
     } catch (e) {
+      debugPrint('TransactionDB error: $e');
       return [];
     }
   }
@@ -590,6 +602,7 @@ class TransactionDBHelper {
     try {
       await dbClient.close();
     } catch (e) {
+      debugPrint('TransactionDB error: $e');
       // Ignore errors on close
     }
   }

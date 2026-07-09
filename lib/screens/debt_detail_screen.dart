@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/account_provider.dart';
+import '../utilities/id_generator.dart';
 import '../providers/category_provider.dart';
 import '../providers/debt_provider.dart';
 import '../providers/settings_provider.dart';
@@ -77,7 +78,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
     final categoryId = await _miscCategoryId(isExpense);
 
     final transaction = Transaction.createNew(
-      id: UniqueKey().toString(),
+      id: newId(),
       title: isExpense
           ? 'Paid ${debt.debtorName} · ${debt.title}'
           : 'Repayment from ${debt.debtorName} · ${debt.title}',
@@ -455,6 +456,10 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                 final debtProvider = Provider.of<DebtProvider>(
                                     this.context,
                                     listen: false);
+                                final transactionProvider =
+                                    Provider.of<TransactionProvider>(
+                                        this.context,
+                                        listen: false);
                                 final messenger = ScaffoldMessenger.of(context);
                                 final navigator = Navigator.of(context);
 
@@ -486,6 +491,16 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
 
                                 final success = await debtProvider
                                     .recordPayment(debt.id, payment);
+
+                                // Roll back the settlement transaction if the
+                                // payment was rejected, so we never leave a
+                                // spend record for a payment that didn't apply.
+                                if (!success &&
+                                    settlementTransactionId != null) {
+                                  await transactionProvider
+                                      .deleteTransaction(
+                                          settlementTransactionId);
+                                }
 
                                 if (!context.mounted) return;
                                 navigator.pop();
@@ -596,6 +611,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
     if (confirmed == true) {
       if (!mounted) return;
       final debtProvider = Provider.of<DebtProvider>(context, listen: false);
+      final transactionProvider =
+          Provider.of<TransactionProvider>(context, listen: false);
 
       // Mirror the final payment into transactions before settling, so the
       // payment record can link back to it.
@@ -610,6 +627,11 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
 
       final success = await debtProvider.markAsPaid(widget.debtId,
           transactionId: settlementTransactionId);
+
+      // Roll back the settlement transaction if settling failed.
+      if (!success && settlementTransactionId != null) {
+        await transactionProvider.deleteTransaction(settlementTransactionId);
+      }
 
       if (!mounted) return;
 

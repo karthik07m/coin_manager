@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../db/debt_db_helper.dart';
+import '../utilities/id_generator.dart';
 import '../models/debt.dart';
 import '../models/debt_payment.dart';
 
@@ -122,13 +123,22 @@ class DebtProvider with ChangeNotifier {
   // Record a payment for a debt
   Future<bool> recordPayment(String debtId, DebtPayment payment) async {
     try {
+      // Fetch the debt and guard BEFORE any write, so a rejected payment
+      // never leaves an orphaned payment row behind.
+      final debt = getDebtById(debtId);
+      if (debt == null) return false;
+
+      // Reject overpayment. Epsilon (0.005) tolerates floating-point drift —
+      // markAsPaid records exactly the remaining amount, which can carry
+      // rounding error like 33.333333333333336.
+      final remaining = debt.getRemainingAmount();
+      if (payment.amount > remaining + 0.005) {
+        return false;
+      }
+
       // Insert payment record
       final paymentResult = await _dbHelper.insertPayment(payment);
       if (paymentResult == -1) return false;
-
-      // Get the debt
-      final debt = getDebtById(debtId);
-      if (debt == null) return false;
 
       // Update debt's amount paid
       debt.amountPaid += payment.amount;
@@ -167,7 +177,7 @@ class DebtProvider with ChangeNotifier {
       final remaining = debt.getRemainingAmount();
       if (remaining > 0) {
         final payment = DebtPayment.createNew(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          id: newId(),
           debtId: debtId,
           amount: remaining,
           paymentDate: DateTime.now(),

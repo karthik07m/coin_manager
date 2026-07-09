@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
@@ -89,6 +90,7 @@ class GoalDBHelper {
     try {
       return await dbClient.insert(goalsTable, goal.toMap());
     } catch (e) {
+      debugPrint('GoalDB error: $e');
       return -1;
     }
   }
@@ -102,6 +104,7 @@ class GoalDBHelper {
       );
       return goals.map((map) => Goal.fromMap(map)).toList();
     } catch (e) {
+      debugPrint('GoalDB error: $e');
       return [];
     }
   }
@@ -118,6 +121,7 @@ class GoalDBHelper {
         return Goal.fromMap(maps.first);
       }
     } catch (e) {
+      debugPrint('GoalDB error: $e');
       // Return null if something goes wrong
     }
     return null;
@@ -129,6 +133,7 @@ class GoalDBHelper {
       return await dbClient.update(goalsTable, goal.toMap(),
           where: '$columnId = ?', whereArgs: [goal.id]);
     } catch (e) {
+      debugPrint('GoalDB error: $e');
       return -1;
     }
   }
@@ -141,6 +146,7 @@ class GoalDBHelper {
       return await dbClient
           .delete(goalsTable, where: '$columnId = ?', whereArgs: [id]);
     } catch (e) {
+      debugPrint('GoalDB error: $e');
       return -1;
     }
   }
@@ -152,6 +158,7 @@ class GoalDBHelper {
     try {
       return await dbClient.insert(contributionsTable, contribution.toMap());
     } catch (e) {
+      debugPrint('GoalDB error: $e');
       return -1;
     }
   }
@@ -170,6 +177,7 @@ class GoalDBHelper {
           .map((map) => GoalContribution.fromMap(map))
           .toList();
     } catch (e) {
+      debugPrint('GoalDB error: $e');
       return [];
     }
   }
@@ -179,6 +187,7 @@ class GoalDBHelper {
     try {
       await dbClient.close();
     } catch (e) {
+      debugPrint('GoalDB error: $e');
       // Ignore errors on close
     }
   }
