@@ -79,7 +79,6 @@ class TransactionFormState extends State<TransactionForm> {
     super.initState();
     _titleController = TextEditingController();
     _titleController.addListener(_onTitleChanged);
-    _noteFocusNode.addListener(_handleNoteFocusChanged);
 
     final categoryProvider =
         Provider.of<CategoryProvider>(context, listen: false);
@@ -99,11 +98,6 @@ class TransactionFormState extends State<TransactionForm> {
     });
   }
 
-  void _handleNoteFocusChanged() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
 
   Future<void> _loadAccounts(AccountProvider accountProvider) async {
     if (!accountProvider.isLoaded) {
@@ -333,7 +327,6 @@ class TransactionFormState extends State<TransactionForm> {
   @override
   void dispose() {
     _titleDebounce?.cancel();
-    _noteFocusNode.removeListener(_handleNoteFocusChanged);
     _noteFocusNode.dispose();
     _titleController.dispose();
     _loanPersonController.dispose();
@@ -1067,7 +1060,6 @@ class TransactionFormState extends State<TransactionForm> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isEditingNote = _noteFocusNode.hasFocus;
     return Scaffold(
       backgroundColor: context.appBackground,
       resizeToAvoidBottomInset: false,
@@ -1110,11 +1102,8 @@ class TransactionFormState extends State<TransactionForm> {
                         constraints:
                             BoxConstraints(minHeight: constraints.maxHeight),
                         child: Column(
-                          mainAxisAlignment: isEditingNote
-                              ? MainAxisAlignment.start
-                              : MainAxisAlignment.center,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            SizedBox(height: isEditingNote ? 24 : 0),
                             _buildAmountDisplay(),
                             _buildNoteField(),
                           ],
@@ -1125,7 +1114,10 @@ class TransactionFormState extends State<TransactionForm> {
                 ),
               ),
 
-              if (!isEditingNote) ...[
+              // Chips + keypad stay mounted; the system keyboard simply
+              // overlays them when the note is focused, so there's no layout
+              // reflow to fight the keyboard's slide animation.
+              ...[
                 // Chips: category / account / date / extras
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
