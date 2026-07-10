@@ -208,7 +208,7 @@ class QuickStatsWidget extends StatelessWidget {
                         ),
                         if (isCurrentMonth)
                           Text(
-                            '${calendarProgress.toStringAsFixed(0)}% of month gone',
+                            'Day ${now.day} of $daysInMonth',
                             style: AppTextStyles.caption.copyWith(
                               color: context.textSecondary
                                   .withValues(alpha: 0.8),
