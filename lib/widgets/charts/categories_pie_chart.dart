@@ -128,6 +128,12 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
     final filteredTotal =
         displayCategories.fold(0.0, (sum, cat) => sum + cat.amount);
 
+    // Center "Total" reflects every SELECTED category (not just the top 6
+    // drawn), so unchecking a category always subtracts its amount.
+    final selectedTotal = sortedCategories
+        .where((cat) => _selectedCategories.contains(cat.name))
+        .fold(0.0, (sum, cat) => sum + cat.amount);
+
     final hasSelection = displayCategories.isNotEmpty;
     // Don't use swap animation during the entrance sweep to avoid lag
     // Use it only for touch interactions after entrance is done
@@ -161,7 +167,7 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
                   ),
                 ),
                 child: Text(
-                  UtilityFunction.addCommaWithSign(widget.totalExpenses),
+                  UtilityFunction.addCommaWithSign(selectedTotal),
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: context.appAccent,
                     fontWeight: FontWeight.bold,
@@ -279,7 +285,7 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
                                       const SizedBox(height: 4),
                                       Text(
                                         UtilityFunction.addCommaWithSign(
-                                            sel?.amount ?? widget.totalExpenses),
+                                            sel?.amount ?? selectedTotal),
                                         style: AppTextStyles.h2.copyWith(
                                           color: hasTouched
                                               ? selColor
