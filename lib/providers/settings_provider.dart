@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/notification_service.dart';
+import '../services/bill_reminder_scheduler.dart';
 import '../utilities/budget_rules.dart';
 
 class AccentColorOption {
@@ -43,6 +44,7 @@ class SettingsProvider extends ChangeNotifier {
   String _lastAutoIncomeMonth =
       ''; // "YYYY-M" of the last month auto-income was added
   bool _enableNotifications = false;
+  bool _billRemindersEnabled = false;
   TimeOfDay _notificationTime =
       const TimeOfDay(hour: 20, minute: 0); // Default 8 PM
   bool _isAppLockEnabled = false;
@@ -79,6 +81,7 @@ class SettingsProvider extends ChangeNotifier {
   int get incomeDay => _incomeDay;
   bool get use24HourFormat => _use24HourFormat;
   bool get enableNotifications => _enableNotifications;
+  bool get billRemindersEnabled => _billRemindersEnabled;
   String get lastAutoIncomeMonth => _lastAutoIncomeMonth;
   TimeOfDay get notificationTime => _notificationTime;
   bool get isAppLockEnabled => _isAppLockEnabled;
@@ -129,6 +132,7 @@ class SettingsProvider extends ChangeNotifier {
     _lastAutoIncomeMonth = prefs.getString('lastAutoIncomeMonth') ?? '';
     _use24HourFormat = prefs.getBool('use24HourFormat') ?? false;
     _enableNotifications = prefs.getBool('enableNotifications') ?? false;
+    _billRemindersEnabled = prefs.getBool('billRemindersEnabled') ?? false;
     _isAppLockEnabled = prefs.getBool('isAppLockEnabled') ?? false;
     _aiAssistantEnabled = prefs.getBool('aiAssistantEnabled') ?? false;
     _aiFunctionUrl = prefs.getString('aiFunctionUrl') ?? defaultAiFunctionUrl;
@@ -237,6 +241,20 @@ class SettingsProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('use24HourFormat', use24Hour);
     notifyListeners();
+  }
+
+  Future<void> setBillRemindersEnabled(bool enable) async {
+    _billRemindersEnabled = enable;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('billRemindersEnabled', enable);
+    notifyListeners();
+
+    if (enable) {
+      await NotificationService().requestPermissions();
+    }
+    // reschedule() reads the flag we just persisted: it schedules when on,
+    // and cancels everything when off.
+    await BillReminderScheduler().reschedule();
   }
 
   Future<void> toggleNotifications(bool enable) async {

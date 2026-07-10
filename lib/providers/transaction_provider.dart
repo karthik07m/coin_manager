@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../db/category_db_helper.dart';
 import '../db/receipt_db_helper.dart';
+import '../services/bill_reminder_scheduler.dart';
 import '../utilities/id_generator.dart';
 import '../models/category_amount.dart';
 import '../models/transaction.dart';
@@ -120,6 +121,9 @@ class TransactionProvider extends ChangeNotifier {
     await _calculateCategoryAmounts(); // Await to avoid double-notify race
     await loadUpcomingTransactions(notify: false); // Refresh upcoming payments
     notifyListeners(); // Single notify after ALL data is ready
+    // Only recurring bills feed the reminder scheduler; skip the churn on
+    // ordinary one-off transactions.
+    if (transaction.isRecurring) BillReminderScheduler().reschedule();
   }
 
   Future<void> updateTransaction(Transaction transaction) async {
@@ -162,6 +166,7 @@ class TransactionProvider extends ChangeNotifier {
     await _calculateCategoryAmounts(); // Await to avoid double-notify race
     await loadUpcomingTransactions(notify: false); // Refresh upcoming payments
     notifyListeners(); // Single notify after ALL data is ready
+    if (transaction.isRecurring) BillReminderScheduler().reschedule();
   }
 
   bool _shouldRefreshRecurringSeries(
@@ -241,6 +246,7 @@ class TransactionProvider extends ChangeNotifier {
     await _calculateCategoryAmounts(); // Await to avoid double-notify race
     await loadUpcomingTransactions(notify: false); // Refresh upcoming payments
     notifyListeners(); // Single notify after ALL data is ready
+    if (transaction.isRecurring) BillReminderScheduler().reschedule();
   }
 
   /// Stop a recurring payment by disabling its recurring flag and deleting all future instances
@@ -267,6 +273,7 @@ class TransactionProvider extends ChangeNotifier {
     await loadUpcomingTransactions(notify: false);
 
     notifyListeners();
+    BillReminderScheduler().reschedule();
   }
 
   void _updateTotalsForMonth(DateTime startDate, DateTime endDate) {

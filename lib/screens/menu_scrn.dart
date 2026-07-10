@@ -17,6 +17,7 @@ import '../models/transaction.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/budget_period.dart';
+import '../services/bill_reminder_scheduler.dart';
 
 class MenuScrn extends StatefulWidget {
   const MenuScrn({super.key});
@@ -148,6 +149,10 @@ class BottomNavBarState extends State<MenuScrn>
         );
       }
     }
+
+    // Refresh bill/debt due-date reminders now that recurring instances and
+    // this month's data are up to date. No-ops if reminders are disabled.
+    await BillReminderScheduler().reschedule();
   }
 
   void _onItemTapped(int index) {

@@ -66,6 +66,76 @@ class NotificationService {
         .resolvePlatformSpecificImplementation<
             fln.AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(androidChannel);
+
+    // Channel for bill / debt due-date reminders.
+    const billChannel = fln.AndroidNotificationChannel(
+      'bill_reminder_channel',
+      'Bill Reminders',
+      description: 'Upcoming bill and debt due dates',
+      importance: fln.Importance.max,
+    );
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            fln.AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(billChannel);
+  }
+
+  /// Schedule a one-off notification on the bill-reminder channel.
+  /// No-ops on a past instant (zonedSchedule throws otherwise).
+  Future<void> scheduleOneTime({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime when,
+  }) async {
+    if (when.isBefore(DateTime.now())) return;
+    try {
+      final canScheduleExact = await canScheduleExactAlarms();
+      final scheduleMode = canScheduleExact
+          ? fln.AndroidScheduleMode.exactAllowWhileIdle
+          : fln.AndroidScheduleMode.inexactAllowWhileIdle;
+
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        id,
+        title,
+        body,
+        tz.TZDateTime.from(when, tz.local),
+        const fln.NotificationDetails(
+          android: fln.AndroidNotificationDetails(
+            'bill_reminder_channel',
+            'Bill Reminders',
+            channelDescription: 'Upcoming bill and debt due dates',
+            importance: fln.Importance.max,
+            priority: fln.Priority.high,
+          ),
+          iOS: fln.DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+          macOS: fln.DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        androidScheduleMode: scheduleMode,
+        // One-shot: no matchDateTimeComponents (that would make it repeat).
+      );
+    } catch (e) {
+      debugPrint('Error scheduling bill reminder $id: $e');
+    }
+  }
+
+  /// Cancel a set of previously-scheduled notification ids.
+  Future<void> cancelIds(List<int> ids) async {
+    for (final id in ids) {
+      try {
+        await flutterLocalNotificationsPlugin.cancel(id);
+      } catch (e) {
+        debugPrint('Error cancelling notification $id: $e');
+      }
+    }
   }
 
   Future<void> requestPermissions() async {

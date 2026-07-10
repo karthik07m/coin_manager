@@ -171,6 +171,25 @@ class SettingsScreen extends StatelessWidget {
                   );
                 },
               ),
+              Consumer<SettingsProvider>(
+                builder: (context, settings, child) {
+                  return _buildSettingTile(
+                    context,
+                    icon: Icons.event_available_outlined,
+                    activeIcon: Icons.event_available,
+                    title: 'Bill Reminders',
+                    subtitle: settings.billRemindersEnabled
+                        ? 'Notified the day before bills and debts are due'
+                        : 'Bill reminders disabled',
+                    trailing: Switch(
+                      value: settings.billRemindersEnabled,
+                      onChanged: (value) {
+                        settings.setBillRemindersEnabled(value);
+                      },
+                    ),
+                  );
+                },
+              ),
             ],
           ),
           const SizedBox(height: AppDimensions.spacing24),

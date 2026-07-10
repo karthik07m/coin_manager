@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../db/debt_db_helper.dart';
+import '../services/bill_reminder_scheduler.dart';
 import '../utilities/id_generator.dart';
 import '../models/debt.dart';
 import '../models/debt_payment.dart';
@@ -72,6 +73,12 @@ class DebtProvider with ChangeNotifier {
     }
   }
 
+  // Refresh due-date reminders after any change that affects debts.
+  // Fire-and-forget: no-ops when bill reminders are disabled in settings.
+  void _refreshReminders() {
+    BillReminderScheduler().reschedule();
+  }
+
   // Add a new debt
   Future<bool> addDebt(Debt debt) async {
     try {
@@ -79,6 +86,7 @@ class DebtProvider with ChangeNotifier {
       if (result != -1) {
         _debts.add(debt);
         notifyListeners();
+        _refreshReminders();
         return true;
       }
       return false;
@@ -96,6 +104,7 @@ class DebtProvider with ChangeNotifier {
         if (index != -1) {
           _debts[index] = debt;
           notifyListeners();
+          _refreshReminders();
           return true;
         }
       }
@@ -112,6 +121,7 @@ class DebtProvider with ChangeNotifier {
       if (result != -1) {
         _debts.removeWhere((debt) => debt.id == id);
         notifyListeners();
+        _refreshReminders();
         return true;
       }
       return false;
@@ -149,6 +159,7 @@ class DebtProvider with ChangeNotifier {
       final debtResult = await _dbHelper.updateDebt(debt);
       if (debtResult != -1) {
         notifyListeners();
+        _refreshReminders();
         return true;
       }
       return false;
