@@ -196,20 +196,22 @@ class QuickStatsWidget extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        // Colour-matched to the fill so it's clearly the bar's value.
                         Text(
-                          'Spent ${money(totalExpenses)} · ${budgetUsedPercent.toStringAsFixed(0)}%',
+                          'Spent ${budgetUsedPercent.toStringAsFixed(0)}% of budget',
                           style: AppTextStyles.caption.copyWith(
-                            color: context.textSecondary,
+                            color: statusColor,
                             fontSize: 11,
+                            fontWeight: FontWeight.w600,
                             letterSpacing: 0,
                           ),
                         ),
                         if (isCurrentMonth)
                           Text(
-                            'Today · ${calendarProgress.toStringAsFixed(0)}%',
+                            '${calendarProgress.toStringAsFixed(0)}% of month gone',
                             style: AppTextStyles.caption.copyWith(
                               color: context.textSecondary
-                                  .withValues(alpha: 0.7),
+                                  .withValues(alpha: 0.8),
                               fontSize: 11,
                               letterSpacing: 0,
                             ),
@@ -319,8 +321,9 @@ class QuickStatsWidget extends StatelessWidget {
     );
   }
 
-  /// Single progress bar: colored fill for spending, subtle vertical tick
-  /// marking where "today" falls in the month, so pace is read at a glance.
+  /// Progress bar: colored fill = how much of the budget is spent; a labeled
+  /// "TODAY" marker = how far through the month you are. When the fill is past
+  /// the marker you're spending faster than the month is elapsing.
   Widget _buildPaceBar(
     BuildContext context, {
     required double spentFraction,
@@ -328,18 +331,63 @@ class QuickStatsWidget extends StatelessWidget {
     required bool showTodayMarker,
     required Color statusColor,
   }) {
+    const double barHeight = 12;
+    const double labelWidth = 62;
+    // Space reserved above the bar for the TODAY label + pointer.
+    final double topInset = showTodayMarker ? 22 : 0;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
+        final markerX = (width * todayFraction).clamp(0.0, width);
+
         return SizedBox(
-          height: 14,
+          height: topInset + barHeight,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
+              // "TODAY" label + downward caret, centered over the marker.
+              if (showTodayMarker)
+                Positioned(
+                  left: (markerX - labelWidth / 2)
+                      .clamp(0.0, width - labelWidth),
+                  top: 0,
+                  width: labelWidth,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'TODAY',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.caption.copyWith(
+                          color: context.textPrimary.withValues(alpha: 0.9),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              // Caret pinned exactly at the marker (independent of the label
+              // box, so it stays aligned even when the label is clamped).
+              if (showTodayMarker)
+                Positioned(
+                  left: markerX - 4,
+                  top: 13,
+                  child: CustomPaint(
+                    size: const Size(8, 5),
+                    painter: _CaretPainter(
+                      context.textPrimary.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ),
               // Track
-              Positioned.fill(
-                top: 1,
-                bottom: 1,
+              Positioned(
+                left: 0,
+                right: 0,
+                top: topInset,
+                height: barHeight,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: AppColors.divider.withValues(alpha: 0.35),
@@ -347,11 +395,11 @@ class QuickStatsWidget extends StatelessWidget {
                   ),
                 ),
               ),
-              // Fill
+              // Fill (spent)
               Positioned(
                 left: 0,
-                top: 1,
-                bottom: 1,
+                top: topInset,
+                height: barHeight,
                 width: width * spentFraction,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -360,17 +408,16 @@ class QuickStatsWidget extends StatelessWidget {
                   ),
                 ),
               ),
-              // "Today" tick
+              // Today tick through the bar.
               if (showTodayMarker)
                 Positioned(
-                  left: (width * todayFraction - 1.25)
-                      .clamp(0.0, width - 2.5),
-                  top: -1,
-                  bottom: -1,
+                  left: (markerX - 1.25).clamp(0.0, width - 2.5),
+                  top: topInset - 2,
+                  height: barHeight + 4,
                   width: 2.5,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: context.textPrimary.withValues(alpha: 0.85),
+                      color: context.textPrimary.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -483,4 +530,24 @@ class QuickStatsWidget extends StatelessWidget {
       color: AppColors.divider.withValues(alpha: 0.5),
     );
   }
+}
+
+/// Small downward-pointing triangle under the "TODAY" label.
+class _CaretPainter extends CustomPainter {
+  final Color color;
+  _CaretPainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_CaretPainter oldDelegate) => oldDelegate.color != color;
 }
