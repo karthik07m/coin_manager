@@ -180,7 +180,7 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
           child: hasSelection
               ? SizedBox(
                   key: const ValueKey('category-chart'),
-                  height: 260,
+                  height: 320,
                   child: AnimatedBuilder(
                     animation: _animation,
                     builder: (context, child) {
@@ -645,8 +645,14 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
                 ]
               : null,
         ),
-        badgeWidget: _touchedIndex == i ? _buildBadge(cat.icon) : null,
-        badgePositionPercentageOffset: .98,
+        // Float icons on the ring once the entrance sweep finishes; always
+        // show the touched one (enlarged). ≥6% avoids crowding thin slices.
+        badgeWidget: (isTouched || (anim >= 0.99 && percentage >= 6))
+            ? _buildBadge(cat.icon, color, large: isTouched)
+            : null,
+        // Sit the badge just outside the ring so it never overlaps the
+        // in-slice percentage label.
+        badgePositionPercentageOffset: 1.35,
       ));
     }
 
@@ -674,25 +680,36 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
     return sections;
   }
 
-  Widget _buildBadge(String iconPath) {
-    return Container(
+  /// Circular category icon that floats on the donut ring, ringed and
+  /// glowing in the slice's colour so it reads as belonging to that wedge.
+  Widget _buildBadge(String iconPath, Color color, {bool large = false}) {
+    final double size = large ? 40 : 32;
+    final double iconSize = large ? 20 : 16;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      width: size,
+      height: size,
+      padding: EdgeInsets.all(large ? 8 : 6),
       decoration: BoxDecoration(
-        color: context.appBackground,
+        color: context.appSurface,
         shape: BoxShape.circle,
+        border: Border.all(color: color, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 4,
+            color: color.withValues(alpha: 0.4),
+            blurRadius: large ? 12 : 7,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(6),
       child: Image.asset(
         iconPath,
-        width: 16,
-        height: 16,
+        width: iconSize,
+        height: iconSize,
         fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) =>
+            Icon(Icons.category, size: iconSize, color: color),
       ),
     );
   }
