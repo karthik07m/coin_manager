@@ -647,7 +647,11 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
         ),
         // Float icons on the ring once the entrance sweep finishes; always
         // show the touched one (enlarged). ≥6% avoids crowding thin slices.
-        badgeWidget: (isTouched || (anim >= 0.99 && percentage >= 6))
+        // Badge major slices only. Use the *rounded* percentage so a slice
+        // that displays "6%" (e.g. 5.9%) also gets its icon — thin 3%-ish
+        // slices cluster too tightly for floating icons and stay in the
+        // legend below.
+        badgeWidget: (isTouched || (anim >= 0.99 && percentage.round() >= 6))
             ? _buildBadge(cat.icon, color, large: isTouched)
             : null,
         // Sit the badge just outside the ring so it never overlaps the
