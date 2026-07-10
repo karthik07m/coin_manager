@@ -207,6 +207,23 @@ class TransactionDBHelper {
     }
   }
 
+  /// Batch-insert transactions (CSV import). One commit for the whole set.
+  Future<int> insertTransactionsBatch(
+      List<trans_model.Transaction> transactions) async {
+    var dbClient = await database;
+    try {
+      final batch = dbClient.batch();
+      for (final t in transactions) {
+        batch.insert(tableName, t.toMap());
+      }
+      await batch.commit(noResult: true);
+      return transactions.length;
+    } catch (e) {
+      debugPrint('TransactionDB insertTransactionsBatch error: $e');
+      return 0;
+    }
+  }
+
   Future<List<trans_model.Transaction>> getTransactions() async {
     var dbClient = await database;
     try {

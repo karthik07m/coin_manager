@@ -1,9 +1,13 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/transaction_provider.dart';
 import '../services/app_lock_service.dart';
 import '../services/backup_service.dart';
 import '../services/export_service.dart';
+import '../services/import_service.dart';
+import '../utilities/budget_period.dart';
 import 'category_manger.dart';
 import 'manage_budget.dart';
 import 'privacy_policy.dart';
@@ -339,6 +343,16 @@ class SettingsScreen extends StatelessWidget {
               ),
               _buildSettingTile(
                 context,
+                icon: Icons.file_upload_outlined,
+                activeIcon: Icons.file_upload,
+                title: 'Import Transactions CSV',
+                subtitle: 'Add transactions from a CSV file',
+                onTap: () async {
+                  await _importTransactionsCsv(context);
+                },
+              ),
+              _buildSettingTile(
+                context,
                 icon: Icons.folder_open,
                 activeIcon: Icons.folder_open,
                 title: 'Manage Backups',
@@ -650,6 +664,87 @@ class SettingsScreen extends StatelessWidget {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Export failed: ${e.toString()}')),
+      );
+    }
+  }
+
+  Future<void> _importTransactionsCsv(BuildContext context) async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+    );
+    if (picked == null || picked.files.single.path == null) return;
+    final path = picked.files.single.path!;
+
+    if (!context.mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text('Importing transactions...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final result = await ImportService().importTransactionsCsv(path);
+
+      // Refresh app state so imported rows appear without a restart.
+      if (context.mounted) {
+        final txProvider =
+            Provider.of<TransactionProvider>(context, listen: false);
+        final now = DateTime.now();
+        await txProvider.loadTransactionsFromDB(
+          startDate: BudgetPeriod.startOfMonth(now),
+          endDate: BudgetPeriod.endOfMonth(now),
+        );
+        await txProvider.loadUpcomingTransactions();
+      }
+
+      if (!context.mounted) return;
+      Navigator.of(context).pop(); // close progress
+
+      final summary =
+          'Imported ${result.imported} · Skipped ${result.skippedDuplicates} duplicate(s) · ${result.failed} failed';
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Import Complete'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(summary),
+              if (result.errors.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  result.errors.take(5).join('\n'),
+                  style: const TextStyle(fontSize: 12),
+                ),
+                if (result.errors.length > 5)
+                  Text('…and ${result.errors.length - 5} more',
+                      style: const TextStyle(fontSize: 12)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Import failed: ${e.toString()}')),
       );
     }
   }
