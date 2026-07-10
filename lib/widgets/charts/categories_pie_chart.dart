@@ -488,18 +488,34 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Amount
-                    AnimatedDefaultTextStyle(
-                      duration: _selectionAnimationDuration,
-                      curve: _selectionAnimationCurve,
-                      style: AppTextStyles.h3.copyWith(
-                        color: isSelected ? color : context.textSecondary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                      child: Text(
-                        UtilityFunction.addCommaWithSign(category.amount),
-                      ),
+                    // Amount + share of spending
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedDefaultTextStyle(
+                          duration: _selectionAnimationDuration,
+                          curve: _selectionAnimationCurve,
+                          style: AppTextStyles.h3.copyWith(
+                            color: isSelected ? color : context.textSecondary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                          child: Text(
+                            UtilityFunction.addCommaWithSign(category.amount),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${percentage < 10 ? percentage.toStringAsFixed(1) : percentage.round()}%',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: (isSelected ? color : context.textSecondary)
+                                .withValues(alpha: 0.75),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

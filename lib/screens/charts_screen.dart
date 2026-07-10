@@ -699,7 +699,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
       return 'Spending is flat compared with last month.';
     }
     final direction = expenseDelta > 0 ? 'up' : 'down';
-    return 'Spending is $direction ${expensePercent.abs().toStringAsFixed(0)}%; $topCategory leads this month.';
+    return 'Spending is $direction ${expensePercent.abs().toStringAsFixed(0)}%. $topCategory leads this month.';
   }
 }
 
