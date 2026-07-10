@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -182,22 +181,13 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
           child: hasSelection
               ? SizedBox(
                   key: const ValueKey('category-chart'),
-                  height: 340,
+                  height: 300,
                   child: AnimatedBuilder(
                     animation: _animation,
                     builder: (context, child) {
-                      return LayoutBuilder(
-                          builder: (context, constraints) {
-                        return Stack(
+                      return Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          // Leader-line callouts (name + %) around the ring.
-                          if (_animation.value >= 0.99)
-                            ..._buildLeaderCallouts(
-                              constraints.biggest,
-                              displayCategories,
-                              sortedCategories,
-                            ),
                           PieChart(
                             PieChartData(
                               sections: _buildPieChartSections(
@@ -241,99 +231,122 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
                                 : _selectionAnimationDuration,
                             curve: _selectionAnimationCurve,
                           ),
-                          // Center display (Total or Selected) - Tappable for all transactions
+                          // Center display: total, or the selected slice's
+                          // name / amount / share. Tappable to open the list.
                           Center(
-                            child: GestureDetector(
-                              onTap: () {
-                                // Center opens the currently highlighted
-                                // category, or all transactions if none.
-                                final int? categoryId = _touchedIndex != null &&
-                                        _touchedIndex! >= 0 &&
-                                        _touchedIndex! <
-                                            displayCategories.length
-                                    ? displayCategories[_touchedIndex!].id
+                            child: Builder(
+                              builder: (context) {
+                                final bool hasTouched = _touchedIndex != null &&
+                                    _touchedIndex! >= 0 &&
+                                    _touchedIndex! < displayCategories.length;
+                                final CategoryAmount? sel = hasTouched
+                                    ? displayCategories[_touchedIndex!]
                                     : null;
-                                _openTransactions(categoryId);
+                                final double selPct =
+                                    (sel != null && filteredTotal > 0)
+                                        ? sel.amount / filteredTotal * 100
+                                        : 0.0;
+                                final int selColorIndex = hasTouched
+                                    ? sortedCategories
+                                        .indexWhere((c) => c.name == sel!.name)
+                                    : -1;
+                                final Color selColor = hasTouched
+                                    ? _getColor(selColorIndex != -1
+                                        ? selColorIndex
+                                        : _touchedIndex!)
+                                    : context.appAccent;
+
+                                return GestureDetector(
+                                  onTap: () => _openTransactions(sel?.id),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        sel?.name ?? 'Total',
+                                        style:
+                                            AppTextStyles.bodyMedium.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                          letterSpacing: 0.2,
+                                          color: hasTouched
+                                              ? selColor
+                                              : context.textSecondary,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        UtilityFunction.addCommaWithSign(
+                                            sel?.amount ?? widget.totalExpenses),
+                                        style: AppTextStyles.h2.copyWith(
+                                          color: hasTouched
+                                              ? selColor
+                                              : context.appAccent,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 22,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      // Selected → its share of spending;
+                                      // otherwise a "tap to view" hint.
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: (hasTouched
+                                                  ? selColor
+                                                  : context.appAccent)
+                                              .withValues(alpha: 0.12),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: hasTouched
+                                            ? Text(
+                                                '${selPct.toStringAsFixed(selPct < 10 ? 1 : 0)}% of spending',
+                                                style: AppTextStyles.bodySmall
+                                                    .copyWith(
+                                                  color: selColor,
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 11,
+                                                ),
+                                              )
+                                            : Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.touch_app,
+                                                    size: 14,
+                                                    color: context.appAccent,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    'View Details',
+                                                    style: AppTextStyles
+                                                        .bodySmall
+                                                        .copyWith(
+                                                      color: context.appAccent,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      fontSize: 11,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                      ),
+                                    ],
+                                  ),
+                                );
                               },
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    _touchedIndex != null &&
-                                            _touchedIndex! >= 0 &&
-                                            _touchedIndex! <
-                                                displayCategories.length
-                                        ? displayCategories[_touchedIndex!].name
-                                        : 'Total',
-                                    style: AppTextStyles.bodyMedium.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                      letterSpacing: 0.2,
-                                      color: context.textSecondary,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _touchedIndex != null &&
-                                            _touchedIndex! >= 0 &&
-                                            _touchedIndex! <
-                                                displayCategories.length
-                                        ? UtilityFunction.addCommaWithSign(
-                                            displayCategories[_touchedIndex!]
-                                                .amount)
-                                        : UtilityFunction.addCommaWithSign(widget
-                                            .totalExpenses), // Use the total from parent for accuracy
-                                    style: AppTextStyles.h2.copyWith(
-                                      color: context.appAccent,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 17,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 5),
-                                  // View Details hint
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: context.appAccent
-                                          .withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.touch_app,
-                                          size: 14,
-                                          color: context.appAccent,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          'View Details',
-                                          style:
-                                              AppTextStyles.bodySmall.copyWith(
-                                            color: context.appAccent,
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 11,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
                             ),
                           ),
                         ],
                       );
-                      });
                     },
                   ),
                 )
@@ -535,169 +548,11 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
   }
 
   // Uses a Dummy Section to simulate "Sweeping" animation
-  // Donut geometry (must match PieChartData below). Kept compact so the
-  // external leader-line labels have room beside it on a phone.
-  static const double _centerSpaceRadius = 58;
-  static const double _sectionRadius = 32;
-  static const double _sectionRadiusTouched = 38;
-  static const double _ringOuter = _centerSpaceRadius + _sectionRadius; // 90
+  // Donut geometry (must match PieChartData below).
+  static const double _centerSpaceRadius = 74;
+  static const double _sectionRadius = 50;
+  static const double _sectionRadiusTouched = 58;
 
-  /// External leader-line callouts: for each slice >=4%, a line runs from the
-  /// ring out to a floating "Name / % · amount" label — the professional
-  /// pie-chart style. Labels are split left/right and spread vertically so
-  /// they never overlap. Tiny slices stay in the legend below.
-  List<Widget> _buildLeaderCallouts(
-    Size size,
-    List<CategoryAmount> categories,
-    List<CategoryAmount> allSorted,
-  ) {
-    if (size.width <= 0 || size.height <= 0) return const [];
-    final total = categories.fold(0.0, (s, c) => s + c.amount);
-    if (total <= 0) return const [];
-
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-
-    // Build a callout per qualifying slice.
-    final left = <_Callout>[];
-    final right = <_Callout>[];
-    double cumulative = 0; // degrees swept so far
-    for (int i = 0; i < categories.length; i++) {
-      final cat = categories[i];
-      final pct = cat.amount / total * 100;
-      final sweep = cat.amount / total * 360;
-      final midDeg = 270 + cumulative + sweep / 2; // 270 = start at top
-      cumulative += sweep;
-      if (pct < 4) continue;
-
-      final rad = midDeg * math.pi / 180;
-      final cos = math.cos(rad);
-      final sin = math.sin(rad);
-      final anchor = Offset(cx + _ringOuter * cos, cy + _ringOuter * sin);
-      final knee = Offset(cx + (_ringOuter + 12) * cos, cy + (_ringOuter + 12) * sin);
-
-      final colorIndex = allSorted.indexWhere((c) => c.name == cat.name);
-      final color = _getColor(colorIndex != -1 ? colorIndex : i);
-
-      final callout = _Callout(
-        name: cat.name,
-        iconPath: cat.icon,
-        pct: pct,
-        amount: cat.amount,
-        color: color,
-        anchor: anchor,
-        knee: knee,
-        targetY: knee.dy,
-        onRight: cos >= 0,
-      );
-      (callout.onRight ? right : left).add(callout);
-    }
-
-    // Spread each side vertically so labels don't collide.
-    const labelH = 40.0;
-    void distribute(List<_Callout> list) {
-      list.sort((a, b) => a.targetY.compareTo(b.targetY));
-      for (int i = 1; i < list.length; i++) {
-        final minY = list[i - 1].y + labelH;
-        if (list[i].y < minY) list[i].y = minY;
-      }
-      // Nudge back up if we ran past the bottom.
-      final overflow = list.isNotEmpty ? list.last.y + labelH / 2 - size.height : 0;
-      if (overflow > 0) {
-        for (final c in list) {
-          c.y = (c.y - overflow).clamp(labelH / 2, size.height - labelH / 2);
-        }
-      }
-    }
-
-    for (final c in [...left, ...right]) {
-      c.y = c.targetY.clamp(labelH / 2, size.height - labelH / 2);
-    }
-    distribute(left);
-    distribute(right);
-
-    const double labelW = 82;
-    final widgets = <Widget>[
-      // The lines beneath the labels.
-      Positioned.fill(
-        child: IgnorePointer(
-          child: CustomPaint(
-            painter: _LeaderLinePainter(
-              callouts: [...left, ...right],
-              labelWidth: labelW,
-              size: size,
-            ),
-          ),
-        ),
-      ),
-    ];
-
-    for (final c in [...left, ...right]) {
-      widgets.add(Positioned(
-        top: c.y - labelH / 2,
-        left: c.onRight ? size.width - labelW : 0,
-        width: labelW,
-        height: labelH,
-        child: IgnorePointer(
-          child: Column(
-            crossAxisAlignment: c.onRight
-                ? CrossAxisAlignment.start
-                : CrossAxisAlignment.end,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Icon + name on one line (icon leads on whichever side).
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                textDirection:
-                    c.onRight ? TextDirection.ltr : TextDirection.rtl,
-                children: [
-                  Image.asset(
-                    c.iconPath,
-                    width: 14,
-                    height: 14,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) =>
-                        Icon(Icons.category, size: 14, color: c.color),
-                  ),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      c.name,
-                      textAlign: c.onRight ? TextAlign.left : TextAlign.right,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                        color: context.textPrimary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 1),
-              Text(
-                '${c.pct.toStringAsFixed(c.pct < 10 ? 1 : 0)}%',
-                textAlign: c.onRight ? TextAlign.left : TextAlign.right,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.caption.copyWith(
-                  fontSize: 11,
-                  letterSpacing: 0,
-                  color: c.color,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ));
-    }
-    return widgets;
-  }
-
-  /// Opens the month's transactions, optionally filtered to one category.
-  /// Shared by slice taps and the donut center.
   void _openTransactions(int? categoryId) {
     final startDate =
         DateTime(widget.currentMonth.year, widget.currentMonth.month, 1);
@@ -788,10 +643,12 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
         color: color,
         value: cat.amount,
         radius: radius,
-        // Percentages are rendered as external leader-line callouts (see the
-        // overlay in build); the in-slice title stays off to avoid clutter.
-        showTitle: false,
-        title: '${percentage.round()}%',
+        // Percentage sits inside the slice; label slices down to 3%.
+        showTitle: percentage >= 3,
+        title: percentage < 10
+            ? '${percentage.round()}%'
+            : '${percentage.toStringAsFixed(1)}%',
+        titlePositionPercentageOffset: 0.5,
         titleStyle: AppTextStyles.bodySmall.copyWith(
           color: Colors.white,
           fontWeight: FontWeight.bold,
@@ -806,11 +663,12 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
                 ]
               : null,
         ),
-        // Category icons now live in the external leader-line labels, so the
-        // thin band only shows an enlarged icon while a slice is touched.
-        badgeWidget:
-            isTouched ? _buildBadge(cat.icon, color, large: true) : null,
-        badgePositionPercentageOffset: 0.5,
+        // Category icon floats just outside the ring for major slices, and
+        // enlarges on touch. Offset 1.35 keeps it clear of the in-slice %.
+        badgeWidget: (isTouched || (anim >= 0.99 && percentage.round() >= 6))
+            ? _buildBadge(cat.icon, color, large: isTouched)
+            : null,
+        badgePositionPercentageOffset: 1.35,
       ));
     }
 
@@ -885,75 +743,3 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
   }
 }
 
-/// One external callout: an anchor on the ring, a knee just outside it, and a
-/// resolved label y (spread to avoid collisions).
-class _Callout {
-  final String name;
-  final String iconPath;
-  final double pct;
-  final double amount;
-  final Color color;
-  final Offset anchor;
-  final Offset knee;
-  final double targetY;
-  final bool onRight;
-  double y;
-
-  _Callout({
-    required this.name,
-    required this.iconPath,
-    required this.pct,
-    required this.amount,
-    required this.color,
-    required this.anchor,
-    required this.knee,
-    required this.targetY,
-    required this.onRight,
-  }) : y = targetY;
-}
-
-/// Draws the leader lines: ring anchor → knee → horizontal run to the label,
-/// with a small dot at the anchor, each in its slice colour.
-class _LeaderLinePainter extends CustomPainter {
-  final List<_Callout> callouts;
-  final double labelWidth;
-  final Size size;
-
-  _LeaderLinePainter({
-    required this.callouts,
-    required this.labelWidth,
-    required this.size,
-  });
-
-  @override
-  void paint(Canvas canvas, Size canvasSize) {
-    for (final c in callouts) {
-      final paint = Paint()
-        ..color = c.color.withValues(alpha: 0.8)
-        ..strokeWidth = 1.5
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round;
-
-      // Horizontal run ends where the label starts.
-      final labelInnerX =
-          c.onRight ? canvasSize.width - labelWidth : labelWidth;
-      final elbow = Offset(labelInnerX, c.y);
-
-      final path = Path()
-        ..moveTo(c.anchor.dx, c.anchor.dy)
-        ..lineTo(c.knee.dx, c.knee.dy)
-        ..lineTo(elbow.dx, elbow.dy);
-      canvas.drawPath(path, paint);
-
-      // Dot at the ring anchor.
-      canvas.drawCircle(
-        c.anchor,
-        2.5,
-        Paint()..color = c.color,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_LeaderLinePainter oldDelegate) => true;
-}
