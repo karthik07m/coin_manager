@@ -625,12 +625,16 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
         color: color,
         value: cat.amount,
         radius: radius,
-        showTitle: percentage > 4, // Only show if > 4% to avoid clutter
-        title: '${percentage.toStringAsFixed(1)}%', // Show one decimal place
+        // Label slices down to 3%; tinier ones stay in the legend below.
+        showTitle: percentage >= 3,
+        // Whole % under 10 keeps the label compact on a thin slice.
+        title: percentage < 10
+            ? '${percentage.round()}%'
+            : '${percentage.toStringAsFixed(1)}%',
         titleStyle: AppTextStyles.bodySmall.copyWith(
           color: Colors.white,
           fontWeight: FontWeight.bold,
-          fontSize: isTouched ? 15 : 12, // Larger text when touched
+          fontSize: isTouched ? 16 : 13, // Larger text when touched
           shadows: isTouched
               ? [
                   const Shadow(

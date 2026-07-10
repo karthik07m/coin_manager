@@ -521,7 +521,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                     symbol: currencySymbol,
                     currencyCode: currencyCode,
                   ),
-                  detail: netSavings >= 0 ? 'saved' : 'short',
+                  detail: netSavings >= 0 ? 'saved' : 'deficit',
                   color:
                       netSavings >= 0 ? AppColors.positive : AppColors.negative,
                 ),
@@ -601,32 +601,38 @@ class _ChartsScreenState extends State<ChartsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            label,
+            label.toUpperCase(),
             style: AppTextStyles.caption.copyWith(
               color: context.textSecondary,
               fontSize: 10,
-              letterSpacing: 0,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.4,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: color,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0,
+          const SizedBox(height: 5),
+          // The tile's hero number — scale down to fit rather than truncate.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: AppTextStyles.h3.copyWith(
+                color: color,
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+                letterSpacing: 0,
+              ),
+              maxLines: 1,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 3),
           Text(
             detail,
             style: AppTextStyles.caption.copyWith(
               color: context.textSecondary,
-              fontSize: 10,
+              fontSize: 11,
               letterSpacing: 0,
             ),
             maxLines: 1,
