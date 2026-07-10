@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../db/category_db_helper.dart';
 import '../db/transaction_db_helper.dart';
 import '../models/transaction.dart';
+import '../models/account.dart';
 import '../providers/transaction_provider.dart';
 import '../widgets/charts/categories_pie_chart.dart';
 import '../widgets/charts/accounts_pie_chart.dart';
@@ -336,15 +337,24 @@ class _ChartsScreenState extends State<ChartsScreen> {
                     ),
                   ),
 
-                  _buildMonthlyInsightsCard(
-                    context,
-                    transactions: transactions,
-                    previousTransactions: _previousMonthTransactions,
-                    totalIncome: totalIncome,
-                    totalExpenses: totalExpenses,
-                    currencySymbol: settings.currencySymbol,
-                    currencyCode: settings.currencyCode,
-                  ),
+                  _selectedChart == 0
+                      ? _buildMonthlyInsightsCard(
+                          context,
+                          transactions: transactions,
+                          previousTransactions: _previousMonthTransactions,
+                          totalIncome: totalIncome,
+                          totalExpenses: totalExpenses,
+                          currencySymbol: settings.currencySymbol,
+                          currencyCode: settings.currencyCode,
+                        )
+                      : _buildAccountInsightsCard(
+                          context,
+                          transactions: transactions,
+                          accounts: accountProvider.accounts,
+                          totalExpenses: totalExpenses,
+                          currencySymbol: settings.currencySymbol,
+                          currencyCode: settings.currencyCode,
+                        ),
                   const SizedBox(height: AppDimensions.spacing20),
 
                   // Chart Card
@@ -579,6 +589,164 @@ class _ChartsScreenState extends State<ChartsScreen> {
               overflow: TextOverflow.ellipsis,
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// Account-focused summary shown on the "Accounts" tab (mirrors the layout
+  /// of the expense insights card, but every metric is about accounts).
+  Widget _buildAccountInsightsCard(
+    BuildContext context, {
+    required List<Transaction> transactions,
+    required List<Account> accounts,
+    required double totalExpenses,
+    required String currencySymbol,
+    required String currencyCode,
+  }) {
+    // Spending per account this month.
+    final Map<int, double> spendByAccount = {};
+    for (final t in transactions) {
+      if (t.isExpense) {
+        spendByAccount[t.accountId] =
+            (spendByAccount[t.accountId] ?? 0.0) + t.amount;
+      }
+    }
+
+    Account? topAccount;
+    double topSpend = 0.0;
+    for (final a in accounts) {
+      final spent = spendByAccount[a.id] ?? 0.0;
+      if (spent > topSpend) {
+        topSpend = spent;
+        topAccount = a;
+      }
+    }
+
+    final totalBalance =
+        accounts.fold(0.0, (sum, a) => sum + a.currentBalance);
+    final accountCount = accounts.length;
+    final avgPerAccount = accountCount > 0 ? totalExpenses / accountCount : 0.0;
+
+    String money(double v) => UtilityFunction.formatMoney(
+          v,
+          symbol: currencySymbol,
+          currencyCode: currencyCode,
+        );
+
+    final summary = accountCount == 0
+        ? 'No accounts yet — add one to track balances.'
+        : topAccount != null
+            ? '$accountCount account${accountCount == 1 ? '' : 's'}. ${topAccount.name} spent the most this month.'
+            : '$accountCount account${accountCount == 1 ? '' : 's'}. No spending this month.';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppDimensions.spacing16),
+      decoration: BoxDecoration(
+        color: context.appSurfaceLight,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
+        border: Border.all(
+          color: context.appAccent.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: context.appAccent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.account_balance_wallet,
+                  color: context.appAccent,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacing12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Account Insights',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        color: context.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      summary,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.textSecondary,
+                        letterSpacing: 0,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacing16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildInsightMetric(
+                  context,
+                  label: 'Total balance',
+                  value: money(totalBalance),
+                  detail: 'across all accounts',
+                  color: totalBalance >= 0
+                      ? AppColors.positive
+                      : AppColors.negative,
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacing12),
+              Expanded(
+                child: _buildInsightMetric(
+                  context,
+                  label: 'Accounts',
+                  value: '$accountCount',
+                  detail: accountCount == 1 ? 'account' : 'accounts',
+                  color: AppColors.accentBlue,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacing12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildInsightMetric(
+                  context,
+                  label: 'Top account',
+                  value: topAccount?.name ?? '—',
+                  detail: topAccount != null ? money(topSpend) : 'No spending',
+                  color: AppColors.accentPurple,
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacing12),
+              Expanded(
+                child: _buildInsightMetric(
+                  context,
+                  label: 'Avg per account',
+                  value: money(avgPerAccount),
+                  detail: 'spent this month',
+                  color: AppColors.warning,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
