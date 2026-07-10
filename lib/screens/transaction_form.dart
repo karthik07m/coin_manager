@@ -114,7 +114,17 @@ class TransactionFormState extends State<TransactionForm> {
 
     setState(() {
       accountMap = {for (var acc in accountProvider.accounts) acc.id!: acc};
-      if (!accountMap.containsKey(selectedAccount) && accountMap.isNotEmpty) {
+      if (_transaction == null) {
+        // New transaction → start on the user's default account (fall back to
+        // the first account). Editing keeps the transaction's own account.
+        final defaultId = accountProvider.defaultAccount?.id;
+        if (defaultId != null && accountMap.containsKey(defaultId)) {
+          selectedAccount = defaultId;
+        } else if (accountMap.isNotEmpty) {
+          selectedAccount = accountMap.values.first.id ?? selectedAccount;
+        }
+      } else if (!accountMap.containsKey(selectedAccount) &&
+          accountMap.isNotEmpty) {
         selectedAccount = accountMap.values.first.id ?? 1;
       }
     });
