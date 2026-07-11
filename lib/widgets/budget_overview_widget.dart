@@ -292,10 +292,6 @@ class BudgetOverviewWidget extends StatelessWidget {
 
             const SizedBox(height: AppDimensions.spacing24),
 
-            _BudgetPeriodHistoryStrip(selectedMonth: selectedMonth),
-
-            const SizedBox(height: AppDimensions.spacing24),
-
             // Section header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -362,6 +358,10 @@ class BudgetOverviewWidget extends StatelessWidget {
                 currencySymbol: currencySymbol,
               );
             }),
+
+            const SizedBox(height: AppDimensions.spacing24),
+
+            _BudgetPeriodHistoryStrip(selectedMonth: selectedMonth),
           ],
         );
       },
