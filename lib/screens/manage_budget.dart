@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/monthly_budget_provider.dart';
 import '../providers/category_provider.dart';
 import '../providers/transaction_provider.dart';
+import '../models/category.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
@@ -322,6 +323,251 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
           });
         }
       }
+    }
+  }
+
+  /// Add a new expense category, or edit an existing one's name/icon, via a
+  /// clean bottom sheet (name + icon picker). Reuses CategoryProvider CRUD.
+  Future<void> _showCategoryEditor({Category? category}) async {
+    final isEditing = category != null;
+    final nameController = TextEditingController(text: category?.name ?? '');
+    String selectedIcon = category?.icon ??
+        (categoryIcons.isNotEmpty ? categoryIcons.first : '');
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+          ),
+          child: StatefulBuilder(
+            builder: (context, setSheetState) {
+              return Container(
+                decoration: BoxDecoration(
+                  color: context.appSurface,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                ),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: AppColors.divider,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      isEditing ? 'Edit category' : 'New category',
+                      style: AppTextStyles.h3.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: nameController,
+                      textCapitalization: TextCapitalization.words,
+                      autofocus: !isEditing,
+                      style: AppTextStyles.bodyLarge,
+                      decoration: InputDecoration(
+                        hintText: 'Category name',
+                        filled: true,
+                        fillColor: context.appBackground,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'ICON',
+                      style: AppTextStyles.caption.copyWith(
+                        color: context.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 210,
+                      child: GridView.builder(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 5,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                        ),
+                        itemCount: categoryIcons.length,
+                        itemBuilder: (context, index) {
+                          final icon = categoryIcons[index];
+                          final isSelected = selectedIcon == icon;
+                          return GestureDetector(
+                            onTap: () =>
+                                setSheetState(() => selectedIcon = icon),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? context.appAccent.withValues(alpha: 0.18)
+                                    : context.appBackground,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? context.appAccent
+                                      : AppColors.divider
+                                          .withValues(alpha: 0.3),
+                                  width: isSelected ? 2 : 1,
+                                ),
+                              ),
+                              padding: const EdgeInsets.all(9),
+                              child: Image.asset(
+                                icon,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    const Icon(Icons.category, size: 24),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          final name = nameController.text.trim();
+                          if (name.isEmpty || selectedIcon.isEmpty) return;
+                          Navigator.pop(sheetContext);
+                          await _saveCategory(
+                            existing: category,
+                            name: name,
+                            icon: selectedIcon,
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: context.appAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: Text(
+                          isEditing ? 'Save changes' : 'Add category',
+                          style: AppTextStyles.button,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    nameController.dispose();
+  }
+
+  Future<void> _saveCategory({
+    Category? existing,
+    required String name,
+    required String icon,
+  }) async {
+    final categoryProvider =
+        Provider.of<CategoryProvider>(context, listen: false);
+    final now = DateTime.now().toIso8601String();
+    final category = Category(
+      id: existing?.id,
+      name: name,
+      icon: icon,
+      isExpense: true, // budget categories are always expenses
+      budget: existing?.budget,
+      createdOn: existing?.createdOn ?? now,
+      modifiedOn: now,
+    );
+
+    try {
+      if (existing == null) {
+        await categoryProvider.addCategory(category);
+      } else {
+        await categoryProvider.updateCategory(category);
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not save category: $e'),
+          backgroundColor: AppColors.negative,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmDeleteCategory(Category category, double spent) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: context.appSurface,
+        title: const Text('Delete category'),
+        content: Text(
+          spent > 0
+              ? 'Delete "${category.name}"? Its ${UtilityFunction.formatMoney(spent)} of spending this month will no longer be categorized.'
+              : 'Delete "${category.name}"? This removes it from every month\'s budget.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.negative,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await Provider.of<CategoryProvider>(context, listen: false)
+          .deleteCategory(category.id ?? 0);
+      _categoryControllers.remove(category.name)?.dispose();
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not delete category: $e'),
+          backgroundColor: AppColors.negative,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -873,7 +1119,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                           const SizedBox(width: 12),
                                           // Budget input
                                           SizedBox(
-                                            width: 110,
+                                            width: 100,
                                             child: TextFormField(
                                               controller: _categoryControllers[
                                                   category.name],
@@ -913,6 +1159,61 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                                   decimal: true),
                                               onChanged: (_) => setState(() {}),
                                             ),
+                                          ),
+                                          // Edit / delete menu
+                                          PopupMenuButton<String>(
+                                            icon: Icon(
+                                              Icons.more_vert,
+                                              size: 20,
+                                              color: context.textSecondary,
+                                            ),
+                                            padding: EdgeInsets.zero,
+                                            splashRadius: 20,
+                                            color: context.appSurface,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            onSelected: (value) {
+                                              if (value == 'edit') {
+                                                _showCategoryEditor(
+                                                    category: category);
+                                              } else if (value == 'delete') {
+                                                _confirmDeleteCategory(
+                                                    category, spent);
+                                              }
+                                            },
+                                            itemBuilder: (context) => [
+                                              const PopupMenuItem(
+                                                value: 'edit',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.edit_outlined,
+                                                        size: 18),
+                                                    SizedBox(width: 10),
+                                                    Text('Edit'),
+                                                  ],
+                                                ),
+                                              ),
+                                              PopupMenuItem(
+                                                value: 'delete',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.delete_outline,
+                                                        size: 18,
+                                                        color:
+                                                            AppColors.negative),
+                                                    const SizedBox(width: 10),
+                                                    Text(
+                                                      'Delete',
+                                                      style: TextStyle(
+                                                          color: AppColors
+                                                              .negative),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ],
                                       ),
@@ -962,6 +1263,41 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                 ),
                               );
                             },
+                          ),
+                          const SizedBox(height: 14),
+                          // Add a new expense category
+                          InkWell(
+                            onTap: () => _showCategoryEditor(),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color:
+                                      context.appAccent.withValues(alpha: 0.4),
+                                  width: 1.4,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.add_rounded,
+                                    size: 20,
+                                    color: context.appAccent,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Add category',
+                                    style: AppTextStyles.bodyLarge.copyWith(
+                                      color: context.appAccent,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 100),
                         ],
