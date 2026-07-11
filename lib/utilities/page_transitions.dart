@@ -5,72 +5,51 @@ class PageTransitions {
   static const Curve _forwardCurve = Curves.easeOutCubic;
   static const Curve _reverseCurve = Curves.easeInCubic;
 
-  /// Slide transition from right (default for most screens)
+  /// Slide transition from right (default for most screens).
+  /// Slide-only: the incoming page is opaque, so a full-page fade/scale would
+  /// only add a per-frame offscreen layer (jank) without visible benefit.
   static Route<T> slideFromRight<T>(Widget page, {RouteSettings? settings}) {
     return PageRouteBuilder<T>(
       settings: settings,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const begin = Offset(0.08, 0.0);
-        const end = Offset.zero;
-
-        final curvedAnimation = CurvedAnimation(
+        final offsetAnimation = Tween(
+          begin: const Offset(0.18, 0.0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(
           parent: animation,
           curve: _forwardCurve,
           reverseCurve: _reverseCurve,
-        );
-        final offsetAnimation =
-            Tween(begin: begin, end: end).animate(curvedAnimation);
-        final fadeAnimation =
-            Tween<double>(begin: 0.0, end: 1.0).animate(curvedAnimation);
-        final scaleAnimation =
-            Tween<double>(begin: 0.985, end: 1.0).animate(curvedAnimation);
+        ));
 
-        return SlideTransition(
-          position: offsetAnimation,
-          child: FadeTransition(
-            opacity: fadeAnimation,
-            child: ScaleTransition(
-              scale: scaleAnimation,
-              child: child,
-            ),
-          ),
-        );
+        return SlideTransition(position: offsetAnimation, child: child);
       },
-      transitionDuration: const Duration(milliseconds: 240),
+      transitionDuration: const Duration(milliseconds: 220),
       reverseTransitionDuration: const Duration(milliseconds: 180),
     );
   }
 
-  /// Slide transition from bottom (for modal-like screens)
+  /// Slide transition from bottom (for modal-like screens).
+  /// Slide-only for the same reason as [slideFromRight] — a full-page fade on
+  /// an opaque modal just forces an offscreen layer every frame.
   static Route<T> slideFromBottom<T>(Widget page, {RouteSettings? settings}) {
     return PageRouteBuilder<T>(
       settings: settings,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const begin = Offset(0.0, 0.12);
-        const end = Offset.zero;
-
-        final curvedAnimation = CurvedAnimation(
+        final offsetAnimation = Tween(
+          begin: const Offset(0.0, 0.18),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(
           parent: animation,
           curve: _forwardCurve,
           reverseCurve: _reverseCurve,
-        );
-        final offsetAnimation =
-            Tween(begin: begin, end: end).animate(curvedAnimation);
-        final fadeAnimation =
-            Tween<double>(begin: 0.0, end: 1.0).animate(curvedAnimation);
+        ));
 
-        return SlideTransition(
-          position: offsetAnimation,
-          child: FadeTransition(
-            opacity: fadeAnimation,
-            child: child,
-          ),
-        );
+        return SlideTransition(position: offsetAnimation, child: child);
       },
-      transitionDuration: const Duration(milliseconds: 260),
-      reverseTransitionDuration: const Duration(milliseconds: 190),
+      transitionDuration: const Duration(milliseconds: 240),
+      reverseTransitionDuration: const Duration(milliseconds: 180),
     );
   }
 

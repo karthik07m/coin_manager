@@ -90,10 +90,14 @@ class TransactionFormState extends State<TransactionForm> {
       final transactionId =
           ModalRoute.of(context)?.settings.arguments as String?;
       if (transactionId != null) {
+        // Editing: loadTransactionDetails already fetches & maps categories
+        // for this transaction's type, so don't fetch a second time (that was
+        // an extra full-tree rebuild mid-transition).
         await loadTransactionDetails(transactionId);
+      } else {
+        await _fetchAndMapCategories(categoryProvider);
       }
       if (!mounted) return;
-      await _fetchAndMapCategories(categoryProvider);
       await _loadAccounts(accountProvider);
     });
   }
