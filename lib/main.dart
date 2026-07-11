@@ -122,11 +122,17 @@ class MyApp extends StatelessWidget {
                 ),
               ),
               appBarTheme: AppBarTheme(
-                backgroundColor: const Color(0xFFFEFEFE), // Off-white
-                elevation: 0.5, // Subtle elevation for depth
+                // Flat bar that blends into the body (matches scaffold), so
+                // every screen's header looks the same and clean.
+                backgroundColor: const Color(0xFFF6F7F9),
+                surfaceTintColor: Colors.transparent,
+                scrolledUnderElevation: 0,
+                elevation: 0,
                 centerTitle: true,
+                titleSpacing: 20,
                 titleTextStyle: AppTextStyles.h3.copyWith(
                   color: const Color(0xFF1F2937), // Softer dark
+                  fontWeight: FontWeight.w700,
                 ),
                 iconTheme: const IconThemeData(
                   color: Color(0xFF1F2937), // Softer dark
@@ -236,11 +242,18 @@ class MyApp extends StatelessWidget {
                 ),
               ),
               appBarTheme: AppBarTheme(
-                backgroundColor: AppColors.surface,
+                // Flat bar that blends into the body (matches scaffold), so
+                // every screen's header looks the same and clean.
+                backgroundColor: AppColors.background,
+                surfaceTintColor: Colors.transparent,
+                scrolledUnderElevation: 0,
                 elevation: 0,
                 centerTitle: true,
-                titleTextStyle:
-                    AppTextStyles.h3.copyWith(color: AppColors.textPrimary),
+                titleSpacing: 20,
+                titleTextStyle: AppTextStyles.h3.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
                 iconTheme: IconThemeData(
                   color: AppColors.textPrimary,
                   size: AppDimensions.iconMedium,
