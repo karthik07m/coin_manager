@@ -3,6 +3,10 @@ import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
 
+/// Compact, scannable per-category budget row (real finance-app style):
+/// one header line (name + %), a spent-of-budget / remaining sub-line, a slim
+/// progress bar, and a single pace caption. Status color (green / amber / red)
+/// carries the "how am I doing" signal instead of a heavy tinted card.
 class BudgetProgressCard extends StatelessWidget {
   final String categoryName;
   final String categoryIcon;
@@ -25,355 +29,184 @@ class BudgetProgressCard extends StatelessWidget {
     required this.currencySymbol,
   });
 
+  String _money(double v) =>
+      UtilityFunction.formatMoney(v, symbol: currencySymbol);
+
   @override
   Widget build(BuildContext context) {
     final percentSpent = budgetAmount > 0 ? (spentAmount / budgetAmount) : 0.0;
     final remaining = budgetAmount - spentAmount;
-    final dailyBudget = daysRemaining > 0 ? remaining / daysRemaining : 0.0;
+    final isOver = remaining < 0;
+
+    // Pace: how spending compares to a straight-line burn of the budget.
     final elapsedBudget = budgetAmount > 0 && periodDays > 0
         ? budgetAmount * (daysElapsed / periodDays)
         : 0.0;
     final paceDelta = spentAmount - elapsedBudget;
-    final isAheadOfPace = paceDelta > 0;
+    final isOverPace = paceDelta > 0.01;
 
-    // Determine color based on percentage spent
-    Color progressColor;
-    Color accentColor;
-    List<Color> gradientColors;
-
+    // Status color drives the whole row: green ok, amber ≥80%, red over.
+    final Color statusColor;
     if (percentSpent >= 1.0) {
-      progressColor = AppColors.negative;
-      accentColor = const Color(0xFFFF5252);
-      gradientColors = [
-        const Color(0xFFFF5252).withValues(alpha: 0.1),
-        const Color(0xFFFF1744).withValues(alpha: 0.05),
-      ];
+      statusColor = AppColors.negative;
     } else if (percentSpent >= 0.8) {
-      progressColor = AppColors.warning;
-      accentColor = const Color(0xFFFF9800);
-      gradientColors = [
-        const Color(0xFFFF9800).withValues(alpha: 0.1),
-        const Color(0xFFFF6D00).withValues(alpha: 0.05),
-      ];
+      statusColor = AppColors.warning;
     } else {
-      progressColor = AppColors.positive;
-      accentColor = const Color(0xFF4CAF50);
-      gradientColors = [
-        const Color(0xFF4CAF50).withValues(alpha: 0.1),
-        const Color(0xFF2E7D32).withValues(alpha: 0.05),
-      ];
+      statusColor = AppColors.positive;
     }
 
+    final pct = (percentSpent * 100).round();
+    final needsAttention = percentSpent >= 0.8;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: AppDimensions.spacing16),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: gradientColors,
-        ),
+        color: context.appSurfaceLight,
         borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
         border: Border.all(
-          color: progressColor.withValues(alpha: 0.2),
-          width: 1.5,
+          color: needsAttention
+              ? statusColor.withValues(alpha: 0.35)
+              : AppColors.divider.withValues(alpha: 0.15),
+          width: 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: progressColor.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-        child: Container(
-          padding: const EdgeInsets.all(AppDimensions.spacing16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              // Header: Icon, Name, Status Badge
-              Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    padding: const EdgeInsets.all(AppDimensions.spacing12),
-                    decoration: BoxDecoration(
-                      color: progressColor.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Image.asset(
-                      categoryIcon,
-                      width: 24,
-                      height: 24,
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                        Icons.category,
-                        size: 24,
-                        color: accentColor,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppDimensions.spacing12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              // Category icon
+              Container(
+                width: 38,
+                height: 38,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Image.asset(
+                  categoryIcon,
+                  width: 22,
+                  height: 22,
+                  errorBuilder: (context, error, stackTrace) =>
+                      Icon(Icons.category, size: 22, color: statusColor),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Text(
-                          categoryName,
-                          style: AppTextStyles.h3.copyWith(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 17,
+                        Expanded(
+                          child: Text(
+                            categoryName,
+                            style: AppTextStyles.bodyLarge.copyWith(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.access_time,
-                              size: 14,
-                              color: context.textSecondary,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '$daysRemaining days left',
-                              style: AppTextStyles.caption.copyWith(
-                                color: context.textSecondary,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 8),
+                        Text(
+                          '$pct%',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: statusColor,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: progressColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: progressColor.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Text(
-                      '${(percentSpent * 100).toStringAsFixed(0)}%',
-                      style: TextStyle(
-                        color: progressColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppDimensions.spacing16),
-
-              // Amount Display
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Spent',
-                        style: AppTextStyles.caption.copyWith(
-                          color: context.textSecondary,
-                          fontSize: 11,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        UtilityFunction.formatMoney(spentAmount,
-                            symbol: currencySymbol),
-                        style: AppTextStyles.h2.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: progressColor,
-                          fontSize: 24,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        'Budget',
-                        style: AppTextStyles.caption.copyWith(
-                          color: context.textSecondary,
-                          fontSize: 11,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        UtilityFunction.formatMoney(budgetAmount,
-                            symbol: currencySymbol),
-                        style: AppTextStyles.bodyLarge.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: context.textPrimary,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppDimensions.spacing16),
-
-              // Progress Bar with Animation
-              Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: context.appBackground,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: TweenAnimationBuilder<double>(
-                      duration: const Duration(milliseconds: 800),
-                      curve: Curves.easeOutCubic,
-                      tween: Tween<double>(
-                        begin: 0,
-                        end: percentSpent.clamp(0.0, 1.0),
-                      ),
-                      builder: (context, value, _) => Container(
-                        height: 12,
-                        width: MediaQuery.of(context).size.width * value,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              progressColor,
-                              progressColor.withValues(alpha: 0.7),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: progressColor.withValues(alpha: 0.3),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${_money(spentAmount)} of ${_money(budgetAmount)}',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: context.textSecondary,
+                              fontSize: 13,
                             ),
-                          ],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppDimensions.spacing12),
-
-              // Bottom Stats
-              Container(
-                padding: const EdgeInsets.all(AppDimensions.spacing12),
-                decoration: BoxDecoration(
-                  color: context.appBackground.withValues(alpha: 0.5),
-                  borderRadius:
-                      BorderRadius.circular(AppDimensions.radiusSmall),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: _buildStatItem(
-                        context: context,
-                        icon: Icons.trending_down,
-                        label: remaining >= 0 ? 'Remaining' : 'Over',
-                        value: UtilityFunction.formatMoney(remaining.abs(),
-                            symbol: currencySymbol),
-                        color:
-                            remaining >= 0 ? progressColor : AppColors.negative,
-                      ),
-                    ),
-                    Container(
-                      width: 1,
-                      height: 30,
-                      color: AppColors.divider,
-                    ),
-                    Expanded(
-                      child: _buildStatItem(
-                        context: context,
-                        icon: Icons.calendar_today,
-                        label: 'Daily Budget',
-                        value: UtilityFunction.formatMoney(dailyBudget,
-                            symbol: currencySymbol),
-                        color: context.textSecondary,
-                      ),
-                    ),
-                    Container(
-                      width: 1,
-                      height: 30,
-                      color: AppColors.divider,
-                    ),
-                    Expanded(
-                      child: _buildStatItem(
-                        context: context,
-                        icon: Icons.speed,
-                        label: isAheadOfPace ? 'Fast Pace' : 'Under Pace',
-                        value: UtilityFunction.formatMoney(
-                          paceDelta.abs(),
-                          symbol: currencySymbol,
+                        const SizedBox(width: 8),
+                        Text(
+                          isOver
+                              ? '${_money(remaining.abs())} over'
+                              : '${_money(remaining)} left',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: isOver
+                                ? AppColors.negative
+                                : context.textSecondary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
                         ),
-                        color: isAheadOfPace
-                            ? AppColors.warning
-                            : AppColors.positive,
-                      ),
+                      ],
                     ),
                   ],
                 ),
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
+          const SizedBox(height: 12),
 
-  Widget _buildStatItem({
-    required BuildContext context,
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: AppTextStyles.caption.copyWith(
-                color: context.textSecondary,
-                fontSize: 11,
+          // Slim progress bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: TweenAnimationBuilder<double>(
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.easeOutCubic,
+              tween: Tween<double>(
+                begin: 0,
+                end: percentSpent.clamp(0.0, 1.0),
+              ),
+              builder: (context, value, _) => LinearProgressIndicator(
+                value: value,
+                minHeight: 7,
+                backgroundColor: context.appBackground,
+                valueColor: AlwaysStoppedAnimation<Color>(statusColor),
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: AppTextStyles.bodyMedium.copyWith(
-            fontWeight: FontWeight.bold,
-            color: color,
-            fontSize: 14,
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+
+          // Single pace caption
+          Row(
+            children: [
+              Icon(
+                isOverPace
+                    ? Icons.trending_up_rounded
+                    : Icons.check_circle_outline_rounded,
+                size: 13,
+                color: isOverPace ? AppColors.warning : AppColors.positive,
+              ),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  isOverPace
+                      ? '${_money(paceDelta.abs())} ahead of pace'
+                      : 'On track · ${_money(paceDelta.abs())} under pace',
+                  style: AppTextStyles.caption.copyWith(
+                    color: context.textSecondary,
+                    fontSize: 11.5,
+                    letterSpacing: 0,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
