@@ -618,8 +618,11 @@ class _ChartsScreenState extends State<ChartsScreen> {
       }
     }
 
-    final totalBalance =
-        accounts.fold(0.0, (sum, a) => sum + a.currentBalance);
+    // Net worth: assets minus liabilities (credit-card balances are debt).
+    final totalBalance = accounts.fold(
+        0.0,
+        (sum, a) =>
+            a.isLiability ? sum - a.currentBalance : sum + a.currentBalance);
     final accountCount = accounts.length;
     final avgPerAccount = accountCount > 0 ? totalExpenses / accountCount : 0.0;
 
@@ -698,9 +701,9 @@ class _ChartsScreenState extends State<ChartsScreen> {
               Expanded(
                 child: _buildInsightMetric(
                   context,
-                  label: 'Total balance',
+                  label: 'Net worth',
                   value: money(totalBalance),
-                  detail: 'across all accounts',
+                  detail: 'assets − liabilities',
                   color: totalBalance >= 0
                       ? AppColors.positive
                       : AppColors.negative,

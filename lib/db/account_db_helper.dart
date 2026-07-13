@@ -55,11 +55,14 @@ class AccountDBHelper {
         columns.any((col) => col['name'] == 'initial_balance');
     final balanceColumnName = hasInitialBalance ? 'initial_balance' : 'balance';
 
+    final hasType = columns.any((col) => col['name'] == 'type');
+
     final defaultAccounts = [
       {
         'name': 'Cash',
         'icon': 'wallet',
         'color': '#4CAF50',
+        if (hasType) 'type': 'cash',
         balanceColumnName: 0.0,
         'is_default': 1,
         'created_on': now,
@@ -69,6 +72,7 @@ class AccountDBHelper {
         'name': 'Bank Account',
         'icon': 'account_balance',
         'color': '#2196F3',
+        if (hasType) 'type': 'checking',
         balanceColumnName: 0.0,
         'is_default': 0,
         'created_on': now,
@@ -78,6 +82,7 @@ class AccountDBHelper {
         'name': 'Credit Card',
         'icon': 'credit_card',
         'color': '#FF9800',
+        if (hasType) 'type': 'credit_card',
         balanceColumnName: 0.0,
         'is_default': 0,
         'created_on': now,
@@ -87,6 +92,7 @@ class AccountDBHelper {
         'name': 'Debit Card',
         'icon': 'payment',
         'color': '#9C27B0',
+        if (hasType) 'type': 'checking',
         balanceColumnName: 0.0,
         'is_default': 0,
         'created_on': now,
@@ -175,7 +181,11 @@ class AccountDBHelper {
   }
 
   // Calculate current balance  for an account from initial balance + transactions
-  Future<double> calculateAccountBalance(int accountId) async {
+  /// For asset accounts: initial + income - expense.
+  /// For liabilities (credit cards): balance is the amount OWED, so spending
+  /// increases it and payments (income) reduce it: initial + expense - income.
+  Future<double> calculateAccountBalance(int accountId,
+      {bool isLiability = false}) async {
     try {
       final db = await database;
 
@@ -219,7 +229,9 @@ class AccountDBHelper {
           ? expenseValue.toDouble()
           : (expenseValue as double? ?? 0.0);
 
-      return initialBalance + income - expense;
+      return isLiability
+          ? initialBalance + expense - income
+          : initialBalance + income - expense;
     } catch (e) {
       debugPrint('Error calculating account balance for $accountId: $e');
       return 0.0; // Return 0 on error rather than crashing

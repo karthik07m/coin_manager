@@ -19,6 +19,19 @@ class AccountProvider extends ChangeNotifier {
 
   bool get isLoaded => _isLoaded;
 
+  /// Assets = everything you own (checking, savings, cash, investments...).
+  double get totalAssets => _accounts
+      .where((a) => !a.isLiability)
+      .fold(0.0, (sum, a) => sum + a.currentBalance);
+
+  /// Liabilities = what you owe (credit card balances).
+  double get totalLiabilities => _accounts
+      .where((a) => a.isLiability)
+      .fold(0.0, (sum, a) => sum + a.currentBalance);
+
+  /// Net worth = assets - liabilities, like real finance apps.
+  double get netWorth => totalAssets - totalLiabilities;
+
   final AccountDBHelper _dbHelper = AccountDBHelper();
 
   // Load all accounts from database
@@ -50,8 +63,9 @@ class AccountProvider extends ChangeNotifier {
       for (var account in _accounts) {
         if (account.id != null) {
           try {
-            final balance =
-                await _dbHelper.calculateAccountBalance(account.id!);
+            final balance = await _dbHelper.calculateAccountBalance(
+                account.id!,
+                isLiability: account.isLiability);
             account.updateCurrentBalance(balance);
           } catch (e) {
             debugPrint(
@@ -136,8 +150,9 @@ class AccountProvider extends ChangeNotifier {
   // Recalculate balance for a specific account
   Future<void> recalculateAccountBalance(int accountId) async {
     try {
-      final balance = await _dbHelper.calculateAccountBalance(accountId);
       final account = _accounts.firstWhere((acc) => acc.id == accountId);
+      final balance = await _dbHelper.calculateAccountBalance(accountId,
+          isLiability: account.isLiability);
       account.updateCurrentBalance(balance);
       notifyListeners();
     } catch (e) {

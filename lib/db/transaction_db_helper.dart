@@ -41,7 +41,7 @@ class TransactionDBHelper {
     String path = join(documentsDirectory.path, 'transactions.db');
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -73,6 +73,7 @@ class TransactionDBHelper {
         name TEXT NOT NULL,
         icon TEXT NOT NULL,
         color TEXT NOT NULL,
+        type TEXT DEFAULT '',
         initial_balance REAL DEFAULT 0.0,
         is_default INTEGER DEFAULT 0,
         created_on TEXT NOT NULL,
@@ -174,6 +175,31 @@ class TransactionDBHelper {
       }
 
       await _backfillRecurrenceIds(db);
+    }
+
+    if (oldVersion < 7) {
+      // Account types (Checking / Savings / Cash / Credit Card / Investment /
+      // Other), so credit cards can be treated as liabilities like real
+      // finance apps. Backfill legacy rows by name.
+      try {
+        await db.execute("ALTER TABLE accounts ADD COLUMN type TEXT DEFAULT ''");
+      } catch (e) {
+        debugPrint('Note: accounts.type column might already exist');
+      }
+      try {
+        await db.execute('''
+          UPDATE accounts SET type = CASE
+            WHEN lower(name) LIKE '%credit%' THEN 'credit_card'
+            WHEN lower(name) LIKE '%cash%' THEN 'cash'
+            WHEN lower(name) LIKE '%saving%' THEN 'savings'
+            WHEN lower(name) LIKE '%invest%' THEN 'investment'
+            ELSE 'checking'
+          END
+          WHERE type IS NULL OR type = ''
+        ''');
+      } catch (e) {
+        debugPrint('Error backfilling account types: $e');
+      }
     }
   }
 

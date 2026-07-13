@@ -75,9 +75,13 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
 
           return ListView.builder(
             padding: const EdgeInsets.all(AppDimensions.spacing16),
-            itemCount: accounts.length,
+            itemCount: accounts.length + 1,
             itemBuilder: (context, index) {
-              final account = accounts[index];
+              if (index == 0) {
+                return _buildNetWorthHeader(
+                    context, accountProvider, currencySymbol);
+              }
+              final account = accounts[index - 1];
               return _buildAccountCard(
                   context, account, accountProvider, currencySymbol);
             },
@@ -95,6 +99,120 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
     );
   }
 
+  Widget _buildNetWorthHeader(
+    BuildContext context,
+    AccountProvider accountProvider,
+    String currencySymbol,
+  ) {
+    final netWorth = accountProvider.netWorth;
+    final assets = accountProvider.totalAssets;
+    final liabilities = accountProvider.totalLiabilities;
+    final netColor = netWorth >= 0 ? context.appAccent : AppColors.negative;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppDimensions.spacing16),
+      padding: const EdgeInsets.all(AppDimensions.spacing20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            netColor.withValues(alpha: 0.18),
+            netColor.withValues(alpha: 0.04),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
+        border: Border.all(color: netColor.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'NET WORTH',
+            style: AppTextStyles.caption.copyWith(
+              color: context.textSecondary,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            UtilityFunction.formatMoney(netWorth, symbol: currencySymbol),
+            style: AppTextStyles.h1.copyWith(
+              color: netColor,
+              fontWeight: FontWeight.w800,
+              fontSize: 30,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _netWorthStat(
+                  context,
+                  label: 'Assets',
+                  value: UtilityFunction.formatMoney(assets,
+                      symbol: currencySymbol),
+                  color: AppColors.positive,
+                  icon: Icons.arrow_upward_rounded,
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 34,
+                color: AppColors.divider.withValues(alpha: 0.4),
+              ),
+              Expanded(
+                child: _netWorthStat(
+                  context,
+                  label: 'Liabilities',
+                  value: UtilityFunction.formatMoney(liabilities,
+                      symbol: currencySymbol),
+                  color: AppColors.negative,
+                  icon: Icons.arrow_downward_rounded,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _netWorthStat(
+    BuildContext context, {
+    required String label,
+    required String value,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: AppTextStyles.caption.copyWith(
+                color: context.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: AppTextStyles.bodyLarge.copyWith(
+            color: color,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildAccountCard(
     BuildContext context,
     Account account,
@@ -102,6 +220,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
     String currencySymbol,
   ) {
     final color = Color(Account.colorFromHex(account.color));
+    final isLiability = account.isLiability;
 
     return Card(
       margin: const EdgeInsets.only(bottom: AppDimensions.spacing12),
@@ -174,8 +293,10 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Balance: ${UtilityFunction.formatMoney(account.currentBalance, symbol: currencySymbol)}',
-                      style: AppTextStyles.bodyMedium.copyWith(
+                      isLiability
+                          ? '${account.type.label} · owed'
+                          : account.type.label,
+                      style: AppTextStyles.caption.copyWith(
                         color: context.textSecondary,
                       ),
                     ),
@@ -183,10 +304,32 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                 ),
               ),
 
-              // Arrow icon
-              Icon(
-                Icons.chevron_right,
-                color: context.textSecondary.withValues(alpha: 0.5),
+              const SizedBox(width: 8),
+
+              // Balance (liabilities shown as amount owed, in red)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    UtilityFunction.formatMoney(account.currentBalance,
+                        symbol: currencySymbol),
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isLiability
+                          ? AppColors.negative
+                          : (account.currentBalance < 0
+                              ? AppColors.negative
+                              : context.textPrimary),
+                    ),
+                  ),
+                  Text(
+                    isLiability ? 'balance owed' : 'available',
+                    style: AppTextStyles.caption.copyWith(
+                      color: context.textSecondary,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

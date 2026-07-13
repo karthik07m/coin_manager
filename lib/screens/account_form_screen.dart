@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/account_provider.dart';
+import '../providers/settings_provider.dart';
 import '../models/account.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
@@ -17,9 +19,11 @@ class AccountFormScreen extends StatefulWidget {
 class _AccountFormScreenState extends State<AccountFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
+  late TextEditingController _balanceController;
 
   String _selectedIcon = 'wallet';
   String _selectedColor = '#4CAF50';
+  AccountType _selectedType = AccountType.checking;
   bool _isDefault = false;
   Account? _existingAccount;
   bool _isLoading = true;
@@ -47,6 +51,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
   void initState() {
     super.initState();
     _nameController = TextEditingController();
+    _balanceController = TextEditingController();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAccountDetails();
@@ -65,7 +70,12 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           _nameController.text = _existingAccount!.name;
           _selectedIcon = _existingAccount!.icon;
           _selectedColor = _existingAccount!.color;
+          _selectedType = _existingAccount!.type;
           _isDefault = _existingAccount!.isDefault;
+          // Editing shows the CURRENT balance (initial + activity) as the
+          // adjustable figure; on save we back it out to a new opening balance.
+          final bal = _existingAccount!.currentBalance;
+          _balanceController.text = bal == 0 ? '' : bal.toStringAsFixed(2);
         });
       }
     }
@@ -77,6 +87,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _balanceController.dispose();
     super.dispose();
   }
 
@@ -85,21 +96,38 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
       final accountProvider =
           Provider.of<AccountProvider>(context, listen: false);
 
+      final enteredBalance =
+          double.tryParse(_balanceController.text.trim()) ?? 0.0;
+
       bool success;
       if (_existingAccount != null) {
-        // Update existing account
+        // The user edited the CURRENT balance. Recover the underlying
+        // transaction delta (income - expense) using the OLD type's sign, then
+        // set an opening balance so the new type yields the entered current
+        // balance — correct even when switching asset <-> liability.
+        final oldSign = _existingAccount!.isLiability ? -1.0 : 1.0;
+        final txnDelta =
+            (_existingAccount!.currentBalance - _existingAccount!.initialBalance) *
+                oldSign;
+
         _existingAccount!.update(
           name: _nameController.text,
           icon: _selectedIcon,
           color: _selectedColor,
+          type: _selectedType,
         );
+
+        final newSign = _existingAccount!.isLiability ? -1.0 : 1.0;
+        _existingAccount!.initialBalance = enteredBalance - newSign * txnDelta;
         success = await accountProvider.updateAccount(_existingAccount!);
       } else {
-        // Create new account
+        // Create new account — entered figure is the opening balance.
         final newAccount = Account.createNew(
           name: _nameController.text,
           icon: _selectedIcon,
           color: _selectedColor,
+          type: _selectedType,
+          initialBalance: enteredBalance,
           isDefault: _isDefault,
         );
         success = await accountProvider.addAccount(newAccount);
@@ -209,6 +237,23 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
     }
   }
 
+  IconData _iconForType(AccountType type) {
+    switch (type) {
+      case AccountType.checking:
+        return Icons.account_balance;
+      case AccountType.savings:
+        return Icons.savings;
+      case AccountType.cash:
+        return Icons.account_balance_wallet;
+      case AccountType.creditCard:
+        return Icons.credit_card;
+      case AccountType.investment:
+        return Icons.trending_up;
+      case AccountType.other:
+        return Icons.account_balance_wallet_outlined;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -265,6 +310,110 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                     }
                     return null;
                   },
+                ),
+
+                const SizedBox(height: AppDimensions.spacing24),
+
+                // Account Type
+                Text(
+                  'Account Type',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: AppDimensions.spacing12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: AccountType.values.map((type) {
+                    final isSelected = _selectedType == type;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedType = type),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? context.appAccent
+                              : context.appSurface,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: isSelected
+                                ? context.appAccent
+                                : context.textSecondary.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _iconForType(type),
+                              size: 16,
+                              color: isSelected
+                                  ? Colors.white
+                                  : context.textSecondary,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              type.label,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: isSelected
+                                    ? Colors.white
+                                    : context.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+
+                const SizedBox(height: AppDimensions.spacing24),
+
+                // Balance field
+                Text(
+                  _existingAccount != null
+                      ? 'Current Balance'
+                      : 'Opening Balance',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: AppDimensions.spacing8),
+                TextFormField(
+                  controller: _balanceController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]')),
+                  ],
+                  decoration: InputDecoration(
+                    hintText: '0.00',
+                    prefixText:
+                        '${context.watch<SettingsProvider>().currencySymbol} ',
+                    filled: true,
+                    fillColor: context.appSurface,
+                    border: OutlineInputBorder(
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.radiusMedium),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _selectedType.isLiability
+                      ? 'For a credit card, enter what you currently owe.'
+                      : 'The money currently in this account.',
+                  style: AppTextStyles.caption.copyWith(
+                    color: context.textSecondary,
+                  ),
                 ),
 
                 const SizedBox(height: AppDimensions.spacing24),
