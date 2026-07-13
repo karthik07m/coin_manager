@@ -230,6 +230,11 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
   ) {
     final color = Color(Account.colorFromHex(account.color));
     final isLiability = account.isLiability;
+    // For credit cards with a limit set: available = limit − owed, shown as the
+    // headline figure counting down from the limit.
+    final available = account.availableCredit;
+    final utilization = account.creditUtilization;
+    final hasLimit = available != null && utilization != null;
 
     return Card(
       margin: const EdgeInsets.only(bottom: AppDimensions.spacing12),
@@ -247,103 +252,205 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
         borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
         child: Padding(
           padding: const EdgeInsets.all(AppDimensions.spacing16),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Icon
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  _getIconData(account.icon),
-                  color: color,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: AppDimensions.spacing16),
-
-              // Name and balance
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          account.name,
-                          style: AppTextStyles.bodyLarge.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        if (account.isDefault) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: context.appAccent.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              'DEFAULT',
-                              style: AppTextStyles.caption.copyWith(
-                                color: context.appAccent,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      isLiability
-                          ? '${account.type.label} · owed'
-                          : account.type.label,
-                      style: AppTextStyles.caption.copyWith(
-                        color: context.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(width: 8),
-
-              // Balance (liabilities shown as amount owed, in red)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              Row(
                 children: [
-                  Text(
-                    UtilityFunction.formatMoney(account.currentBalance,
-                        symbol: currencySymbol),
-                    style: AppTextStyles.bodyLarge.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: isLiability
-                          ? AppColors.negative
-                          : (account.currentBalance < 0
-                              ? AppColors.negative
-                              : context.textPrimary),
+                  // Icon
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      _getIconData(account.icon),
+                      color: color,
+                      size: 28,
                     ),
                   ),
-                  Text(
-                    isLiability ? 'balance owed' : 'available',
-                    style: AppTextStyles.caption.copyWith(
-                      color: context.textSecondary,
-                      fontSize: 10,
+                  const SizedBox(width: AppDimensions.spacing16),
+
+                  // Name and type
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                account.name,
+                                style: AppTextStyles.bodyLarge.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (account.isDefault) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      context.appAccent.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'DEFAULT',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: context.appAccent,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          (isLiability && !hasLimit)
+                              ? '${account.type.label} · owed'
+                              : account.type.label,
+                          style: AppTextStyles.caption.copyWith(
+                            color: context.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  // Headline figure: available credit (CC w/ limit), amount
+                  // owed (CC w/o limit), or current balance (assets).
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        UtilityFunction.formatMoney(
+                          hasLimit ? available : account.currentBalance,
+                          symbol: currencySymbol,
+                        ),
+                        style: AppTextStyles.bodyLarge.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: hasLimit
+                              ? (available < 0
+                                  ? AppColors.negative
+                                  : AppColors.positive)
+                              : (isLiability
+                                  ? AppColors.negative
+                                  : (account.currentBalance < 0
+                                      ? AppColors.negative
+                                      : context.textPrimary)),
+                        ),
+                      ),
+                      Text(
+                        hasLimit
+                            ? 'available'
+                            : (isLiability ? 'balance owed' : 'available'),
+                        style: AppTextStyles.caption.copyWith(
+                          color: context.textSecondary,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
+
+              // Utilization bar for credit cards with a limit.
+              if (hasLimit) ...[
+                const SizedBox(height: 14),
+                _creditUtilizationBar(
+                    context, account, utilization, currencySymbol),
+              ],
+
+              // Pay action for credit cards: records a transfer from a bank/
+              // cash account onto this card (the real-app way to pay a card).
+              if (isLiability) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () =>
+                        showTransferSheet(context, toAccountId: account.id),
+                    style: TextButton.styleFrom(
+                      foregroundColor: context.appAccent,
+                      backgroundColor:
+                          context.appAccent.withValues(alpha: 0.10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    icon: const Icon(Icons.south_west_rounded, size: 16),
+                    label: const Text('Pay card'),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _creditUtilizationBar(
+    BuildContext context,
+    Account account,
+    double utilization,
+    String currencySymbol,
+  ) {
+    final pct = utilization.clamp(0.0, 1.0);
+    final over = utilization > 1.0;
+    final owed = account.currentBalance;
+    final limit = account.creditLimit!;
+
+    final Color barColor = (over || pct >= 0.9)
+        ? AppColors.negative
+        : (pct >= 0.5 ? AppColors.warning : AppColors.positive);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: pct,
+            minHeight: 6,
+            backgroundColor: context.textSecondary.withValues(alpha: 0.12),
+            valueColor: AlwaysStoppedAnimation<Color>(barColor),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '${UtilityFunction.formatMoney(owed, symbol: currencySymbol)}'
+              ' of '
+              '${UtilityFunction.formatMoney(limit, symbol: currencySymbol)} used',
+              style: AppTextStyles.caption.copyWith(
+                color: context.textSecondary,
+              ),
+            ),
+            Text(
+              over ? 'Over limit' : '${(utilization * 100).round()}%',
+              style: AppTextStyles.caption.copyWith(
+                color: barColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

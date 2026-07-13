@@ -45,6 +45,7 @@ class Account {
   AccountType type;
   double initialBalance; // Balance when account was created
   double currentBalance; // Calculated from transactions, not stored in DB
+  double? creditLimit; // Credit cards only: the card's spending ceiling.
   bool isDefault;
   final DateTime createdOn;
   late DateTime modifiedOn;
@@ -57,6 +58,7 @@ class Account {
     this.type = AccountType.checking,
     this.initialBalance = 0.0,
     this.currentBalance = 0.0, // Will be calculated
+    this.creditLimit,
     this.isDefault = false,
     required this.createdOn,
     required this.modifiedOn,
@@ -65,12 +67,27 @@ class Account {
   /// Liability accounts (credit cards) count against net worth.
   bool get isLiability => type.isLiability;
 
+  /// Credit remaining to spend on a card: limit − amount owed. Null unless
+  /// this is a credit card with a positive limit set.
+  double? get availableCredit {
+    if (!isLiability || creditLimit == null || creditLimit! <= 0) return null;
+    return creditLimit! - currentBalance;
+  }
+
+  /// Fraction of the credit limit currently used (0..1+, un-clamped so callers
+  /// can flag over-limit). Null unless this is a credit card with a limit set.
+  double? get creditUtilization {
+    if (!isLiability || creditLimit == null || creditLimit! <= 0) return null;
+    return currentBalance / creditLimit!;
+  }
+
   factory Account.createNew({
     required String name,
     required String icon,
     required String color,
     AccountType type = AccountType.checking,
     double initialBalance = 0.0,
+    double? creditLimit,
     bool isDefault = false,
   }) {
     final now = DateTime.now();
@@ -81,6 +98,7 @@ class Account {
       type: type,
       initialBalance: initialBalance,
       currentBalance: initialBalance, // Initially same as initial balance
+      creditLimit: creditLimit,
       isDefault: isDefault,
       createdOn: now,
       modifiedOn: now,
@@ -92,11 +110,13 @@ class Account {
     required String icon,
     required String color,
     AccountType? type,
+    double? creditLimit,
   }) {
     this.name = name;
     this.icon = icon;
     this.color = color;
     if (type != null) this.type = type;
+    this.creditLimit = creditLimit;
     modifiedOn = DateTime.now();
   }
 
@@ -115,6 +135,7 @@ class Account {
       'type': type.key,
       'balance': initialBalance, // For backward compatibility
       'initial_balance': initialBalance, // For new schema
+      'credit_limit': creditLimit,
       'is_default': isDefault ? 1 : 0,
       'created_on': createdOn.toIso8601String(),
       'modified_on': modifiedOn.toIso8601String(),
@@ -134,6 +155,11 @@ class Account {
             (map['name'] ?? '') as String, (map['icon'] ?? '') as String)
         : AccountType.fromKey(typeKey);
 
+    final creditLimitValue = map['credit_limit'];
+    final creditLimit = creditLimitValue == null
+        ? null
+        : (creditLimitValue as num).toDouble();
+
     return Account(
       id: map['id'],
       name: map['name'],
@@ -142,6 +168,7 @@ class Account {
       type: type,
       initialBalance: initialBal,
       currentBalance: initialBal, // Will be calculated later by provider
+      creditLimit: creditLimit,
       isDefault: map['is_default'] == 1,
       createdOn: DateTime.parse(map['created_on']),
       modifiedOn: DateTime.parse(map['modified_on']),

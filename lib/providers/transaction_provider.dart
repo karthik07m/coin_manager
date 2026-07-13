@@ -21,6 +21,17 @@ class TransactionProvider extends ChangeNotifier {
   List<Transaction> get upcomingTransactions => _upcomingTransactions;
   List<CategoryAmount> categories = [];
 
+  /// Hook fired after any mutation that changes account balances (add / edit /
+  /// delete / transfer). Wired to AccountProvider.refreshBalances() in main so
+  /// account balances, net worth, and available credit stay live without the
+  /// user needing to reopen the accounts screen.
+  Future<void> Function()? onBalancesAffected;
+
+  Future<void> _notifyBalancesAffected() async {
+    final cb = onBalancesAffected;
+    if (cb != null) await cb();
+  }
+
   // Previous month comparison
   double _previousMonthExpenses = 0.0;
   DateTime? _cachedPreviousMonth;
@@ -121,6 +132,7 @@ class TransactionProvider extends ChangeNotifier {
     await _calculateCategoryAmounts(); // Await to avoid double-notify race
     await loadUpcomingTransactions(notify: false); // Refresh upcoming payments
     notifyListeners(); // Single notify after ALL data is ready
+    await _notifyBalancesAffected();
     // Only recurring bills feed the reminder scheduler; skip the churn on
     // ordinary one-off transactions.
     if (transaction.isRecurring) BillReminderScheduler().reschedule();
@@ -150,6 +162,7 @@ class TransactionProvider extends ChangeNotifier {
     _updateTotalsForMonth(startDate, endDate);
     await _calculateCategoryAmounts();
     notifyListeners();
+    await _notifyBalancesAffected();
   }
 
   Future<void> updateTransaction(Transaction transaction) async {
@@ -192,6 +205,7 @@ class TransactionProvider extends ChangeNotifier {
     await _calculateCategoryAmounts(); // Await to avoid double-notify race
     await loadUpcomingTransactions(notify: false); // Refresh upcoming payments
     notifyListeners(); // Single notify after ALL data is ready
+    await _notifyBalancesAffected();
     if (transaction.isRecurring) BillReminderScheduler().reschedule();
   }
 
@@ -272,6 +286,7 @@ class TransactionProvider extends ChangeNotifier {
     await _calculateCategoryAmounts(); // Await to avoid double-notify race
     await loadUpcomingTransactions(notify: false); // Refresh upcoming payments
     notifyListeners(); // Single notify after ALL data is ready
+    await _notifyBalancesAffected();
     if (transaction.isRecurring) BillReminderScheduler().reschedule();
   }
 

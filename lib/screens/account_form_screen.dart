@@ -20,6 +20,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _balanceController;
+  late TextEditingController _creditLimitController;
 
   String _selectedIcon = 'wallet';
   String _selectedColor = '#4CAF50';
@@ -52,6 +53,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
     super.initState();
     _nameController = TextEditingController();
     _balanceController = TextEditingController();
+    _creditLimitController = TextEditingController();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAccountDetails();
@@ -76,6 +78,9 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           // adjustable figure; on save we back it out to a new opening balance.
           final bal = _existingAccount!.currentBalance;
           _balanceController.text = bal == 0 ? '' : bal.toStringAsFixed(2);
+          final limit = _existingAccount!.creditLimit;
+          _creditLimitController.text =
+              (limit == null || limit == 0) ? '' : limit.toStringAsFixed(2);
         });
       }
     }
@@ -88,6 +93,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
   void dispose() {
     _nameController.dispose();
     _balanceController.dispose();
+    _creditLimitController.dispose();
     super.dispose();
   }
 
@@ -98,6 +104,11 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
 
       final enteredBalance =
           double.tryParse(_balanceController.text.trim()) ?? 0.0;
+
+      // Credit limit only applies to credit cards; ignore/clear it otherwise.
+      final double? enteredLimit = _selectedType.isLiability
+          ? double.tryParse(_creditLimitController.text.trim())
+          : null;
 
       bool success;
       if (_existingAccount != null) {
@@ -115,6 +126,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           icon: _selectedIcon,
           color: _selectedColor,
           type: _selectedType,
+          creditLimit: enteredLimit,
         );
 
         final newSign = _existingAccount!.isLiability ? -1.0 : 1.0;
@@ -128,6 +140,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           color: _selectedColor,
           type: _selectedType,
           initialBalance: enteredBalance,
+          creditLimit: enteredLimit,
           isDefault: _isDefault,
         );
         success = await accountProvider.addAccount(newAccount);
@@ -409,12 +422,53 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                 const SizedBox(height: 6),
                 Text(
                   _selectedType.isLiability
-                      ? 'For a credit card, enter what you currently owe.'
+                      ? 'For a credit card, enter what you currently owe (0 for a fresh card).'
                       : 'The money currently in this account.',
                   style: AppTextStyles.caption.copyWith(
                     color: context.textSecondary,
                   ),
                 ),
+
+                // Credit Limit — credit cards only
+                if (_selectedType.isLiability) ...[
+                  const SizedBox(height: AppDimensions.spacing24),
+                  Text(
+                    'Credit Limit',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimensions.spacing8),
+                  TextFormField(
+                    controller: _creditLimitController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                    ],
+                    decoration: InputDecoration(
+                      hintText: '0.00',
+                      prefixText:
+                          '${context.watch<SettingsProvider>().currencySymbol} ',
+                      filled: true,
+                      fillColor: context.appSurface,
+                      border: OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppDimensions.radiusMedium),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'The card\'s total limit. We show your available credit as '
+                    'limit minus what you owe. Leave blank to skip.',
+                    style: AppTextStyles.caption.copyWith(
+                      color: context.textSecondary,
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: AppDimensions.spacing24),
 

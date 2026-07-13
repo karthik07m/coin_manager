@@ -42,7 +42,7 @@ class TransactionDBHelper {
     String path = join(documentsDirectory.path, 'transactions.db');
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -77,6 +77,7 @@ class TransactionDBHelper {
         color TEXT NOT NULL,
         type TEXT DEFAULT '',
         initial_balance REAL DEFAULT 0.0,
+        credit_limit REAL,
         is_default INTEGER DEFAULT 0,
         created_on TEXT NOT NULL,
         modified_on TEXT NOT NULL
@@ -212,6 +213,16 @@ class TransactionDBHelper {
             'ALTER TABLE $tableName ADD COLUMN $columnTransferAccountId INTEGER');
       } catch (e) {
         debugPrint('Note: transfer_account_id column might already exist');
+      }
+    }
+
+    if (oldVersion < 9) {
+      // Credit limit on accounts, so credit cards can show available credit
+      // (limit − owed) and a utilization bar. Null for non-credit accounts.
+      try {
+        await db.execute('ALTER TABLE accounts ADD COLUMN credit_limit REAL');
+      } catch (e) {
+        debugPrint('Note: accounts.credit_limit column might already exist');
       }
     }
   }

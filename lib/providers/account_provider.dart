@@ -147,6 +147,16 @@ class AccountProvider extends ChangeNotifier {
     }
   }
 
+  /// Recompute every account's current balance from the latest transactions
+  /// WITHOUT re-reading the account rows. Call this after a transaction is
+  /// added, edited, deleted, or transferred so balances/net worth/available
+  /// credit stay live. No-op until accounts have been loaded at least once.
+  Future<void> refreshBalances() async {
+    if (!_isLoaded) return;
+    await _calculateAllBalances();
+    notifyListeners();
+  }
+
   // Recalculate balance for a specific account
   Future<void> recalculateAccountBalance(int accountId) async {
     try {
@@ -171,8 +181,10 @@ class AccountProvider extends ChangeNotifier {
             name: account.name,
             icon: account.icon,
             color: account.color,
+            type: account.type,
             initialBalance: account.initialBalance,
             currentBalance: account.currentBalance,
+            creditLimit: account.creditLimit,
             isDefault: false,
             createdOn: account.createdOn,
             modifiedOn: DateTime.now(),
@@ -188,8 +200,10 @@ class AccountProvider extends ChangeNotifier {
         name: targetAccount.name,
         icon: targetAccount.icon,
         color: targetAccount.color,
+        type: targetAccount.type,
         initialBalance: targetAccount.initialBalance,
         currentBalance: targetAccount.currentBalance,
+        creditLimit: targetAccount.creditLimit,
         isDefault: true,
         createdOn: targetAccount.createdOn,
         modifiedOn: DateTime.now(),

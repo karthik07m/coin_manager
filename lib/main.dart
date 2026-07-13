@@ -50,7 +50,18 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
+          create: (context) => AccountProvider(),
+        ),
+        // TransactionProvider depends on AccountProvider so a transaction
+        // add/edit/delete/transfer can refresh account balances live. The
+        // proxy only re-wires the callback; it never recreates the provider.
+        ChangeNotifierProxyProvider<AccountProvider, TransactionProvider>(
           create: (context) => TransactionProvider(),
+          update: (context, accountProvider, transactionProvider) {
+            transactionProvider!.onBalancesAffected =
+                accountProvider.refreshBalances;
+            return transactionProvider;
+          },
         ),
         ChangeNotifierProvider(
           create: (context) => CategoryProvider(),
@@ -66,9 +77,6 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (context) => GoalProvider(),
-        ),
-        ChangeNotifierProvider(
-          create: (context) => AccountProvider(),
         ),
         ChangeNotifierProvider(
           create: (context) => AiAssistantProvider(),

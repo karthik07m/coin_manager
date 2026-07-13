@@ -9,14 +9,16 @@ import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
 
-/// Opens the account-to-account transfer screen.
-Future<void> showTransferSheet(BuildContext context) {
+/// Opens the account-to-account transfer screen. Pass [toAccountId] to
+/// preselect the destination — used by "Pay" on a credit card so the card is
+/// already the target and the user just picks which account pays it.
+Future<void> showTransferSheet(BuildContext context, {int? toAccountId}) {
   return Navigator.of(context).push(
     PageRouteBuilder(
       opaque: true,
       transitionDuration: const Duration(milliseconds: 240),
       reverseTransitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (_, __, ___) => const _TransferPage(),
+      pageBuilder: (_, __, ___) => _TransferPage(toAccountId: toAccountId),
       transitionsBuilder: (context, animation, secondary, child) {
         final offset = Tween<Offset>(
           begin: const Offset(0, 0.06),
@@ -36,7 +38,10 @@ Future<void> showTransferSheet(BuildContext context) {
 }
 
 class _TransferPage extends StatefulWidget {
-  const _TransferPage();
+  const _TransferPage({this.toAccountId});
+
+  /// When set, the destination account is preselected (e.g. paying a card).
+  final int? toAccountId;
 
   @override
   State<_TransferPage> createState() => _TransferPageState();
@@ -55,8 +60,22 @@ class _TransferPageState extends State<_TransferPage> {
     super.initState();
     final accounts =
         Provider.of<AccountProvider>(context, listen: false).accounts;
-    if (accounts.isNotEmpty) _fromId = accounts.first.id;
-    if (accounts.length > 1) _toId = accounts[1].id;
+    if (widget.toAccountId != null &&
+        accounts.any((a) => a.id == widget.toAccountId)) {
+      // Paying a specific account (e.g. a credit card): preselect it as the
+      // destination and pick a sensible source that isn't itself and, if
+      // possible, isn't another liability.
+      _toId = widget.toAccountId;
+      final source = accounts.firstWhere(
+        (a) => a.id != _toId && !a.isLiability,
+        orElse: () => accounts.firstWhere((a) => a.id != _toId,
+            orElse: () => accounts.first),
+      );
+      _fromId = source.id;
+    } else {
+      if (accounts.isNotEmpty) _fromId = accounts.first.id;
+      if (accounts.length > 1) _toId = accounts[1].id;
+    }
     Future.delayed(const Duration(milliseconds: 260), () {
       if (mounted) _amountFocus.requestFocus();
     });
