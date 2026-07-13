@@ -8,6 +8,7 @@ import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
 import '../providers/settings_provider.dart';
+import '../providers/account_provider.dart';
 
 class TransactionItem extends StatefulWidget {
   final Transaction transaction;
@@ -118,6 +119,9 @@ class _TransactionItemState extends State<TransactionItem> {
   }
 
   Widget _buildListTile(BuildContext context) {
+    if (widget.transaction.isTransfer) {
+      return _buildTransferTile(context);
+    }
     final isExpense = widget.category?.isExpense == true;
     final amountColor = isExpense ? AppColors.negative : AppColors.positive;
     final iconBgColor = (isExpense ? AppColors.negative : AppColors.positive)
@@ -223,6 +227,79 @@ class _TransactionItemState extends State<TransactionItem> {
                 },
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransferTile(BuildContext context) {
+    final accountProvider = context.read<AccountProvider>();
+    String nameFor(int? id) {
+      for (final acc in accountProvider.accounts) {
+        if (acc.id == id) return acc.name;
+      }
+      return 'Account';
+    }
+
+    final from = nameFor(widget.transaction.accountId);
+    final to = nameFor(widget.transaction.transferAccountId);
+
+    return Padding(
+      padding: const EdgeInsets.all(AppDimensions.spacing16),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppDimensions.spacing12),
+            decoration: BoxDecoration(
+              color: context.appAccent.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.swap_horiz_rounded,
+                size: 24, color: context.appAccent),
+          ),
+          const SizedBox(width: AppDimensions.spacing16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Transfer',
+                  style: AppTextStyles.bodyLarge
+                      .copyWith(fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$from → $to',
+                  style: AppTextStyles.bodySmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppDimensions.spacing12),
+          Selector<SettingsProvider, ({String symbol, String code})>(
+            selector: (_, settings) => (
+              symbol: settings.currencySymbol,
+              code: settings.currencyCode,
+            ),
+            builder: (context, currency, _) {
+              return Text(
+                UtilityFunction.addCommaWithSign(
+                  widget.transaction.amount,
+                  currencySymbol: currency.symbol,
+                  currencyCode: currency.code,
+                ),
+                style: AppTextStyles.amount.copyWith(
+                  color: context.textSecondary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              );
+            },
           ),
         ],
       ),

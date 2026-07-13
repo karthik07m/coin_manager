@@ -27,6 +27,7 @@ class TransactionDBHelper {
   final String columnIsRecurring = 'is_recurring';
   final String columnRecurrenceId = 'recurrence_id';
   final String columnReceiptId = 'receipt_id';
+  final String columnTransferAccountId = 'transfer_account_id';
 
   Future<Database> get database async {
     if (_db != null) {
@@ -41,7 +42,7 @@ class TransactionDBHelper {
     String path = join(documentsDirectory.path, 'transactions.db');
     return await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -62,7 +63,8 @@ class TransactionDBHelper {
         $columnIsExpense INTEGER,
         $columnIsRecurring INTEGER,
         $columnRecurrenceId TEXT,
-        $columnReceiptId TEXT
+        $columnReceiptId TEXT,
+        $columnTransferAccountId INTEGER
       )
     ''');
 
@@ -199,6 +201,17 @@ class TransactionDBHelper {
         ''');
       } catch (e) {
         debugPrint('Error backfilling account types: $e');
+      }
+    }
+
+    if (oldVersion < 8) {
+      // Account-to-account transfers (Cashew-style): a transfer row carries a
+      // destination account id and is excluded from income/expense totals.
+      try {
+        await db.execute(
+            'ALTER TABLE $tableName ADD COLUMN $columnTransferAccountId INTEGER');
+      } catch (e) {
+        debugPrint('Note: transfer_account_id column might already exist');
       }
     }
   }

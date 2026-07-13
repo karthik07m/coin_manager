@@ -9,6 +9,13 @@ class Transaction {
   bool isRecurring;
   String? recurrenceId;
   String? receiptId;
+
+  /// When non-null this row is an account-to-account TRANSFER: money leaves
+  /// [accountId] and lands in [transferAccountId]. Transfers are excluded from
+  /// income/expense and category totals (they just move money between
+  /// accounts, like Cashew).
+  int? transferAccountId;
+
   final DateTime createdOn;
   late DateTime modifiedOn;
 
@@ -24,7 +31,11 @@ class Transaction {
       required this.isExpense,
       this.isRecurring = false,
       this.recurrenceId,
-      this.receiptId});
+      this.receiptId,
+      this.transferAccountId});
+
+  /// True when this transaction moves money between two accounts.
+  bool get isTransfer => transferAccountId != null;
 
   factory Transaction.createNew(
       {required String id,
@@ -51,6 +62,33 @@ class Transaction {
       isRecurring: isRecurring,
       recurrenceId: isRecurring ? (recurrenceId ?? id) : null,
       receiptId: receiptId,
+    );
+  }
+
+  /// A one-row transfer from [fromAccountId] to [toAccountId]. Stored on the
+  /// source account with is_expense = 1 so legacy balance paths still see money
+  /// leaving; the destination credit is applied via transfer_account_id.
+  factory Transaction.createTransfer({
+    required String id,
+    required double amount,
+    required int fromAccountId,
+    required int toAccountId,
+    required DateTime date,
+    String title = 'Transfer',
+  }) {
+    final now = DateTime.now();
+    return Transaction(
+      id: id,
+      title: title.trim().isEmpty ? 'Transfer' : title.trim(),
+      amount: amount,
+      categoryId: 0, // no category for transfers
+      accountId: fromAccountId,
+      transferAccountId: toAccountId,
+      date: date,
+      createdOn: now,
+      modifiedOn: now,
+      isExpense: true,
+      isRecurring: false,
     );
   }
 
@@ -86,6 +124,7 @@ class Transaction {
       'is_recurring': isRecurring ? 1 : 0,
       'recurrence_id': recurrenceId,
       'receipt_id': receiptId,
+      'transfer_account_id': transferAccountId,
     };
   }
 
@@ -104,6 +143,7 @@ class Transaction {
       isRecurring: map['is_recurring'] == 1,
       recurrenceId: map['recurrence_id'],
       receiptId: map['receipt_id'],
+      transferAccountId: map['transfer_account_id'] as int?,
     );
   }
 }

@@ -7,6 +7,7 @@ import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
 import '../providers/settings_provider.dart';
 import 'account_form_screen.dart';
+import '../widgets/transfer_sheet.dart';
 
 class AccountManagementScreen extends StatefulWidget {
   static const routeName = '/account-management';
@@ -41,6 +42,14 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
         backgroundColor: context.appBackground,
         title: const Text('Manage Accounts'),
         elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: 'Transfer between accounts',
+            icon: const Icon(Icons.swap_horiz_rounded),
+            onPressed: () => showTransferSheet(context),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: Consumer2<AccountProvider, SettingsProvider>(
         builder: (context, accountProvider, settingsProvider, child) {

@@ -243,6 +243,7 @@ class _TransactionListState extends State<TransactionList> {
     double expense = 0;
 
     for (final transaction in transactions) {
+      if (transaction.isTransfer) continue;
       if (transaction.isExpense) {
         expense += transaction.amount;
       } else {
@@ -259,6 +260,7 @@ class _TransactionListState extends State<TransactionList> {
     final totals = <DateTime, ({double income, double expense})>{};
 
     for (final transaction in transactions) {
+      if (transaction.isTransfer) continue;
       final day = _dateOnly(transaction.date);
       final current = totals[day] ?? (income: 0.0, expense: 0.0);
       totals[day] = transaction.isExpense

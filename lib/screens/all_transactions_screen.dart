@@ -578,6 +578,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                 double totalIncome = 0;
                 double totalExpense = 0;
                 for (final transaction in filteredTransactions) {
+                  if (transaction.isTransfer) continue;
                   if (transaction.isExpense) {
                     totalExpense += transaction.amount;
                   } else {

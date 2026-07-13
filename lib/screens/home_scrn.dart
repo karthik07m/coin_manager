@@ -77,6 +77,7 @@ class _HomePageState extends State<HomePage> {
           double totalExpenses = 0.0;
 
           for (var transaction in transactions) {
+            if (transaction.isTransfer) continue;
             if (transaction.isExpense) {
               totalExpenses += transaction.amount;
             } else {

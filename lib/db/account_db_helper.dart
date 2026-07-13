@@ -205,33 +205,55 @@ class AccountDBHelper {
           ? balanceValue.toDouble()
           : (balanceValue as double? ?? 0.0);
 
-      // Calculate transaction impact
+      // Income/expense impact — transfers (transfer_account_id set) are
+      // excluded here and handled separately below.
       final transactionResult = await db.rawQuery(
         '''
-      SELECT 
+      SELECT
         SUM(CASE WHEN is_expense = 0 THEN amount ELSE 0 END) as income,
         SUM(CASE WHEN is_expense = 1 THEN amount ELSE 0 END) as expense
       FROM transactions
-      WHERE account_id = ?
+      WHERE account_id = ? AND transfer_account_id IS NULL
       ''',
         [accountId],
       );
 
-      if (transactionResult.isEmpty) return initialBalance;
+      double parseNum(Object? v) =>
+          v is int ? v.toDouble() : (v as double? ?? 0.0);
 
-      // Handle both int and double from SQLite SUM operations
-      final incomeValue = transactionResult.first['income'];
-      final expenseValue = transactionResult.first['expense'];
-      final income = incomeValue is int
-          ? incomeValue.toDouble()
-          : (incomeValue as double? ?? 0.0);
-      final expense = expenseValue is int
-          ? expenseValue.toDouble()
-          : (expenseValue as double? ?? 0.0);
+      final income =
+          transactionResult.isEmpty ? 0.0 : parseNum(transactionResult.first['income']);
+      final expense = transactionResult.isEmpty
+          ? 0.0
+          : parseNum(transactionResult.first['expense']);
 
-      return isLiability
-          ? initialBalance + expense - income
-          : initialBalance + income - expense;
+      // Transfers: money leaving this account (it's the source) and money
+      // arriving (it's the destination).
+      final transferResult = await db.rawQuery(
+        '''
+      SELECT
+        (SELECT COALESCE(SUM(amount),0) FROM transactions
+           WHERE account_id = ? AND transfer_account_id IS NOT NULL) as out_amt,
+        (SELECT COALESCE(SUM(amount),0) FROM transactions
+           WHERE transfer_account_id = ?) as in_amt
+      ''',
+        [accountId, accountId],
+      );
+      final transfersOut =
+          transferResult.isEmpty ? 0.0 : parseNum(transferResult.first['out_amt']);
+      final transfersIn =
+          transferResult.isEmpty ? 0.0 : parseNum(transferResult.first['in_amt']);
+
+      if (isLiability) {
+        // Owed goes up with spending & outgoing transfers, down with income &
+        // incoming transfers (a payment onto the card).
+        return initialBalance +
+            expense -
+            income +
+            transfersOut -
+            transfersIn;
+      }
+      return initialBalance + income - expense + transfersIn - transfersOut;
     } catch (e) {
       debugPrint('Error calculating account balance for $accountId: $e');
       return 0.0; // Return 0 on error rather than crashing

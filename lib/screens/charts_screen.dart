@@ -294,6 +294,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
           double totalExpenses = 0.0;
           double totalIncome = 0.0;
           for (var transaction in transactions) {
+            if (transaction.isTransfer) continue;
             if (transaction.isExpense) {
               totalExpenses += transaction.amount;
             } else {
@@ -602,7 +603,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
     // Spending per account this month.
     final Map<int, double> spendByAccount = {};
     for (final t in transactions) {
-      if (t.isExpense) {
+      if (t.isExpense && !t.isTransfer) {
         spendByAccount[t.accountId] =
             (spendByAccount[t.accountId] ?? 0.0) + t.amount;
       }
@@ -811,7 +812,8 @@ class _ChartsScreenState extends State<ChartsScreen> {
 
   double _sumByType(List<Transaction> transactions, {required bool isExpense}) {
     return transactions
-        .where((transaction) => transaction.isExpense == isExpense)
+        .where((transaction) =>
+            transaction.isExpense == isExpense && !transaction.isTransfer)
         .fold(0.0, (sum, transaction) => sum + transaction.amount);
   }
 
@@ -823,7 +825,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
   _CategoryInsight _topExpenseCategory(List<Transaction> transactions) {
     final totals = <int, double>{};
     for (final transaction in transactions) {
-      if (!transaction.isExpense) continue;
+      if (!transaction.isExpense || transaction.isTransfer) continue;
       totals[transaction.categoryId] =
           (totals[transaction.categoryId] ?? 0) + transaction.amount;
     }

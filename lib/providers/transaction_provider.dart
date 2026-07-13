@@ -126,6 +126,32 @@ class TransactionProvider extends ChangeNotifier {
     if (transaction.isRecurring) BillReminderScheduler().reschedule();
   }
 
+  /// Records a money movement between two accounts as a single transfer row.
+  Future<void> addTransfer({
+    required int fromAccountId,
+    required int toAccountId,
+    required double amount,
+    required DateTime date,
+    String note = '',
+  }) async {
+    final transfer = Transaction.createTransfer(
+      id: newId(),
+      amount: amount,
+      fromAccountId: fromAccountId,
+      toAccountId: toAccountId,
+      date: date,
+      title: note,
+    );
+    await _dbHelper.insertTransaction(transfer);
+    _transactions.add(transfer);
+
+    final startDate = DateTime(date.year, date.month, 1);
+    final endDate = DateTime(date.year, date.month + 1, 0);
+    _updateTotalsForMonth(startDate, endDate);
+    await _calculateCategoryAmounts();
+    notifyListeners();
+  }
+
   Future<void> updateTransaction(Transaction transaction) async {
     final existingTransaction =
         await _dbHelper.getTransactionById(transaction.id);
@@ -280,6 +306,7 @@ class TransactionProvider extends ChangeNotifier {
     totalExpenses = _transactions
         .where((transaction) =>
             transaction.isExpense &&
+            !transaction.isTransfer &&
             transaction.date
                 .isAfter(startDate.subtract(const Duration(days: 1))) &&
             transaction.date.isBefore(endDate.add(const Duration(days: 1))))
@@ -288,6 +315,7 @@ class TransactionProvider extends ChangeNotifier {
     totalIncome = _transactions
         .where((transaction) =>
             !transaction.isExpense &&
+            !transaction.isTransfer &&
             transaction.date
                 .isAfter(startDate.subtract(const Duration(days: 1))) &&
             transaction.date.isBefore(endDate.add(const Duration(days: 1))))
@@ -302,7 +330,7 @@ class TransactionProvider extends ChangeNotifier {
 
     // Calculate the total amount per category
     for (var transaction in _transactions) {
-      if (transaction.isExpense) {
+      if (transaction.isExpense && !transaction.isTransfer) {
         if (categoryTotals.containsKey(transaction.categoryId)) {
           categoryTotals[transaction.categoryId] =
               categoryTotals[transaction.categoryId]! + transaction.amount;
@@ -361,6 +389,7 @@ class TransactionProvider extends ChangeNotifier {
         .where((transaction) =>
             transaction.categoryId == categoryId &&
             transaction.isExpense &&
+            !transaction.isTransfer &&
             transaction.date
                 .isAfter(startDate.subtract(const Duration(days: 1))) &&
             transaction.date.isBefore(endDate.add(const Duration(days: 1))))
@@ -500,7 +529,7 @@ class TransactionProvider extends ChangeNotifier {
     );
 
     _previousMonthExpenses = transactions
-        .where((t) => t.isExpense)
+        .where((t) => t.isExpense && !t.isTransfer)
         .fold(0.0, (sum, t) => sum + t.amount);
 
     _cachedPreviousMonth = prevMonth;
@@ -549,6 +578,7 @@ class TransactionProvider extends ChangeNotifier {
     return _transactions
         .where((t) =>
             t.isExpense &&
+            !t.isTransfer &&
             t.date.year == day.year &&
             t.date.month == day.month &&
             t.date.day == day.day)
@@ -560,6 +590,7 @@ class TransactionProvider extends ChangeNotifier {
     return _transactions
         .where((t) =>
             !t.isExpense &&
+            !t.isTransfer &&
             t.date.year == day.year &&
             t.date.month == day.month &&
             t.date.day == day.day)
