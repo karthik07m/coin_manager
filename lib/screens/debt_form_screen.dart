@@ -299,9 +299,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
         backgroundColor: context.appBackground,
         title: Text(
           _existingDebt != null ? 'Edit Debt' : 'Add Debt',
-          style: AppTextStyles.h2,
         ),
-        centerTitle: true,
         elevation: 0,
         actions: [
           if (_existingDebt != null)

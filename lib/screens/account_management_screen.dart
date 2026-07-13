@@ -39,8 +39,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
       backgroundColor: context.appBackground,
       appBar: AppBar(
         backgroundColor: context.appBackground,
-        title: const Text('Manage Accounts', style: AppTextStyles.h2),
-        centerTitle: true,
+        title: const Text('Manage Accounts'),
         elevation: 0,
       ),
       body: Consumer2<AccountProvider, SettingsProvider>(

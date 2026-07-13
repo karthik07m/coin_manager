@@ -632,8 +632,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
       backgroundColor: context.appBackground,
       appBar: AppBar(
         backgroundColor: context.appBackground,
-        title: const Text('Manage Budget', style: AppTextStyles.h3),
-        centerTitle: true,
+        title: const Text('Manage Budget'),
         elevation: 0,
         actions: [
           TextButton.icon(

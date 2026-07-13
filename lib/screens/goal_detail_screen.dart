@@ -324,8 +324,7 @@ class _GoalDetailScreenState extends State<GoalDetailScreen> {
       backgroundColor: context.appBackground,
       appBar: AppBar(
         backgroundColor: context.appBackground,
-        title: const Text('Goal Details', style: AppTextStyles.h3),
-        centerTitle: true,
+        title: const Text('Goal Details'),
         elevation: 0,
         actions: [
           Consumer<GoalProvider>(

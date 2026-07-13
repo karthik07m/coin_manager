@@ -122,21 +122,37 @@ class MyApp extends StatelessWidget {
                 ),
               ),
               appBarTheme: AppBarTheme(
-                // Flat bar that blends into the body (matches scaffold), so
-                // every screen's header looks the same and clean.
+                // Modern finance-app header: flat (blends into the body),
+                // left-aligned large bold title, roomier toolbar.
                 backgroundColor: const Color(0xFFF6F7F9),
                 surfaceTintColor: Colors.transparent,
                 scrolledUnderElevation: 0,
                 elevation: 0,
-                centerTitle: true,
+                centerTitle: false,
                 titleSpacing: 20,
+                toolbarHeight: 64,
                 titleTextStyle: AppTextStyles.h3.copyWith(
                   color: const Color(0xFF1F2937), // Softer dark
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 22,
+                  letterSpacing: -0.3,
                 ),
                 iconTheme: const IconThemeData(
                   color: Color(0xFF1F2937), // Softer dark
                   size: AppDimensions.iconMedium,
+                ),
+              ),
+              // Chip-styled back button used by every AppBar automatically.
+              actionIconTheme: ActionIconThemeData(
+                backButtonIconBuilder: (context) => Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEFEFE),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                  ),
+                  child: const Icon(Icons.arrow_back_ios_new, size: 16),
                 ),
               ),
               iconTheme: const IconThemeData(
@@ -242,21 +258,43 @@ class MyApp extends StatelessWidget {
                 ),
               ),
               appBarTheme: AppBarTheme(
-                // Flat bar that blends into the body (matches scaffold), so
-                // every screen's header looks the same and clean.
+                // Modern finance-app header: flat (blends into the body),
+                // left-aligned large bold title, roomier toolbar.
                 backgroundColor: AppColors.background,
                 surfaceTintColor: Colors.transparent,
                 scrolledUnderElevation: 0,
                 elevation: 0,
-                centerTitle: true,
+                centerTitle: false,
                 titleSpacing: 20,
+                toolbarHeight: 64,
                 titleTextStyle: AppTextStyles.h3.copyWith(
                   color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 22,
+                  letterSpacing: -0.3,
                 ),
                 iconTheme: IconThemeData(
                   color: AppColors.textPrimary,
                   size: AppDimensions.iconMedium,
+                ),
+              ),
+              // Chip-styled back button used by every AppBar automatically.
+              actionIconTheme: ActionIconThemeData(
+                backButtonIconBuilder: (context) => Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.divider.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.arrow_back_ios_new,
+                    size: 16,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
               iconTheme: IconThemeData(

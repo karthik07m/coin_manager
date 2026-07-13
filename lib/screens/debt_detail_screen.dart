@@ -660,8 +660,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
       backgroundColor: context.appBackground,
       appBar: AppBar(
         backgroundColor: context.appBackground,
-        title: const Text('Debt Details', style: AppTextStyles.h3),
-        centerTitle: true,
+        title: const Text('Debt Details'),
         elevation: 0,
         actions: [
           Consumer<DebtProvider>(

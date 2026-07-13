@@ -45,8 +45,7 @@ class _DebtListScreenState extends State<DebtListScreen>
       backgroundColor: context.appBackground,
       appBar: AppBar(
         backgroundColor: context.appBackground,
-        title: const Text('Debt Tracker', style: AppTextStyles.h3),
-        centerTitle: true,
+        title: const Text('Debt Tracker'),
         elevation: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(100),

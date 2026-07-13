@@ -128,7 +128,6 @@ class _CalendarExpenseScreenState extends State<CalendarExpenseScreen>
             fontWeight: FontWeight.bold,
           ),
         ),
-        centerTitle: true,
       ),
       body: Consumer<TransactionProvider>(
         builder: (context, transactionProvider, child) {

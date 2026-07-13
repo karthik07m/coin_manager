@@ -38,8 +38,7 @@ class _GoalListScreenState extends State<GoalListScreen> {
       backgroundColor: context.appBackground,
       appBar: AppBar(
         backgroundColor: context.appBackground,
-        title: const Text('Goals', style: AppTextStyles.h3),
-        centerTitle: true,
+        title: const Text('Goals'),
         elevation: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),

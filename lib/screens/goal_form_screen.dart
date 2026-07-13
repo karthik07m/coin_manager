@@ -232,9 +232,7 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
         backgroundColor: context.appBackground,
         title: Text(
           _existingGoal != null ? 'Edit Goal' : 'Add Goal',
-          style: AppTextStyles.h2,
         ),
-        centerTitle: true,
         elevation: 0,
         actions: [
           if (_existingGoal != null)

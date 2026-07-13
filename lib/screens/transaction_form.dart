@@ -1072,9 +1072,7 @@ class TransactionFormState extends State<TransactionForm> {
         elevation: 0,
         title: Text(
           _transaction?.id == null ? 'Add Transaction' : 'Edit Transaction',
-          style: AppTextStyles.h3,
         ),
-        centerTitle: true,
         actions: [
           if (_transaction?.id != null)
             IconButton(

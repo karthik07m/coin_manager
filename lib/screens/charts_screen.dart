@@ -262,12 +262,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
       appBar: AppBar(
         backgroundColor: context.appBackground,
         elevation: 0,
-        title: Text(
-          'Charts',
-          style: AppTextStyles.h2.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text('Charts'),
         actions: [
           // Month selector button
           Container(

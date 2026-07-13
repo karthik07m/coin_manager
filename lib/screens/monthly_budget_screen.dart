@@ -189,8 +189,7 @@ class _MonthlyBudgetScreenState extends State<MonthlyBudgetScreen> {
       backgroundColor: context.appBackground,
       appBar: AppBar(
         backgroundColor: context.appBackground,
-        title: const Text('Monthly Budget', style: AppTextStyles.h3),
-        centerTitle: true,
+        title: const Text('Monthly Budget'),
         elevation: 0,
         actions: [
           // Compact month selector

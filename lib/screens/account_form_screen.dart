@@ -225,9 +225,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
         backgroundColor: context.appBackground,
         title: Text(
           _existingAccount != null ? 'Edit Account' : 'Add Account',
-          style: AppTextStyles.h2,
         ),
-        centerTitle: true,
         elevation: 0,
         actions: [
           if (_existingAccount != null && !_existingAccount!.isDefault)

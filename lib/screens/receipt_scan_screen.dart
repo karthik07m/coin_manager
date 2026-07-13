@@ -113,11 +113,7 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
       appBar: AppBar(
         backgroundColor: context.appBackground,
         elevation: 0,
-        title: Text(
-          'Scan Receipt',
-          style: AppTextStyles.h2,
-        ),
-        centerTitle: true,
+        title: const Text('Scan Receipt'),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppDimensions.spacing16),
