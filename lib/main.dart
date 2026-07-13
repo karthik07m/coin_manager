@@ -18,6 +18,7 @@ import 'screens/create_category.dart';
 import 'screens/menu_scrn.dart';
 import 'screens/transaction_form.dart';
 import 'screens/privacy_policy.dart';
+import 'screens/activity_history_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/manage_budget.dart';
 import 'screens/backup_management_screen.dart';
@@ -425,6 +426,10 @@ class MyApp extends StatelessWidget {
                 case PrivacyPolicyScreen.routeName:
                   return PageTransitions.slideFromRight(
                       const PrivacyPolicyScreen(),
+                      settings: settings);
+                case ActivityHistoryScreen.routeName:
+                  return PageTransitions.slideFromRight(
+                      const ActivityHistoryScreen(),
                       settings: settings);
                 case OnboardingScreen.routeName:
                   return PageTransitions.fade(const OnboardingScreen(),

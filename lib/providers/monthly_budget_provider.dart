@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/monthly_budget.dart';
+import '../models/activity_log.dart';
+import '../services/activity_logger.dart';
 import '../db/monthly_budget_db_helper.dart';
 import '../utilities/budget_period.dart';
 
@@ -64,6 +66,8 @@ class MonthlyBudgetProvider with ChangeNotifier {
     notifyListeners(); // Notify listeners about the changes
 
     await _dbHelper.setBudget(categoryName, month, budget);
+    ActivityLogger().updated(ActivityEntity.budget, categoryName,
+        amount: budget);
   }
 
   // Method to get budget for a specific category and month
@@ -80,6 +84,8 @@ class MonthlyBudgetProvider with ChangeNotifier {
     _totalBudgets[month] = amount;
     notifyListeners();
     await _dbHelper.setTotalBudget(month, amount);
+    ActivityLogger()
+        .updated(ActivityEntity.budget, 'Total budget', amount: amount);
   }
 
   // Copy current month's budget to next month

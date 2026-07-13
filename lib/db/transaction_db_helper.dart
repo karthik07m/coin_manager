@@ -42,7 +42,7 @@ class TransactionDBHelper {
     String path = join(documentsDirectory.path, 'transactions.db');
     return await openDatabase(
       path,
-      version: 9,
+      version: 10,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -81,6 +81,18 @@ class TransactionDBHelper {
         is_default INTEGER DEFAULT 0,
         created_on TEXT NOT NULL,
         modified_on TEXT NOT NULL
+      )
+    ''');
+
+    // Activity/audit log (read-only history of data changes)
+    await db.execute('''
+      CREATE TABLE activity_log(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action TEXT,
+        entity TEXT,
+        title TEXT,
+        amount REAL,
+        timestamp TEXT
       )
     ''');
 
@@ -223,6 +235,24 @@ class TransactionDBHelper {
         await db.execute('ALTER TABLE accounts ADD COLUMN credit_limit REAL');
       } catch (e) {
         debugPrint('Note: accounts.credit_limit column might already exist');
+      }
+    }
+
+    if (oldVersion < 10) {
+      // Activity/audit log table.
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS activity_log(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action TEXT,
+            entity TEXT,
+            title TEXT,
+            amount REAL,
+            timestamp TEXT
+          )
+        ''');
+      } catch (e) {
+        debugPrint('Error creating activity_log table: $e');
       }
     }
   }

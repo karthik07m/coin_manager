@@ -11,6 +11,7 @@ import '../utilities/budget_period.dart';
 import 'category_manger.dart';
 import 'manage_budget.dart';
 import 'privacy_policy.dart';
+import 'activity_history_screen.dart';
 import '../utilities/constants.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -321,6 +322,15 @@ class SettingsScreen extends StatelessWidget {
             context,
             title: 'Data & Privacy',
             children: [
+              _buildSettingTile(
+                context,
+                icon: Icons.history_rounded,
+                activeIcon: Icons.history_rounded,
+                title: 'Activity History',
+                subtitle: 'See every change you\'ve made in the app',
+                onTap: () => Navigator.pushNamed(
+                    context, ActivityHistoryScreen.routeName),
+              ),
               _buildSettingTile(
                 context,
                 icon: Icons.backup_outlined,

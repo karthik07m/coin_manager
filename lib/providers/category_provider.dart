@@ -1,6 +1,8 @@
 import '../db/category_db_helper.dart';
 import 'package:flutter/material.dart';
 import '../models/category.dart';
+import '../models/activity_log.dart';
+import '../services/activity_logger.dart';
 
 class CategoryProvider with ChangeNotifier {
   // Maintain both the list and map for efficient access
@@ -50,17 +52,20 @@ class CategoryProvider with ChangeNotifier {
       createdOn: category.createdOn,
       modifiedOn: category.modifiedOn,
     );
+    ActivityLogger().created(ActivityEntity.category, category.name);
     await fetchAllCategories();
   }
 
   /// Delete a category by ID and remove it from cache
   Future<void> deleteCategory(int id) async {
+    final deletedName = _categoryMap[id]?.name ?? 'Category';
     await DBHelper().deleteCategory(id);
 
     // Remove from both list and map
     _categories.removeWhere((category) => category.id == id);
     _categoryMap.remove(id);
 
+    ActivityLogger().deleted(ActivityEntity.category, deletedName);
     notifyListeners();
   }
 
@@ -74,6 +79,7 @@ class CategoryProvider with ChangeNotifier {
       budget: category.budget,
       modifiedOn: category.modifiedOn,
     );
+    ActivityLogger().updated(ActivityEntity.category, category.name);
     await fetchAllCategories();
   }
 

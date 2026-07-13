@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/account.dart';
+import '../models/activity_log.dart';
+import '../services/activity_logger.dart';
 import '../db/account_db_helper.dart';
 
 class AccountProvider extends ChangeNotifier {
@@ -91,6 +93,8 @@ class AccountProvider extends ChangeNotifier {
     try {
       final id = await _dbHelper.insertAccount(account);
       if (id > 0) {
+        ActivityLogger().created(ActivityEntity.account, account.name,
+            amount: account.initialBalance == 0 ? null : account.initialBalance);
         await loadAccounts(); // Reload to get the new account with ID
         return true;
       }
@@ -106,6 +110,7 @@ class AccountProvider extends ChangeNotifier {
     try {
       final result = await _dbHelper.updateAccount(account);
       if (result > 0) {
+        ActivityLogger().updated(ActivityEntity.account, account.name);
         await loadAccounts(); // Reload to reflect changes
         return true;
       }
@@ -126,8 +131,10 @@ class AccountProvider extends ChangeNotifier {
         return false;
       }
 
+      final deletedName = getAccountById(id)?.name ?? 'Account';
       final result = await _dbHelper.deleteAccount(id);
       if (result > 0) {
+        ActivityLogger().deleted(ActivityEntity.account, deletedName);
         await loadAccounts(); // Reload after deletion
         return true;
       }

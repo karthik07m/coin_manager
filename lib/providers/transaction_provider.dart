@@ -7,6 +7,8 @@ import '../services/bill_reminder_scheduler.dart';
 import '../utilities/id_generator.dart';
 import '../models/category_amount.dart';
 import '../models/transaction.dart';
+import '../models/activity_log.dart';
+import '../services/activity_logger.dart';
 import '../db/transaction_db_helper.dart';
 
 class TransactionProvider extends ChangeNotifier {
@@ -133,6 +135,8 @@ class TransactionProvider extends ChangeNotifier {
     await loadUpcomingTransactions(notify: false); // Refresh upcoming payments
     notifyListeners(); // Single notify after ALL data is ready
     await _notifyBalancesAffected();
+    ActivityLogger().created(ActivityEntity.transaction, transaction.title,
+        amount: transaction.amount);
     // Only recurring bills feed the reminder scheduler; skip the churn on
     // ordinary one-off transactions.
     if (transaction.isRecurring) BillReminderScheduler().reschedule();
@@ -206,6 +210,8 @@ class TransactionProvider extends ChangeNotifier {
     await loadUpcomingTransactions(notify: false); // Refresh upcoming payments
     notifyListeners(); // Single notify after ALL data is ready
     await _notifyBalancesAffected();
+    ActivityLogger().updated(ActivityEntity.transaction, transaction.title,
+        amount: transaction.amount);
     if (transaction.isRecurring) BillReminderScheduler().reschedule();
   }
 
@@ -287,6 +293,13 @@ class TransactionProvider extends ChangeNotifier {
     await loadUpcomingTransactions(notify: false); // Refresh upcoming payments
     notifyListeners(); // Single notify after ALL data is ready
     await _notifyBalancesAffected();
+    ActivityLogger().deleted(
+      transaction.isTransfer
+          ? ActivityEntity.transfer
+          : ActivityEntity.transaction,
+      transaction.title,
+      amount: transaction.amount,
+    );
     if (transaction.isRecurring) BillReminderScheduler().reschedule();
   }
 

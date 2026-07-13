@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/account.dart';
+import '../models/activity_log.dart';
+import '../services/activity_logger.dart';
 import '../providers/account_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/settings_provider.dart';
@@ -105,12 +107,23 @@ class _TransferPageState extends State<_TransferPage> {
     final accProvider =
         Provider.of<AccountProvider>(context, listen: false);
     try {
+      final amount = _amount;
+      final fromName = accProvider.accounts
+          .firstWhere((a) => a.id == _fromId,
+              orElse: () => accProvider.accounts.first)
+          .name;
+      final toName = accProvider.accounts
+          .firstWhere((a) => a.id == _toId,
+              orElse: () => accProvider.accounts.first)
+          .name;
       await txProvider.addTransfer(
         fromAccountId: _fromId!,
         toAccountId: _toId!,
-        amount: _amount,
+        amount: amount,
         date: _date,
       );
+      ActivityLogger()
+          .created(ActivityEntity.transfer, '$fromName → $toName', amount: amount);
       await accProvider.loadAccounts(); // refresh balances
       if (!mounted) return;
       Navigator.pop(context);

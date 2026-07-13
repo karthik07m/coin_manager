@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../db/goal_db_helper.dart';
 import '../models/goal.dart';
 import '../models/goal_contribution.dart';
+import '../models/activity_log.dart';
+import '../services/activity_logger.dart';
 
 class GoalProvider with ChangeNotifier {
   List<Goal> _goals = [];
@@ -46,6 +48,8 @@ class GoalProvider with ChangeNotifier {
       final result = await _dbHelper.insertGoal(goal);
       if (result != -1) {
         _goals.add(goal);
+        ActivityLogger().created(ActivityEntity.goal, goal.title,
+            amount: goal.targetAmount);
         notifyListeners();
         return true;
       }
@@ -62,6 +66,8 @@ class GoalProvider with ChangeNotifier {
         final index = _goals.indexWhere((g) => g.id == goal.id);
         if (index != -1) {
           _goals[index] = goal;
+          ActivityLogger().updated(ActivityEntity.goal, goal.title,
+              amount: goal.targetAmount);
           notifyListeners();
           return true;
         }
@@ -74,9 +80,17 @@ class GoalProvider with ChangeNotifier {
 
   Future<bool> deleteGoal(String id) async {
     try {
+      String deletedTitle = 'Goal';
+      for (final g in _goals) {
+        if (g.id == id) {
+          deletedTitle = g.title;
+          break;
+        }
+      }
       final result = await _dbHelper.deleteGoal(id);
       if (result != -1) {
         _goals.removeWhere((goal) => goal.id == id);
+        ActivityLogger().deleted(ActivityEntity.goal, deletedTitle);
         notifyListeners();
         return true;
       }
