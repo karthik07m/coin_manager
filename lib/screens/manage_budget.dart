@@ -4,6 +4,7 @@ import '../providers/monthly_budget_provider.dart';
 import '../providers/category_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../models/category.dart';
+import '../widgets/category_editor_sheet.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
@@ -326,179 +327,33 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
     }
   }
 
-  /// Add a new expense category, or edit an existing one's name/icon, via a
-  /// clean bottom sheet (name + icon picker). Reuses CategoryProvider CRUD.
+  /// Add a new expense category, or edit one's name/icon, via the shared
+  /// bottom-sheet editor (crash-free keyboard dismissal). Budgets only deal
+  /// with expenses, so the type toggle is hidden.
   Future<void> _showCategoryEditor({Category? category}) async {
-    final isEditing = category != null;
-    final nameController = TextEditingController(text: category?.name ?? '');
-    String selectedIcon = category?.icon ??
-        (categoryIcons.isNotEmpty ? categoryIcons.first : '');
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-          ),
-          child: StatefulBuilder(
-            builder: (context, setSheetState) {
-              return Container(
-                decoration: BoxDecoration(
-                  color: context.appSurface,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(24),
-                  ),
-                ),
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: AppColors.divider,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    Text(
-                      isEditing ? 'Edit category' : 'New category',
-                      style: AppTextStyles.h3.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: nameController,
-                      textCapitalization: TextCapitalization.words,
-                      autofocus: !isEditing,
-                      style: AppTextStyles.bodyLarge,
-                      decoration: InputDecoration(
-                        hintText: 'Category name',
-                        filled: true,
-                        fillColor: context.appBackground,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'ICON',
-                      style: AppTextStyles.caption.copyWith(
-                        color: context.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 210,
-                      child: GridView.builder(
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 5,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                        ),
-                        itemCount: categoryIcons.length,
-                        itemBuilder: (context, index) {
-                          final icon = categoryIcons[index];
-                          final isSelected = selectedIcon == icon;
-                          return GestureDetector(
-                            onTap: () =>
-                                setSheetState(() => selectedIcon = icon),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? context.appAccent.withValues(alpha: 0.18)
-                                    : context.appBackground,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? context.appAccent
-                                      : AppColors.divider
-                                          .withValues(alpha: 0.3),
-                                  width: isSelected ? 2 : 1,
-                                ),
-                              ),
-                              padding: const EdgeInsets.all(9),
-                              child: Image.asset(
-                                icon,
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    const Icon(Icons.category, size: 24),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          final name = nameController.text.trim();
-                          if (name.isEmpty || selectedIcon.isEmpty) return;
-                          Navigator.pop(sheetContext);
-                          await _saveCategory(
-                            existing: category,
-                            name: name,
-                            icon: selectedIcon,
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: context.appAccent,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: Text(
-                          isEditing ? 'Save changes' : 'Add category',
-                          style: AppTextStyles.button,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-      },
+    final result = await showCategoryEditorSheet(
+      context,
+      initialName: category?.name,
+      initialIcon: category?.icon,
+      initialIsExpense: true,
+      showTypeToggle: false,
+      isEditing: category != null,
     );
-
-    nameController.dispose();
+    if (result == null || !mounted) return;
+    await _saveCategory(existing: category, result: result);
   }
 
   Future<void> _saveCategory({
     Category? existing,
-    required String name,
-    required String icon,
+    required CategoryEditorResult result,
   }) async {
     final categoryProvider =
         Provider.of<CategoryProvider>(context, listen: false);
     final now = DateTime.now().toIso8601String();
     final category = Category(
       id: existing?.id,
-      name: name,
-      icon: icon,
+      name: result.name,
+      icon: result.icon,
       isExpense: true, // budget categories are always expenses
       budget: existing?.budget,
       createdOn: existing?.createdOn ?? now,

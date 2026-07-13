@@ -4,6 +4,7 @@ import '../providers/category_provider.dart';
 import '../models/category.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
+import '../widgets/category_editor_sheet.dart';
 
 class CategoryManagementScreen extends StatefulWidget {
   static const routeName = '/crud-category';
@@ -28,237 +29,32 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
         .fetchAllCategories();
   }
 
-  /// Add or edit a category via the same bottom-sheet editor style used in
-  /// Manage Budget: name field, 5-column icon grid, type toggle, one button.
+  /// Add or edit a category via the shared bottom-sheet editor (owns its own
+  /// controller/focus, so dismissing with the keyboard open is crash-free).
   Future<void> _showCategoryEditor({Category? category}) async {
-    final isEditing = category != null;
-    final nameController = TextEditingController(text: category?.name ?? '');
-    String selectedIcon = category?.icon ??
-        (categoryIcons.isNotEmpty ? categoryIcons.first : '');
-    bool isExpense = category?.isExpense ?? _isExpenseSelected;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-          ),
-          child: StatefulBuilder(
-            builder: (context, setSheetState) {
-              return Container(
-                decoration: BoxDecoration(
-                  color: context.appSurface,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(24),
-                  ),
-                ),
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: AppColors.divider,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    Text(
-                      isEditing ? 'Edit category' : 'New category',
-                      style: AppTextStyles.h3.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: nameController,
-                      textCapitalization: TextCapitalization.words,
-                      autofocus: !isEditing,
-                      style: AppTextStyles.bodyLarge,
-                      decoration: InputDecoration(
-                        hintText: 'Category name',
-                        filled: true,
-                        fillColor: context.appBackground,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Type toggle (segmented)
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: context.appBackground,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Row(
-                        children: [
-                          _sheetTypeSegment(
-                            context,
-                            label: 'Expense',
-                            selected: isExpense,
-                            onTap: () => setSheetState(() => isExpense = true),
-                          ),
-                          _sheetTypeSegment(
-                            context,
-                            label: 'Income',
-                            selected: !isExpense,
-                            onTap: () => setSheetState(() => isExpense = false),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'ICON',
-                      style: AppTextStyles.caption.copyWith(
-                        color: context.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 210,
-                      child: GridView.builder(
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 5,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                        ),
-                        itemCount: categoryIcons.length,
-                        itemBuilder: (context, index) {
-                          final icon = categoryIcons[index];
-                          final isSelected = selectedIcon == icon;
-                          return GestureDetector(
-                            onTap: () =>
-                                setSheetState(() => selectedIcon = icon),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? context.appAccent.withValues(alpha: 0.18)
-                                    : context.appBackground,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? context.appAccent
-                                      : AppColors.divider
-                                          .withValues(alpha: 0.3),
-                                  width: isSelected ? 2 : 1,
-                                ),
-                              ),
-                              padding: const EdgeInsets.all(9),
-                              child: Image.asset(
-                                icon,
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    const Icon(Icons.category, size: 24),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          final name = nameController.text.trim();
-                          if (name.isEmpty || selectedIcon.isEmpty) return;
-                          Navigator.pop(sheetContext);
-                          await _saveCategory(
-                            existing: category,
-                            name: name,
-                            icon: selectedIcon,
-                            isExpense: isExpense,
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: context.appAccent,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: Text(
-                          isEditing ? 'Save changes' : 'Add category',
-                          style: AppTextStyles.button,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-      },
+    final result = await showCategoryEditorSheet(
+      context,
+      initialName: category?.name,
+      initialIcon: category?.icon,
+      initialIsExpense: category?.isExpense ?? _isExpenseSelected,
+      showTypeToggle: true,
+      isEditing: category != null,
     );
-
-    nameController.dispose();
-  }
-
-  Widget _sheetTypeSegment(
-    BuildContext context, {
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: selected ? context.appAccent : Colors.transparent,
-            borderRadius: BorderRadius.circular(11),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: selected ? Colors.white : context.textSecondary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ),
-    );
+    if (result == null || !mounted) return;
+    await _saveCategory(existing: category, result: result);
   }
 
   Future<void> _saveCategory({
     Category? existing,
-    required String name,
-    required String icon,
-    required bool isExpense,
+    required CategoryEditorResult result,
   }) async {
     final provider = Provider.of<CategoryProvider>(context, listen: false);
     final now = DateTime.now().toIso8601String();
     final category = Category(
       id: existing?.id,
-      name: name,
-      icon: icon,
-      isExpense: isExpense,
+      name: result.name,
+      icon: result.icon,
+      isExpense: result.isExpense,
       budget: existing?.budget,
       createdOn: existing?.createdOn ?? now,
       modifiedOn: now,
