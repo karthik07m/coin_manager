@@ -82,15 +82,24 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
             );
           }
 
+          // Leading cards above the account list: net worth, then an
+          // optional combined credit-card usage summary.
+          final showCreditUsage = accountProvider.hasCreditCardsWithLimit;
+          final leadingCount = showCreditUsage ? 2 : 1;
+
           return ListView.builder(
             padding: const EdgeInsets.all(AppDimensions.spacing16),
-            itemCount: accounts.length + 1,
+            itemCount: accounts.length + leadingCount,
             itemBuilder: (context, index) {
               if (index == 0) {
                 return _buildNetWorthHeader(
                     context, accountProvider, currencySymbol);
               }
-              final account = accounts[index - 1];
+              if (showCreditUsage && index == 1) {
+                return _buildCreditUsageCard(
+                    context, accountProvider, currencySymbol);
+              }
+              final account = accounts[index - leadingCount];
               return _buildAccountCard(
                   context, account, accountProvider, currencySymbol);
             },
@@ -220,6 +229,103 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// Combined usage across every credit card that has a limit: total used of
+  /// total limit, an overall utilization bar, and remaining credit.
+  Widget _buildCreditUsageCard(
+    BuildContext context,
+    AccountProvider provider,
+    String currencySymbol,
+  ) {
+    final used = provider.totalCreditUsed;
+    final limit = provider.totalCreditLimit;
+    final available = provider.totalCreditAvailable;
+    final util = limit > 0 ? used / limit : 0.0;
+    final pct = util.clamp(0.0, 1.0);
+    final over = util > 1.0;
+    final barColor = (over || pct >= 0.9)
+        ? AppColors.negative
+        : (pct >= 0.5 ? AppColors.warning : AppColors.positive);
+
+    String money(double v) => UtilityFunction.formatMoney(v,
+        symbol: currencySymbol, showDecimals: true);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppDimensions.spacing16),
+      padding: const EdgeInsets.all(AppDimensions.spacing20),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
+        border: Border.all(color: barColor.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.credit_card_rounded,
+                  size: 15, color: context.textSecondary),
+              const SizedBox(width: 6),
+              Text(
+                'CREDIT CARD USAGE',
+                style: AppTextStyles.caption.copyWith(
+                  color: context.textSecondary,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                over ? 'Over limit' : '${(util * 100).round()}%',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: barColor,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                money(used),
+                style: AppTextStyles.h2.copyWith(
+                  color: context.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'of ${money(limit)}',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: context.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(5),
+            child: LinearProgressIndicator(
+              value: pct,
+              minHeight: 8,
+              backgroundColor: context.textSecondary.withValues(alpha: 0.12),
+              valueColor: AlwaysStoppedAnimation<Color>(barColor),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${money(available)} available to spend',
+            style: AppTextStyles.caption.copyWith(
+              color: context.textSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

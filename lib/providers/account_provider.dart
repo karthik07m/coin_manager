@@ -34,6 +34,25 @@ class AccountProvider extends ChangeNotifier {
   /// Net worth = assets - liabilities, like real finance apps.
   double get netWorth => totalAssets - totalLiabilities;
 
+  /// Credit cards that have a limit set (needed for usage/utilization math).
+  List<Account> get _creditCardsWithLimit => _accounts
+      .where((a) =>
+          a.isLiability && a.creditLimit != null && a.creditLimit! > 0)
+      .toList();
+
+  bool get hasCreditCardsWithLimit => _creditCardsWithLimit.isNotEmpty;
+
+  /// Combined credit limit across all credit cards.
+  double get totalCreditLimit =>
+      _creditCardsWithLimit.fold(0.0, (sum, a) => sum + a.creditLimit!);
+
+  /// Combined amount currently owed (used) across all credit cards.
+  double get totalCreditUsed =>
+      _creditCardsWithLimit.fold(0.0, (sum, a) => sum + a.currentBalance);
+
+  /// Combined remaining credit across all credit cards.
+  double get totalCreditAvailable => totalCreditLimit - totalCreditUsed;
+
   final AccountDBHelper _dbHelper = AccountDBHelper();
 
   // Load all accounts from database
