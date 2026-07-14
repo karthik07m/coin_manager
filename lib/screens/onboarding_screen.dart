@@ -385,8 +385,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     if (shouldRequest == true && mounted) {
       final notificationService = NotificationService();
       await notificationService.requestPermissions();
-      // Schedule default daily reminder at 8pm
-      await notificationService.scheduleDailyReminder(hour: 20, minute: 0);
+      // Schedule default daily reminder at 7pm
+      await notificationService.scheduleDailyReminder(hour: 19, minute: 0);
     }
   }
 

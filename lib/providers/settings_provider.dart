@@ -46,7 +46,7 @@ class SettingsProvider extends ChangeNotifier {
   bool _enableNotifications = false;
   bool _billRemindersEnabled = false;
   TimeOfDay _notificationTime =
-      const TimeOfDay(hour: 20, minute: 0); // Default 8 PM
+      const TimeOfDay(hour: 19, minute: 0); // Default 7 PM
   bool _isAppLockEnabled = false;
   bool _aiAssistantEnabled = false;
   String _aiFunctionUrl = defaultAiFunctionUrl;
@@ -145,7 +145,7 @@ class SettingsProvider extends ChangeNotifier {
     _showHomeBudgetChart = prefs.getBool('showHomeBudgetChart') ?? true;
     _showHomeRecentTransactions =
         prefs.getBool('showHomeRecentTransactions') ?? true;
-    final notifHour = prefs.getInt('notificationHour') ?? 20;
+    final notifHour = prefs.getInt('notificationHour') ?? 19;
     final notifMinute = prefs.getInt('notificationMinute') ?? 0;
     _notificationTime = TimeOfDay(hour: notifHour, minute: notifMinute);
     notifyListeners();
