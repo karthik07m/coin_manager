@@ -387,7 +387,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
         title: const Text('Delete category'),
         content: Text(
           spent > 0
-              ? 'Delete "${category.name}"? Its ${UtilityFunction.formatMoney(spent)} of spending this month will no longer be categorized.'
+              ? 'Delete "${category.name}"? Its ${UtilityFunction.formatMoney(spent, showDecimals: true)} of spending this month will no longer be categorized.'
               : 'Delete "${category.name}"? This removes it from every month\'s budget.',
         ),
         actions: [
@@ -957,7 +957,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                                 if (budget > 0) ...[
                                                   const SizedBox(height: 2),
                                                   Text(
-                                                    'Spent: ${UtilityFunction.formatMoney(spent, symbol: currencySymbol)}',
+                                                    'Spent: ${UtilityFunction.formatMoney(spent, symbol: currencySymbol, showDecimals: true)}',
                                                     style: AppTextStyles.caption
                                                         .copyWith(
                                                       color: progressColor,
@@ -1101,7 +1101,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                               ),
                                             ),
                                             Text(
-                                              '${UtilityFunction.formatMoney(budget - spent, symbol: currencySymbol)} left',
+                                              '${UtilityFunction.formatMoney(budget - spent, symbol: currencySymbol, showDecimals: true)} left',
                                               style: AppTextStyles.caption
                                                   .copyWith(
                                                 color: progressColor,
@@ -1246,7 +1246,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${allocationRule.description} from ${UtilityFunction.formatMoney(totalBudget, symbol: currencySymbol)}',
+                  '${allocationRule.description} from ${UtilityFunction.formatMoney(totalBudget, symbol: currencySymbol, showDecimals: true)}',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: context.textSecondary,
                   ),
