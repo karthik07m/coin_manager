@@ -370,7 +370,7 @@ class _TransferPageState extends State<_TransferPage> {
           ),
           Text(
             UtilityFunction.formatMoney(selected.currentBalance,
-                symbol: currency),
+                symbol: currency, showDecimals: true),
             style: AppTextStyles.bodySmall.copyWith(
               color: context.textSecondary,
             ),

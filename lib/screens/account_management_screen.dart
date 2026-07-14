@@ -146,7 +146,8 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            UtilityFunction.formatMoney(netWorth, symbol: currencySymbol),
+            UtilityFunction.formatMoney(netWorth,
+                symbol: currencySymbol, showDecimals: true),
             style: AppTextStyles.h1.copyWith(
               color: netColor,
               fontWeight: FontWeight.w800,
@@ -161,7 +162,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                   context,
                   label: 'Assets',
                   value: UtilityFunction.formatMoney(assets,
-                      symbol: currencySymbol),
+                      symbol: currencySymbol, showDecimals: true),
                   color: AppColors.positive,
                   icon: Icons.arrow_upward_rounded,
                 ),
@@ -176,7 +177,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                   context,
                   label: 'Liabilities',
                   value: UtilityFunction.formatMoney(liabilities,
-                      symbol: currencySymbol),
+                      symbol: currencySymbol, showDecimals: true),
                   color: AppColors.negative,
                   icon: Icons.arrow_downward_rounded,
                 ),
@@ -336,6 +337,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                         UtilityFunction.formatMoney(
                           hasLimit ? available : account.currentBalance,
                           symbol: currencySymbol,
+                          showDecimals: true,
                         ),
                         style: AppTextStyles.bodyLarge.copyWith(
                           fontWeight: FontWeight.bold,
@@ -434,9 +436,9 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              '${UtilityFunction.formatMoney(owed, symbol: currencySymbol)}'
+              '${UtilityFunction.formatMoney(owed, symbol: currencySymbol, showDecimals: true)}'
               ' of '
-              '${UtilityFunction.formatMoney(limit, symbol: currencySymbol)} used',
+              '${UtilityFunction.formatMoney(limit, symbol: currencySymbol, showDecimals: true)} used',
               style: AppTextStyles.caption.copyWith(
                 color: context.textSecondary,
               ),
