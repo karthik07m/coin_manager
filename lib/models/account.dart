@@ -46,6 +46,7 @@ class Account {
   double initialBalance; // Balance when account was created
   double currentBalance; // Calculated from transactions, not stored in DB
   double? creditLimit; // Credit cards only: the card's spending ceiling.
+  String currency; // Currency code (e.g. 'USD'); empty = base currency.
   bool isDefault;
   final DateTime createdOn;
   late DateTime modifiedOn;
@@ -59,6 +60,7 @@ class Account {
     this.initialBalance = 0.0,
     this.currentBalance = 0.0, // Will be calculated
     this.creditLimit,
+    this.currency = '',
     this.isDefault = false,
     required this.createdOn,
     required this.modifiedOn,
@@ -88,6 +90,7 @@ class Account {
     AccountType type = AccountType.checking,
     double initialBalance = 0.0,
     double? creditLimit,
+    String currency = '',
     bool isDefault = false,
   }) {
     final now = DateTime.now();
@@ -99,6 +102,7 @@ class Account {
       initialBalance: initialBalance,
       currentBalance: initialBalance, // Initially same as initial balance
       creditLimit: creditLimit,
+      currency: currency,
       isDefault: isDefault,
       createdOn: now,
       modifiedOn: now,
@@ -111,12 +115,14 @@ class Account {
     required String color,
     AccountType? type,
     double? creditLimit,
+    String? currency,
   }) {
     this.name = name;
     this.icon = icon;
     this.color = color;
     if (type != null) this.type = type;
     this.creditLimit = creditLimit;
+    if (currency != null) this.currency = currency;
     modifiedOn = DateTime.now();
   }
 
@@ -136,6 +142,7 @@ class Account {
       'balance': initialBalance, // For backward compatibility
       'initial_balance': initialBalance, // For new schema
       'credit_limit': creditLimit,
+      'currency': currency,
       'is_default': isDefault ? 1 : 0,
       'created_on': createdOn.toIso8601String(),
       'modified_on': modifiedOn.toIso8601String(),
@@ -169,6 +176,7 @@ class Account {
       initialBalance: initialBal,
       currentBalance: initialBal, // Will be calculated later by provider
       creditLimit: creditLimit,
+      currency: (map['currency'] as String?) ?? '',
       isDefault: map['is_default'] == 1,
       createdOn: DateTime.parse(map['created_on']),
       modifiedOn: DateTime.parse(map['modified_on']),

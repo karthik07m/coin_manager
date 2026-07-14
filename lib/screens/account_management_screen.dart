@@ -28,9 +28,13 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
       if (!mounted) return;
       final accountProvider =
           Provider.of<AccountProvider>(context, listen: false);
+      final base = Provider.of<SettingsProvider>(context, listen: false)
+          .currencyCode;
       if (!accountProvider.isLoaded) {
         accountProvider.loadAccounts();
       }
+      // Load live FX rates so mixed-currency balances convert for net worth.
+      accountProvider.loadRates(base);
     });
   }
 
@@ -343,6 +347,15 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
     final utilization = account.creditUtilization;
     final hasLimit = available != null && utilization != null;
 
+    // Per-account currency: show the balance in the account's own currency,
+    // with a base-currency conversion underneath when they differ.
+    final acctSymbol = account.currency.isEmpty
+        ? currencySymbol
+        : currencySymbolForCode(account.currency);
+    final showConversion = account.currency.isNotEmpty &&
+        account.currency != accountProvider.baseCurrency;
+    final headlineNative = hasLimit ? available : account.currentBalance;
+
     return Card(
       margin: const EdgeInsets.only(bottom: AppDimensions.spacing12),
       shape: RoundedRectangleBorder(
@@ -441,8 +454,8 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                     children: [
                       Text(
                         UtilityFunction.formatMoney(
-                          hasLimit ? available : account.currentBalance,
-                          symbol: currencySymbol,
+                          headlineNative,
+                          symbol: acctSymbol,
                           showDecimals: true,
                         ),
                         style: AppTextStyles.bodyLarge.copyWith(
@@ -459,9 +472,13 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                         ),
                       ),
                       Text(
-                        hasLimit
-                            ? 'available'
-                            : (isLiability ? 'balance owed' : 'available'),
+                        showConversion
+                            ? '${account.currency} · ≈ ${UtilityFunction.formatMoney(accountProvider.balanceInBase(account), symbol: currencySymbol, showDecimals: true)}'
+                            : (hasLimit
+                                ? 'available'
+                                : (isLiability
+                                    ? 'balance owed'
+                                    : 'available')),
                         style: AppTextStyles.caption.copyWith(
                           color: context.textSecondary,
                           fontSize: 10,
@@ -476,7 +493,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
               if (hasLimit) ...[
                 const SizedBox(height: 14),
                 _creditUtilizationBar(
-                    context, account, utilization, currencySymbol),
+                    context, account, utilization, acctSymbol),
               ],
 
               // Pay action for credit cards: records a transfer from a bank/

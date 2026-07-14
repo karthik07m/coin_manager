@@ -29,7 +29,9 @@ class _NetWorthTrendChartState extends State<NetWorthTrendChart> {
 
   Future<void> _load() async {
     final ap = context.read<AccountProvider>();
+    final base = context.read<SettingsProvider>().currencyCode;
     if (!ap.isLoaded) await ap.loadAccounts();
+    await ap.loadRates(base);
     final pts = await ap.netWorthTrend(months: widget.months);
     if (mounted) {
       setState(() {

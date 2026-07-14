@@ -532,3 +532,36 @@ extension TextStyleExtensions on TextStyle {
         ], // Small caps if supported
       );
 }
+
+/// Currencies offered for the base currency and per-account currencies.
+/// Codes match what the live exchange-rate service understands.
+class AppCurrency {
+  final String code;
+  final String symbol;
+  final String name;
+  final String flag;
+  const AppCurrency(this.code, this.symbol, this.name, this.flag);
+}
+
+const List<AppCurrency> appCurrencies = [
+  AppCurrency('INR', '₹', 'Indian Rupee', '🇮🇳'),
+  AppCurrency('USD', '\$', 'US Dollar', '🇺🇸'),
+  AppCurrency('EUR', '€', 'Euro', '🇪🇺'),
+  AppCurrency('GBP', '£', 'British Pound', '🇬🇧'),
+  AppCurrency('JPY', '¥', 'Japanese Yen', '🇯🇵'),
+  AppCurrency('AUD', 'A\$', 'Australian Dollar', '🇦🇺'),
+  AppCurrency('CAD', 'C\$', 'Canadian Dollar', '🇨🇦'),
+  AppCurrency('CNY', '¥', 'Chinese Yuan', '🇨🇳'),
+  AppCurrency('SGD', 'S\$', 'Singapore Dollar', '🇸🇬'),
+  AppCurrency('AED', 'د.إ', 'UAE Dirham', '🇦🇪'),
+  AppCurrency('CHF', 'Fr', 'Swiss Franc', '🇨🇭'),
+];
+
+/// Currency symbol for a code (falls back to the code itself).
+String currencySymbolForCode(String? code) {
+  if (code == null || code.isEmpty) return '';
+  for (final c in appCurrencies) {
+    if (c.code == code) return c.symbol;
+  }
+  return code;
+}

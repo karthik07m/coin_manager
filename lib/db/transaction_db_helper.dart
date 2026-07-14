@@ -42,7 +42,7 @@ class TransactionDBHelper {
     String path = join(documentsDirectory.path, 'transactions.db');
     return await openDatabase(
       path,
-      version: 10,
+      version: 11,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -78,6 +78,7 @@ class TransactionDBHelper {
         type TEXT DEFAULT '',
         initial_balance REAL DEFAULT 0.0,
         credit_limit REAL,
+        currency TEXT DEFAULT '',
         is_default INTEGER DEFAULT 0,
         created_on TEXT NOT NULL,
         modified_on TEXT NOT NULL
@@ -253,6 +254,16 @@ class TransactionDBHelper {
         ''');
       } catch (e) {
         debugPrint('Error creating activity_log table: $e');
+      }
+    }
+
+    if (oldVersion < 11) {
+      // Per-account currency (multi-currency support). Empty = base currency.
+      try {
+        await db
+            .execute("ALTER TABLE accounts ADD COLUMN currency TEXT DEFAULT ''");
+      } catch (e) {
+        debugPrint('Note: accounts.currency column might already exist');
       }
     }
   }

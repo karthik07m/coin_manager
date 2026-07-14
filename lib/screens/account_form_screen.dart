@@ -25,6 +25,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
   String _selectedIcon = 'wallet';
   String _selectedColor = '#4CAF50';
   AccountType _selectedType = AccountType.checking;
+  String _selectedCurrency = 'USD';
   bool _isDefault = false;
   Account? _existingAccount;
   bool _isLoading = true;
@@ -61,6 +62,9 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
   }
 
   void _loadAccountDetails() {
+    // Default a brand-new account to the base currency.
+    _selectedCurrency =
+        Provider.of<SettingsProvider>(context, listen: false).currencyCode;
     final accountId = ModalRoute.of(context)?.settings.arguments as int?;
     if (accountId != null) {
       final accountProvider =
@@ -73,6 +77,9 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           _selectedIcon = _existingAccount!.icon;
           _selectedColor = _existingAccount!.color;
           _selectedType = _existingAccount!.type;
+          _selectedCurrency = _existingAccount!.currency.isEmpty
+              ? _selectedCurrency
+              : _existingAccount!.currency;
           _isDefault = _existingAccount!.isDefault;
           // Editing shows the CURRENT balance (initial + activity) as the
           // adjustable figure; on save we back it out to a new opening balance.
@@ -127,6 +134,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           color: _selectedColor,
           type: _selectedType,
           creditLimit: enteredLimit,
+          currency: _selectedCurrency,
         );
 
         final newSign = _existingAccount!.isLiability ? -1.0 : 1.0;
@@ -141,6 +149,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           type: _selectedType,
           initialBalance: enteredBalance,
           creditLimit: enteredLimit,
+          currency: _selectedCurrency,
           isDefault: _isDefault,
         );
         success = await accountProvider.addAccount(newAccount);
@@ -387,6 +396,54 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
 
                 const SizedBox(height: AppDimensions.spacing24),
 
+                // Currency
+                Text(
+                  'Currency',
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: AppDimensions.spacing12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: context.appSurface,
+                    borderRadius:
+                        BorderRadius.circular(AppDimensions.radiusMedium),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      isExpanded: true,
+                      value: _selectedCurrency,
+                      dropdownColor: context.appSurface,
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.radiusMedium),
+                      items: appCurrencies
+                          .map(
+                            (c) => DropdownMenuItem<String>(
+                              value: c.code,
+                              child: Text(
+                                '${c.flag}  ${c.code} · ${c.name}  (${c.symbol})',
+                                style: AppTextStyles.bodyMedium,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) => setState(
+                          () => _selectedCurrency = v ?? _selectedCurrency),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'This account\'s balance is held in this currency; net worth '
+                  'converts it to your base currency using live rates.',
+                  style: AppTextStyles.caption
+                      .copyWith(color: context.textSecondary),
+                ),
+
+                const SizedBox(height: AppDimensions.spacing24),
+
                 // Balance field
                 Text(
                   _existingAccount != null
@@ -409,7 +466,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                   decoration: InputDecoration(
                     hintText: '0.00',
                     prefixText:
-                        '${context.watch<SettingsProvider>().currencySymbol} ',
+                        '${currencySymbolForCode(_selectedCurrency)} ',
                     filled: true,
                     fillColor: context.appSurface,
                     border: OutlineInputBorder(
@@ -450,7 +507,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                     decoration: InputDecoration(
                       hintText: '0.00',
                       prefixText:
-                          '${context.watch<SettingsProvider>().currencySymbol} ',
+                          '${currencySymbolForCode(_selectedCurrency)} ',
                       filled: true,
                       fillColor: context.appSurface,
                       border: OutlineInputBorder(

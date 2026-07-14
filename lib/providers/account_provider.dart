@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../models/account.dart';
 import '../models/activity_log.dart';
 import '../services/activity_logger.dart';
+import '../services/exchange_rate_service.dart';
 import '../db/account_db_helper.dart';
 
 /// One point on the net-worth-over-time trend.
@@ -35,15 +36,43 @@ class AccountProvider extends ChangeNotifier {
 
   bool get isLoaded => _isLoaded;
 
-  /// Assets = everything you own (checking, savings, cash, investments...).
+  // ---- Multi-currency: base currency + live rates -------------------------
+  final ExchangeRateService _rateService = ExchangeRateService();
+  String _baseCurrency = '';
+  Map<String, double> _rates = {};
+
+  String get baseCurrency => _baseCurrency;
+  bool get hasMixedCurrencies =>
+      _accounts.any((a) => a.currency.isNotEmpty && a.currency != _baseCurrency);
+
+  /// Load live FX rates for [base] so mixed-currency balances can be summed.
+  /// Safe to call repeatedly; only refetches when needed.
+  Future<void> loadRates(String base) async {
+    if (base.isEmpty) return;
+    _baseCurrency = base;
+    final rates = await _rateService.getRates(base);
+    if (rates.isNotEmpty) {
+      _rates = rates;
+      notifyListeners();
+    }
+  }
+
+  /// Convert an amount held in [currency] into the base currency.
+  double _toBase(double amount, String currency) =>
+      ExchangeRateService.toBase(amount, currency, _baseCurrency, _rates);
+
+  /// The account's current balance expressed in the base currency.
+  double balanceInBase(Account a) => _toBase(a.currentBalance, a.currency);
+
+  /// Assets = everything you own, converted to the base currency.
   double get totalAssets => _accounts
       .where((a) => !a.isLiability)
-      .fold(0.0, (sum, a) => sum + a.currentBalance);
+      .fold(0.0, (sum, a) => sum + _toBase(a.currentBalance, a.currency));
 
-  /// Liabilities = what you owe (credit card balances).
+  /// Liabilities = what you owe (credit card balances), in the base currency.
   double get totalLiabilities => _accounts
       .where((a) => a.isLiability)
-      .fold(0.0, (sum, a) => sum + a.currentBalance);
+      .fold(0.0, (sum, a) => sum + _toBase(a.currentBalance, a.currency));
 
   /// Net worth = assets - liabilities, like real finance apps.
   double get netWorth => totalAssets - totalLiabilities;
@@ -56,13 +85,13 @@ class AccountProvider extends ChangeNotifier {
 
   bool get hasCreditCardsWithLimit => _creditCardsWithLimit.isNotEmpty;
 
-  /// Combined credit limit across all credit cards.
-  double get totalCreditLimit =>
-      _creditCardsWithLimit.fold(0.0, (sum, a) => sum + a.creditLimit!);
+  /// Combined credit limit across all credit cards, in the base currency.
+  double get totalCreditLimit => _creditCardsWithLimit.fold(
+      0.0, (sum, a) => sum + _toBase(a.creditLimit!, a.currency));
 
-  /// Combined amount currently owed (used) across all credit cards.
-  double get totalCreditUsed =>
-      _creditCardsWithLimit.fold(0.0, (sum, a) => sum + a.currentBalance);
+  /// Combined amount currently owed (used) across all cards, in base currency.
+  double get totalCreditUsed => _creditCardsWithLimit.fold(
+      0.0, (sum, a) => sum + _toBase(a.currentBalance, a.currency));
 
   /// Combined remaining credit across all credit cards.
   double get totalCreditAvailable => totalCreditLimit - totalCreditUsed;
@@ -210,10 +239,13 @@ class AccountProvider extends ChangeNotifier {
           cutoff,
           isLiability: account.isLiability,
         );
+        // Convert to base currency (uses current rates as an approximation
+        // for historical points — we don't store historical FX).
+        final inBase = _toBase(bal, account.currency);
         if (account.isLiability) {
-          liabilities += bal;
+          liabilities += inBase;
         } else {
-          assets += bal;
+          assets += inBase;
         }
       }
       points.add(NetWorthPoint(
@@ -264,6 +296,7 @@ class AccountProvider extends ChangeNotifier {
             initialBalance: account.initialBalance,
             currentBalance: account.currentBalance,
             creditLimit: account.creditLimit,
+            currency: account.currency,
             isDefault: false,
             createdOn: account.createdOn,
             modifiedOn: DateTime.now(),
@@ -283,6 +316,7 @@ class AccountProvider extends ChangeNotifier {
         initialBalance: targetAccount.initialBalance,
         currentBalance: targetAccount.currentBalance,
         creditLimit: targetAccount.creditLimit,
+        currency: targetAccount.currency,
         isDefault: true,
         createdOn: targetAccount.createdOn,
         modifiedOn: DateTime.now(),
