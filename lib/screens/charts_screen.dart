@@ -8,6 +8,7 @@ import '../models/account.dart';
 import '../providers/transaction_provider.dart';
 import '../widgets/charts/categories_pie_chart.dart';
 import '../widgets/charts/accounts_pie_chart.dart';
+import '../widgets/net_worth_trend_chart.dart';
 import '../providers/account_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utilities/constants.dart';
@@ -379,6 +380,12 @@ class _ChartsScreenState extends State<ChartsScreen> {
                             currentMonth: _selectedMonth,
                           ),
                   ),
+
+                  // Net worth over time — Accounts tab only.
+                  if (_selectedChart == 1) ...[
+                    const SizedBox(height: AppDimensions.spacing20),
+                    const NetWorthTrendChart(),
+                  ],
                 ],
               ),
             ),

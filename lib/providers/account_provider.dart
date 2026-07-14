@@ -4,6 +4,20 @@ import '../models/activity_log.dart';
 import '../services/activity_logger.dart';
 import '../db/account_db_helper.dart';
 
+/// One point on the net-worth-over-time trend.
+class NetWorthPoint {
+  final DateTime month; // first day of the month this point represents
+  final double netWorth;
+  final double assets;
+  final double liabilities;
+  const NetWorthPoint({
+    required this.month,
+    required this.netWorth,
+    required this.assets,
+    required this.liabilities,
+  });
+}
+
 class AccountProvider extends ChangeNotifier {
   List<Account> _accounts = [];
   Account? _selectedAccount;
@@ -171,6 +185,45 @@ class AccountProvider extends ChangeNotifier {
     } catch (e) {
       return null;
     }
+  }
+
+  /// Net worth at the end of each of the last [months] months (oldest first),
+  /// reconstructed from transaction history. The final point matches the live
+  /// net worth exactly (it counts all transactions, like the header does).
+  Future<List<NetWorthPoint>> netWorthTrend({int months = 6}) async {
+    final now = DateTime.now();
+    final points = <NetWorthPoint>[];
+    for (int i = months - 1; i >= 0; i--) {
+      final monthStart = DateTime(now.year, now.month - i, 1);
+      final isCurrent = i == 0;
+      // For past months use the end-of-month cutoff; for the current month
+      // count everything so the last point equals the displayed net worth.
+      final cutoff = isCurrent
+          ? DateTime(9999)
+          : DateTime(monthStart.year, monthStart.month + 1, 1);
+      double assets = 0.0;
+      double liabilities = 0.0;
+      for (final account in _accounts) {
+        if (account.id == null) continue;
+        final bal = await _dbHelper.calculateAccountBalanceAsOf(
+          account.id!,
+          cutoff,
+          isLiability: account.isLiability,
+        );
+        if (account.isLiability) {
+          liabilities += bal;
+        } else {
+          assets += bal;
+        }
+      }
+      points.add(NetWorthPoint(
+        month: monthStart,
+        netWorth: assets - liabilities,
+        assets: assets,
+        liabilities: liabilities,
+      ));
+    }
+    return points;
   }
 
   /// Recompute every account's current balance from the latest transactions

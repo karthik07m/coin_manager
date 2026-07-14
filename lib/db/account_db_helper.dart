@@ -260,6 +260,67 @@ class AccountDBHelper {
     }
   }
 
+  /// Balance for an account considering only transactions dated on or before
+  /// [cutoff]. Used to reconstruct historical net worth. Mirrors
+  /// calculateAccountBalance's asset/liability math with a date bound.
+  Future<double> calculateAccountBalanceAsOf(int accountId, DateTime cutoff,
+      {bool isLiability = false}) async {
+    try {
+      final db = await database;
+      final iso = cutoff.toIso8601String();
+
+      final accountMaps = await db.query(
+        tableName,
+        columns: [columnBalance],
+        where: '$columnId = ?',
+        whereArgs: [accountId],
+      );
+      if (accountMaps.isEmpty) return 0.0;
+      final balanceValue = accountMaps.first[columnBalance];
+      final initialBalance = balanceValue is int
+          ? balanceValue.toDouble()
+          : (balanceValue as double? ?? 0.0);
+
+      double parseNum(Object? v) =>
+          v is int ? v.toDouble() : (v as double? ?? 0.0);
+
+      final txn = await db.rawQuery(
+        '''
+      SELECT
+        SUM(CASE WHEN is_expense = 0 THEN amount ELSE 0 END) as income,
+        SUM(CASE WHEN is_expense = 1 THEN amount ELSE 0 END) as expense
+      FROM transactions
+      WHERE account_id = ? AND transfer_account_id IS NULL AND date <= ?
+      ''',
+        [accountId, iso],
+      );
+      final income = txn.isEmpty ? 0.0 : parseNum(txn.first['income']);
+      final expense = txn.isEmpty ? 0.0 : parseNum(txn.first['expense']);
+
+      final tr = await db.rawQuery(
+        '''
+      SELECT
+        (SELECT COALESCE(SUM(amount),0) FROM transactions
+           WHERE account_id = ? AND transfer_account_id IS NOT NULL
+             AND date <= ?) as out_amt,
+        (SELECT COALESCE(SUM(amount),0) FROM transactions
+           WHERE transfer_account_id = ? AND date <= ?) as in_amt
+      ''',
+        [accountId, iso, accountId, iso],
+      );
+      final transfersOut = tr.isEmpty ? 0.0 : parseNum(tr.first['out_amt']);
+      final transfersIn = tr.isEmpty ? 0.0 : parseNum(tr.first['in_amt']);
+
+      if (isLiability) {
+        return initialBalance + expense - income + transfersOut - transfersIn;
+      }
+      return initialBalance + income - expense + transfersIn - transfersOut;
+    } catch (e) {
+      debugPrint('Error calculating balance as of $cutoff for $accountId: $e');
+      return 0.0;
+    }
+  }
+
   // Update account balance (now updates initial_balance)
   Future<int> updateAccountBalance(int id, double newBalance) async {
     await _detectBalanceColumn();
