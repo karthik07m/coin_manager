@@ -31,8 +31,17 @@ class SettingsScreen extends StatelessWidget {
         children: [
           _buildSection(
             context,
-            title: 'Categories & Budget',
+            title: 'Finances',
             children: [
+              _buildSettingTile(
+                context,
+                icon: Icons.account_balance_outlined,
+                activeIcon: Icons.account_balance,
+                title: 'Manage Accounts',
+                subtitle: 'Add, edit accounts for tracking transactions',
+                onTap: () =>
+                    Navigator.pushNamed(context, '/account-management'),
+              ),
               _buildSettingTile(
                 context,
                 icon: Icons.category_outlined,
@@ -54,60 +63,16 @@ class SettingsScreen extends StatelessWidget {
                       builder: (context) => const ManageBudgetScreen()),
                 ),
               ),
-              _buildSettingTile(
-                context,
-                icon: Icons.account_balance_outlined,
-                activeIcon: Icons.account_balance,
-                title: 'Manage Accounts',
-                subtitle: 'Add, edit accounts for tracking transactions',
-                onTap: () =>
-                    Navigator.pushNamed(context, '/account-management'),
-              ),
             ],
           ),
           const SizedBox(height: AppDimensions.spacing24),
           _buildSection(
             context,
-            title: 'Security',
-            children: [
-              Consumer<SettingsProvider>(
-                builder: (context, settings, child) {
-                  return _buildSettingTile(
-                    context,
-                    icon: Icons.lock_outline,
-                    activeIcon: Icons.lock,
-                    title: 'App Lock',
-                    subtitle: settings.isAppLockEnabled
-                        ? 'Require biometrics or PIN to open the app'
-                        : 'App Lock disabled',
-                    trailing: Switch(
-                      value: settings.isAppLockEnabled,
-                      onChanged: (value) =>
-                          _handleAppLockToggle(context, settings, value),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.spacing24),
-          _buildSection(
-            context,
-            title: 'Customize',
+            title: 'Appearance',
             children: [
               Consumer<SettingsProvider>(
                 builder: (context, settings, child) {
                   return _buildAccentColorTile(context, settings);
-                },
-              ),
-              _buildSettingTile(
-                context,
-                icon: Icons.currency_exchange_outlined,
-                activeIcon: Icons.currency_exchange,
-                title: 'Currency',
-                subtitle: 'Change your preferred currency',
-                onTap: () {
-                  _showCurrencySelectionDialog(context);
                 },
               ),
               Consumer<SettingsProvider>(
@@ -125,6 +90,23 @@ class SettingsScreen extends StatelessWidget {
                       },
                     ),
                   );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacing24),
+          _buildSection(
+            context,
+            title: 'General',
+            children: [
+              _buildSettingTile(
+                context,
+                icon: Icons.currency_exchange_outlined,
+                activeIcon: Icons.currency_exchange,
+                title: 'Currency',
+                subtitle: 'Change your preferred currency',
+                onTap: () {
+                  _showCurrencySelectionDialog(context);
                 },
               ),
               Consumer<SettingsProvider>(
@@ -146,6 +128,13 @@ class SettingsScreen extends StatelessWidget {
                   );
                 },
               ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacing24),
+          _buildSection(
+            context,
+            title: 'Notifications',
+            children: [
               Consumer<SettingsProvider>(
                 builder: (context, settings, child) {
                   return _buildSettingTile(
@@ -202,7 +191,7 @@ class SettingsScreen extends StatelessWidget {
             builder: (context, settings, child) {
               return _buildSection(
                 context,
-                title: 'Home Screen Widgets',
+                title: 'Home Screen',
                 children: [
                   _buildHomeWidgetTile(
                     context,
@@ -320,7 +309,32 @@ class SettingsScreen extends StatelessWidget {
           const SizedBox(height: AppDimensions.spacing24),
           _buildSection(
             context,
-            title: 'Data & Privacy',
+            title: 'Security',
+            children: [
+              Consumer<SettingsProvider>(
+                builder: (context, settings, child) {
+                  return _buildSettingTile(
+                    context,
+                    icon: Icons.lock_outline,
+                    activeIcon: Icons.lock,
+                    title: 'App Lock',
+                    subtitle: settings.isAppLockEnabled
+                        ? 'Require biometrics or PIN to open the app'
+                        : 'App Lock disabled',
+                    trailing: Switch(
+                      value: settings.isAppLockEnabled,
+                      onChanged: (value) =>
+                          _handleAppLockToggle(context, settings, value),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacing24),
+          _buildSection(
+            context,
+            title: 'Data & Backup',
             children: [
               _buildSettingTile(
                 context,
@@ -343,6 +357,16 @@ class SettingsScreen extends StatelessWidget {
               ),
               _buildSettingTile(
                 context,
+                icon: Icons.folder_open,
+                activeIcon: Icons.folder_open,
+                title: 'Manage Backups',
+                subtitle: 'View and restore previous backups',
+                onTap: () {
+                  Navigator.pushNamed(context, '/backup_management');
+                },
+              ),
+              _buildSettingTile(
+                context,
                 icon: Icons.table_view_outlined,
                 activeIcon: Icons.table_view,
                 title: 'Export Transactions CSV',
@@ -361,16 +385,13 @@ class SettingsScreen extends StatelessWidget {
                   await _importTransactionsCsv(context);
                 },
               ),
-              _buildSettingTile(
-                context,
-                icon: Icons.folder_open,
-                activeIcon: Icons.folder_open,
-                title: 'Manage Backups',
-                subtitle: 'View and restore previous backups',
-                onTap: () {
-                  Navigator.pushNamed(context, '/backup_management');
-                },
-              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacing24),
+          _buildSection(
+            context,
+            title: 'About',
+            children: [
               _buildSettingTile(
                 context,
                 icon: Icons.privacy_tip_outlined,
@@ -381,13 +402,6 @@ class SettingsScreen extends StatelessWidget {
                   Navigator.pushNamed(context, PrivacyPolicyScreen.routeName);
                 },
               ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.spacing24),
-          _buildSection(
-            context,
-            title: 'About',
-            children: [
               _buildSettingTile(
                 context,
                 icon: Icons.info_outline,
