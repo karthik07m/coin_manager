@@ -45,6 +45,10 @@ class AccountProvider extends ChangeNotifier {
   bool get hasMixedCurrencies =>
       _accounts.any((a) => a.currency.isNotEmpty && a.currency != _baseCurrency);
 
+  /// Fired after FX rates finish loading, so dependent aggregations (e.g.
+  /// transaction totals) can recompute. Wired to TransactionProvider in main.
+  VoidCallback? onRatesChanged;
+
   /// Load live FX rates for [base] so mixed-currency balances can be summed.
   /// Safe to call repeatedly; only refetches when needed.
   Future<void> loadRates(String base) async {
@@ -54,6 +58,7 @@ class AccountProvider extends ChangeNotifier {
     if (rates.isNotEmpty) {
       _rates = rates;
       notifyListeners();
+      onRatesChanged?.call();
     }
   }
 
@@ -63,6 +68,15 @@ class AccountProvider extends ChangeNotifier {
 
   /// The account's current balance expressed in the base currency.
   double balanceInBase(Account a) => _toBase(a.currentBalance, a.currency);
+
+  /// Convert an [amount] belonging to account [accountId] into the base
+  /// currency. Returns [amount] unchanged for base-currency accounts, unknown
+  /// accounts, or when rates aren't loaded — so single-currency stays exact.
+  double toBaseForAccount(int accountId, double amount) {
+    final acc = getAccountById(accountId);
+    if (acc == null) return amount;
+    return _toBase(amount, acc.currency);
+  }
 
   /// Assets = everything you own, converted to the base currency.
   double get totalAssets => _accounts
@@ -114,6 +128,9 @@ class AccountProvider extends ChangeNotifier {
       // Calculate current balances from transactions (async, non-blocking)
       await _calculateAllBalances();
       notifyListeners(); // Update UI after balance calculation
+      // An account's currency may have changed — refresh transaction totals
+      // so multi-currency reporting stays in sync.
+      onRatesChanged?.call();
     } catch (e) {
       debugPrint('Error loading accounts: $e');
       _isLoaded = true; // Ensure loaded even on error

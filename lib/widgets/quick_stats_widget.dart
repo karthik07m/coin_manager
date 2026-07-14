@@ -56,8 +56,8 @@ class QuickStatsWidget extends StatelessWidget {
                 !transaction.date.isBefore(startDate) &&
                 !transaction.date.isAfter(endDate))
             .toList();
-        final totalExpenses =
-            monthExpenses.fold(0.0, (sum, transaction) => sum + transaction.amount);
+        final totalExpenses = monthExpenses.fold(
+            0.0, (sum, transaction) => sum + transactionProvider.baseAmount(transaction));
         final budgetRemaining = totalBudget - totalExpenses;
         final budgetUsedPercent =
             totalBudget > 0 ? (totalExpenses / totalBudget * 100) : 0.0;

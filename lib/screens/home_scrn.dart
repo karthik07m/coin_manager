@@ -41,6 +41,9 @@ class _HomePageState extends State<HomePage> {
       final accountProvider =
           Provider.of<AccountProvider>(context, listen: false);
       accountProvider.loadAccounts();
+      // Load live FX rates early so multi-currency totals convert app-wide.
+      accountProvider.loadRates(
+          Provider.of<SettingsProvider>(context, listen: false).currencyCode);
       _fetchData(context, _selectedMonth);
     });
   }
@@ -78,10 +81,11 @@ class _HomePageState extends State<HomePage> {
 
           for (var transaction in transactions) {
             if (transaction.isTransfer) continue;
+            final amt = transactionProvider.baseAmount(transaction);
             if (transaction.isExpense) {
-              totalExpenses += transaction.amount;
+              totalExpenses += amt;
             } else {
-              totalIncome += transaction.amount;
+              totalIncome += amt;
             }
           }
 

@@ -139,7 +139,7 @@ class _CalendarExpenseScreenState extends State<CalendarExpenseScreen>
           transactionsByDay.forEach((day, transactions) {
             final dayExpense = transactions
                 .where((t) => t.isExpense)
-                .fold(0.0, (sum, t) => sum + t.amount);
+                .fold(0.0, (sum, t) => sum + transactionProvider.baseAmount(t));
             if (dayExpense > maxExpense) maxExpense = dayExpense;
           });
 
@@ -152,7 +152,7 @@ class _CalendarExpenseScreenState extends State<CalendarExpenseScreen>
           transactionsByDay.forEach((day, transactions) {
             final dayExpense = transactions
                 .where((t) => t.isExpense)
-                .fold(0.0, (sum, t) => sum + t.amount);
+                .fold(0.0, (sum, t) => sum + transactionProvider.baseAmount(t));
             totalExpenses += dayExpense;
             if (dayExpense > 0) daysWithTransactions++;
             if (dayExpense > highestAmount) {
@@ -535,13 +535,15 @@ class _DayDetailsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final categoryProvider = Provider.of<CategoryProvider>(context);
     final settingsProvider = Provider.of<SettingsProvider>(context);
+    final txProvider =
+        Provider.of<TransactionProvider>(context, listen: false);
 
     final totalExpenses = transactions
         .where((t) => t.isExpense)
-        .fold(0.0, (sum, t) => sum + t.amount);
+        .fold(0.0, (sum, t) => sum + txProvider.baseAmount(t));
     final totalIncome = transactions
         .where((t) => !t.isExpense)
-        .fold(0.0, (sum, t) => sum + t.amount);
+        .fold(0.0, (sum, t) => sum + txProvider.baseAmount(t));
 
     return DraggableScrollableSheet(
       initialChildSize: 0.6,

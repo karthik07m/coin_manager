@@ -244,15 +244,17 @@ class _TransactionListState extends State<TransactionList> {
   ({double income, double expense}) _totalsFor(
     List<Transaction> transactions,
   ) {
+    final provider = context.read<TransactionProvider>();
     double income = 0;
     double expense = 0;
 
     for (final transaction in transactions) {
       if (transaction.isTransfer) continue;
+      final amt = provider.baseAmount(transaction);
       if (transaction.isExpense) {
-        expense += transaction.amount;
+        expense += amt;
       } else {
-        income += transaction.amount;
+        income += amt;
       }
     }
 
@@ -263,18 +265,20 @@ class _TransactionListState extends State<TransactionList> {
     List<Transaction> transactions,
   ) {
     final totals = <DateTime, ({double income, double expense})>{};
+    final provider = context.read<TransactionProvider>();
 
     for (final transaction in transactions) {
       if (transaction.isTransfer) continue;
       final day = _dateOnly(transaction.date);
+      final amt = provider.baseAmount(transaction);
       final current = totals[day] ?? (income: 0.0, expense: 0.0);
       totals[day] = transaction.isExpense
           ? (
               income: current.income,
-              expense: current.expense + transaction.amount,
+              expense: current.expense + amt,
             )
           : (
-              income: current.income + transaction.amount,
+              income: current.income + amt,
               expense: current.expense,
             );
     }

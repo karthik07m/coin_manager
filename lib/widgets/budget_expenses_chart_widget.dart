@@ -498,7 +498,7 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
               t.isExpense &&
               t.date.isAfter(dayStart.subtract(const Duration(seconds: 1))) &&
               t.date.isBefore(dayEnd.add(const Duration(seconds: 1))))
-          .fold(0.0, (sum, t) => sum + t.amount);
+          .fold(0.0, (sum, t) => sum + transactionProvider.baseAmount(t));
 
       cumulativeExpenses += dayExpenses;
 

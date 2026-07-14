@@ -34,6 +34,29 @@ class TransactionProvider extends ChangeNotifier {
     if (cb != null) await cb();
   }
 
+  /// Resolves a transaction's amount into the base currency (wired to
+  /// AccountProvider in main). Null / base-currency accounts return the raw
+  /// amount, so single-currency reporting is unchanged.
+  double Function(int accountId, double amount)? baseAmountResolver;
+
+  /// A transaction's amount expressed in the user's base currency.
+  double baseAmount(Transaction t) => baseAmountResolver == null
+      ? t.amount
+      : baseAmountResolver!(t.accountId, t.amount);
+
+  DateTime? _lastTotalsStart;
+  DateTime? _lastTotalsEnd;
+
+  /// Recompute totals/category amounts for the last-used range and notify.
+  /// Called when FX rates load so converted figures refresh.
+  Future<void> reapplyRates() async {
+    if (_lastTotalsStart != null && _lastTotalsEnd != null) {
+      _updateTotalsForMonth(_lastTotalsStart!, _lastTotalsEnd!);
+    }
+    await _calculateCategoryAmounts();
+    notifyListeners();
+  }
+
   // Previous month comparison
   double _previousMonthExpenses = 0.0;
   DateTime? _cachedPreviousMonth;
@@ -331,6 +354,8 @@ class TransactionProvider extends ChangeNotifier {
   }
 
   void _updateTotalsForMonth(DateTime startDate, DateTime endDate) {
+    _lastTotalsStart = startDate;
+    _lastTotalsEnd = endDate;
     totalExpenses = _transactions
         .where((transaction) =>
             transaction.isExpense &&
@@ -338,7 +363,7 @@ class TransactionProvider extends ChangeNotifier {
             transaction.date
                 .isAfter(startDate.subtract(const Duration(days: 1))) &&
             transaction.date.isBefore(endDate.add(const Duration(days: 1))))
-        .fold(0.0, (sum, transaction) => sum + transaction.amount);
+        .fold(0.0, (sum, transaction) => sum + baseAmount(transaction));
 
     totalIncome = _transactions
         .where((transaction) =>
@@ -347,7 +372,7 @@ class TransactionProvider extends ChangeNotifier {
             transaction.date
                 .isAfter(startDate.subtract(const Duration(days: 1))) &&
             transaction.date.isBefore(endDate.add(const Duration(days: 1))))
-        .fold(0.0, (sum, transaction) => sum + transaction.amount);
+        .fold(0.0, (sum, transaction) => sum + baseAmount(transaction));
   }
 
   // Returns Future<void> so callers can await it and avoid race conditions
@@ -359,11 +384,12 @@ class TransactionProvider extends ChangeNotifier {
     // Calculate the total amount per category
     for (var transaction in _transactions) {
       if (transaction.isExpense && !transaction.isTransfer) {
+        final amt = baseAmount(transaction);
         if (categoryTotals.containsKey(transaction.categoryId)) {
           categoryTotals[transaction.categoryId] =
-              categoryTotals[transaction.categoryId]! + transaction.amount;
+              categoryTotals[transaction.categoryId]! + amt;
         } else {
-          categoryTotals[transaction.categoryId] = transaction.amount;
+          categoryTotals[transaction.categoryId] = amt;
         }
       }
     }
@@ -421,7 +447,7 @@ class TransactionProvider extends ChangeNotifier {
             transaction.date
                 .isAfter(startDate.subtract(const Duration(days: 1))) &&
             transaction.date.isBefore(endDate.add(const Duration(days: 1))))
-        .fold(0.0, (sum, transaction) => sum + transaction.amount);
+        .fold(0.0, (sum, transaction) => sum + baseAmount(transaction));
   }
 
   Future<void> checkAndGenerateRecurringTransactions() async {
@@ -558,7 +584,7 @@ class TransactionProvider extends ChangeNotifier {
 
     _previousMonthExpenses = transactions
         .where((t) => t.isExpense && !t.isTransfer)
-        .fold(0.0, (sum, t) => sum + t.amount);
+        .fold(0.0, (sum, t) => sum + baseAmount(t));
 
     _cachedPreviousMonth = prevMonth;
     notifyListeners();
@@ -610,7 +636,7 @@ class TransactionProvider extends ChangeNotifier {
             t.date.year == day.year &&
             t.date.month == day.month &&
             t.date.day == day.day)
-        .fold(0.0, (sum, t) => sum + t.amount);
+        .fold(0.0, (sum, t) => sum + baseAmount(t));
   }
 
   /// Get total income for a specific day
@@ -622,7 +648,7 @@ class TransactionProvider extends ChangeNotifier {
             t.date.year == day.year &&
             t.date.month == day.month &&
             t.date.day == day.day)
-        .fold(0.0, (sum, t) => sum + t.amount);
+        .fold(0.0, (sum, t) => sum + baseAmount(t));
   }
 
   /// Get transactions for a specific day

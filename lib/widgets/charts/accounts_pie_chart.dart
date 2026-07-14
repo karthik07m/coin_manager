@@ -91,11 +91,11 @@ class _AccountsPieChartState extends State<AccountsPieChart>
         for (var transaction in transactions) {
           if (transaction.isExpense) {
             final accId = transaction.accountId;
+            final amt = transactionProvider.baseAmount(transaction);
             if (accountSpending.containsKey(accId)) {
-              accountSpending[accId] =
-                  (accountSpending[accId] ?? 0.0) + transaction.amount;
+              accountSpending[accId] = (accountSpending[accId] ?? 0.0) + amt;
             } else {
-              unknownSpending += transaction.amount;
+              unknownSpending += amt;
             }
           }
         }

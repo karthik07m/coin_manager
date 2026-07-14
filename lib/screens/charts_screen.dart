@@ -296,10 +296,11 @@ class _ChartsScreenState extends State<ChartsScreen> {
           double totalIncome = 0.0;
           for (var transaction in transactions) {
             if (transaction.isTransfer) continue;
+            final amt = transactionProvider.baseAmount(transaction);
             if (transaction.isExpense) {
-              totalExpenses += transaction.amount;
+              totalExpenses += amt;
             } else {
-              totalIncome += transaction.amount;
+              totalIncome += amt;
             }
           }
 
@@ -608,11 +609,12 @@ class _ChartsScreenState extends State<ChartsScreen> {
     required String currencyCode,
   }) {
     // Spending per account this month.
+    final txProvider = context.read<TransactionProvider>();
     final Map<int, double> spendByAccount = {};
     for (final t in transactions) {
       if (t.isExpense && !t.isTransfer) {
         spendByAccount[t.accountId] =
-            (spendByAccount[t.accountId] ?? 0.0) + t.amount;
+            (spendByAccount[t.accountId] ?? 0.0) + txProvider.baseAmount(t);
       }
     }
 
@@ -818,10 +820,11 @@ class _ChartsScreenState extends State<ChartsScreen> {
   }
 
   double _sumByType(List<Transaction> transactions, {required bool isExpense}) {
+    final provider = context.read<TransactionProvider>();
     return transactions
         .where((transaction) =>
             transaction.isExpense == isExpense && !transaction.isTransfer)
-        .fold(0.0, (sum, transaction) => sum + transaction.amount);
+        .fold(0.0, (sum, transaction) => sum + provider.baseAmount(transaction));
   }
 
   double _percentChange(double current, double previous) {
@@ -830,11 +833,12 @@ class _ChartsScreenState extends State<ChartsScreen> {
   }
 
   _CategoryInsight _topExpenseCategory(List<Transaction> transactions) {
+    final provider = context.read<TransactionProvider>();
     final totals = <int, double>{};
     for (final transaction in transactions) {
       if (!transaction.isExpense || transaction.isTransfer) continue;
       totals[transaction.categoryId] =
-          (totals[transaction.categoryId] ?? 0) + transaction.amount;
+          (totals[transaction.categoryId] ?? 0) + provider.baseAmount(transaction);
     }
 
     if (totals.isEmpty) {

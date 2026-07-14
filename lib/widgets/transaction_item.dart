@@ -179,6 +179,15 @@ class _TransactionItemState extends State<TransactionItem> {
     final iconBgColor = (isExpense ? AppColors.negative : AppColors.positive)
         .withValues(alpha: 0.1);
 
+    // Show the amount in its account's own currency (multi-currency); totals
+    // elsewhere convert to the base currency.
+    final acct = context
+        .read<AccountProvider>()
+        .getAccountById(widget.transaction.accountId);
+    final acctCode = (acct != null && acct.currency.isNotEmpty)
+        ? acct.currency
+        : null;
+
     return Padding(
       padding: const EdgeInsets.all(AppDimensions.spacing16),
       child: Row(
@@ -252,8 +261,10 @@ class _TransactionItemState extends State<TransactionItem> {
                   return Text(
                     '${isExpense ? '-' : '+'}${UtilityFunction.addCommaWithSign(
                       widget.transaction.amount,
-                      currencySymbol: currency.symbol,
-                      currencyCode: currency.code,
+                      currencySymbol: acctCode != null
+                          ? currencySymbolForCode(acctCode)
+                          : currency.symbol,
+                      currencyCode: acctCode ?? currency.code,
                     )}',
                     style: AppTextStyles.amount.copyWith(
                       color: amountColor,

@@ -577,12 +577,14 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
 
                 double totalIncome = 0;
                 double totalExpense = 0;
+                final txProvider = context.read<TransactionProvider>();
                 for (final transaction in filteredTransactions) {
                   if (transaction.isTransfer) continue;
+                  final amt = txProvider.baseAmount(transaction);
                   if (transaction.isExpense) {
-                    totalExpense += transaction.amount;
+                    totalExpense += amt;
                   } else {
-                    totalIncome += transaction.amount;
+                    totalIncome += amt;
                   }
                 }
 

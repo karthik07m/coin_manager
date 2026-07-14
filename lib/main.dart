@@ -62,6 +62,9 @@ class MyApp extends StatelessWidget {
           update: (context, accountProvider, transactionProvider) {
             transactionProvider!.onBalancesAffected =
                 accountProvider.refreshBalances;
+            transactionProvider.baseAmountResolver =
+                accountProvider.toBaseForAccount;
+            accountProvider.onRatesChanged = transactionProvider.reapplyRates;
             return transactionProvider;
           },
         ),
