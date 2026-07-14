@@ -190,7 +190,7 @@ class _CategoryEditorPageState extends State<_CategoryEditorPage> {
                 ),
               ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 22, 20, 10),
+              padding: const EdgeInsets.fromLTRB(20, 22, 20, 4),
               child: Text(
                 'ICON',
                 style: AppTextStyles.caption.copyWith(
@@ -201,50 +201,75 @@ class _CategoryEditorPageState extends State<_CategoryEditorPage> {
                 ),
               ),
             ),
-            // Scrollable grid fills the rest; the keyboard just overlays its
-            // lower part (nothing here moves when the keyboard opens/closes).
+            // Scrollable, section-grouped grid fills the rest; the keyboard
+            // just overlays its lower part (nothing moves when it opens).
             Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              child: CustomScrollView(
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 5,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                ),
-                itemCount: categoryIcons.length,
-                itemBuilder: (context, index) {
-                  final icon = categoryIcons[index];
-                  final isSelected = _selectedIcon == icon;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedIcon = icon),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? context.appAccent.withValues(alpha: 0.18)
-                            : context.appSurfaceLight,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: isSelected
-                              ? context.appAccent
-                              : AppColors.divider.withValues(alpha: 0.3),
-                          width: isSelected ? 2 : 1,
+                slivers: [
+                  for (final group in categoryIconGroups) ...[
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+                      sliver: SliverToBoxAdapter(
+                        child: Text(
+                          group.label,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: context.textSecondary,
+                          ),
                         ),
                       ),
-                      padding: const EdgeInsets.all(9),
-                      child: Image.asset(
-                        icon,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const Icon(Icons.category, size: 24),
+                    ),
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      sliver: SliverGrid(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 5,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                        ),
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) => _iconTile(group.icons[index]),
+                          childCount: group.icons.length,
+                        ),
                       ),
                     ),
-                  );
-                },
+                  ],
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _iconTile(String icon) {
+    final isSelected = _selectedIcon == icon;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedIcon = icon),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSelected
+              ? context.appAccent.withValues(alpha: 0.18)
+              : context.appSurfaceLight,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected
+                ? context.appAccent
+                : AppColors.divider.withValues(alpha: 0.3),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        padding: const EdgeInsets.all(9),
+        child: Image.asset(
+          icon,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) =>
+              const Icon(Icons.category, size: 24),
         ),
       ),
     );
