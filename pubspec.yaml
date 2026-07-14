@@ -57,6 +57,9 @@ dependencies:
   local_auth: ^2.3.0
   uuid: ^4.5.1
   csv: ^6.0.0
+  google_sign_in: ^6.2.1
+  extension_google_sign_in_as_googleapis_auth: ^2.0.13
+  googleapis: ^15.0.0
 
 dev_dependencies:
   flutter_test:

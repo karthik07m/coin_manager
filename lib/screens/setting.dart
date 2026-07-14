@@ -12,6 +12,7 @@ import 'category_manger.dart';
 import 'manage_budget.dart';
 import 'privacy_policy.dart';
 import 'activity_history_screen.dart';
+import 'cloud_backup_screen.dart';
 import '../utilities/constants.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -363,6 +364,16 @@ class SettingsScreen extends StatelessWidget {
                 subtitle: 'View and restore previous backups',
                 onTap: () {
                   Navigator.pushNamed(context, '/backup_management');
+                },
+              ),
+              _buildSettingTile(
+                context,
+                icon: Icons.cloud_outlined,
+                activeIcon: Icons.cloud,
+                title: 'Google Drive Backup',
+                subtitle: 'Back up and restore from your Google Drive',
+                onTap: () {
+                  Navigator.pushNamed(context, CloudBackupScreen.routeName);
                 },
               ),
               _buildSettingTile(
