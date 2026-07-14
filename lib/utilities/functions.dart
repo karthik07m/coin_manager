@@ -165,11 +165,12 @@ class UtilityFunction {
     return "$currencySymbol$formattedAmount";
   }
 
-  /// Format money with commas and optional decimals
-  /// Example: 1234.56 => "$1,234" or "$1,234.56"
+  /// Format money with commas. Shows exact cents by default; pass
+  /// showDecimals:false only where a rounded figure is explicitly wanted.
+  /// Example: 1234.56 => "$1,234.56"
   static String formatMoney(
     double value, {
-    bool showDecimals = false,
+    bool showDecimals = true,
     String symbol = '\$',
     String currencyCode = 'USD',
   }) {
