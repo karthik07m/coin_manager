@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/transaction_provider.dart';
@@ -31,6 +32,10 @@ class _TransactionListState extends State<TransactionList> {
   bool _initialized = false;
   bool _isJumpingToMonth = false;
   VoidCallback? _pendingSettleListener;
+
+  // Multi-select delete
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = {};
 
   @override
   void initState() {
@@ -302,10 +307,15 @@ class _TransactionListState extends State<TransactionList> {
       final balance = totals.income - totals.expense;
       final categoryMap = categoryProvider.categoryMap;
 
-      return Column(
-        children: [
-          // Custom Header with Search & Filter
-          _buildHeader(),
+      return PopScope(
+        canPop: !_selectionMode,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && _selectionMode) _exitSelection();
+        },
+        child: Column(
+          children: [
+            // Custom Header with Search & Filter
+            _buildHeader(),
 
           const SizedBox(height: AppDimensions.spacing8),
           _buildMonthScroller(),
@@ -442,6 +452,13 @@ class _TransactionListState extends State<TransactionList> {
                                     transaction,
                                     categoryMap[transaction.categoryId],
                                     key: ValueKey('item_${transaction.id}'),
+                                    selectionMode: _selectionMode,
+                                    selected:
+                                        _selectedIds.contains(transaction.id),
+                                    onLongPress: () =>
+                                        _enterSelection(transaction.id),
+                                    onSelectToggle: () =>
+                                        _toggleSelection(transaction.id),
                                   ),
                                 ),
                               ],
@@ -453,12 +470,121 @@ class _TransactionListState extends State<TransactionList> {
               },
             ),
           ),
-        ],
+          ],
+        ),
       );
     });
   }
 
+  void _enterSelection(String id) {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _selectionMode = true;
+      _selectedIds.add(id);
+    });
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+        if (_selectedIds.isEmpty) _selectionMode = false;
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  void _exitSelection() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    if (_selectedIds.isEmpty) return;
+    final count = _selectedIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.appSurface,
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                color: AppColors.warning, size: 24),
+            const SizedBox(width: 8),
+            Text('Delete $count transaction${count == 1 ? '' : 's'}?',
+                style: AppTextStyles.h3),
+          ],
+        ),
+        content: Text(
+          'This action cannot be undone.',
+          style: AppTextStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel',
+                style: AppTextStyles.bodyMedium
+                    .copyWith(color: context.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Delete',
+                style: AppTextStyles.bodyMedium
+                    .copyWith(color: AppColors.negative)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final provider = context.read<TransactionProvider>();
+    final ids = _selectedIds.toList();
+    for (final id in ids) {
+      await provider.deleteTransaction(id);
+    }
+    if (!mounted) return;
+    _exitSelection();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: context.appSurface,
+        content: Text(
+          '$count transaction${count == 1 ? '' : 's'} deleted',
+          style: AppTextStyles.bodyMedium,
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeader() {
+    if (_selectionMode) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(8, 10, 12, 0),
+        color: Theme.of(context).colorScheme.surface,
+        child: Row(
+          children: [
+            IconButton(
+              icon: Icon(Icons.close, color: context.textPrimary),
+              onPressed: _exitSelection,
+            ),
+            Text(
+              '${_selectedIds.length} selected',
+              style: AppTextStyles.h1
+                  .copyWith(fontWeight: FontWeight.w800, fontSize: 24),
+            ),
+            const Spacer(),
+            IconButton(
+              tooltip: 'Delete selected',
+              icon: const Icon(Icons.delete_outline, color: AppColors.negative),
+              onPressed: _selectedIds.isEmpty ? null : _deleteSelected,
+            ),
+          ],
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
       color: Theme.of(context).colorScheme.surface,

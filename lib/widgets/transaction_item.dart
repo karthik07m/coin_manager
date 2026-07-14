@@ -15,8 +15,21 @@ class TransactionItem extends StatefulWidget {
   final Category? category;
   final bool enableDel;
 
+  /// Multi-select support. When [selectionMode] is on, a tap toggles
+  /// [selected] via [onSelectToggle] instead of opening the transaction;
+  /// [onLongPress] is used to enter selection mode from a normal tap state.
+  final bool selectionMode;
+  final bool selected;
+  final VoidCallback? onSelectToggle;
+  final VoidCallback? onLongPress;
+
   const TransactionItem(this.transaction, this.category,
-      {this.enableDel = false, super.key});
+      {this.enableDel = false,
+      this.selectionMode = false,
+      this.selected = false,
+      this.onSelectToggle,
+      this.onLongPress,
+      super.key});
 
   @override
   State<TransactionItem> createState() => _TransactionItemState();
@@ -53,26 +66,65 @@ class _TransactionItemState extends State<TransactionItem> {
   }
 
   Widget _buildTappableCard(BuildContext context) {
+    final accent = context.appAccent;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown: _handleTapDown,
       onTapUp: _handleTapUp,
       onTapCancel: _handleTapCancel,
-      onTap: _openTransaction,
+      onTap: () {
+        if (widget.selectionMode) {
+          widget.onSelectToggle?.call();
+        } else {
+          _openTransaction();
+        }
+      },
+      onLongPress: widget.onLongPress,
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: widget.selected
+              ? accent.withValues(alpha: 0.10)
+              : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
           boxShadow: AppShadows.card,
           border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
-            width: 0.5,
+            color: widget.selected
+                ? accent
+                : Theme.of(context)
+                    .colorScheme
+                    .outline
+                    .withValues(alpha: 0.5),
+            width: widget.selected ? 1.5 : 0.5,
           ),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-          child: _buildListTile(context),
+          child: Stack(
+            children: [
+              _buildListTile(context),
+              if (widget.selectionMode)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: widget.selected
+                          ? accent
+                          : Colors.black.withValues(alpha: 0.35),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: widget.selected
+                        ? const Icon(Icons.check,
+                            size: 14, color: Colors.white)
+                        : null,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
