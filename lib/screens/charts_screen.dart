@@ -292,10 +292,20 @@ class _ChartsScreenState extends State<ChartsScreen> {
             (context, transactionProvider, accountProvider, settings, child) {
           final transactions = transactionProvider.transactions;
 
-          // Calculate total expenses
+          // Calculate totals — scoped to the selected month. The shared
+          // transaction list may hold a wider range loaded by another tab, so
+          // sum only this month to avoid a wrong headline total.
+          final monthStart =
+              DateTime(_selectedMonth.year, _selectedMonth.month, 1);
+          final monthEnd =
+              DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
           double totalExpenses = 0.0;
           double totalIncome = 0.0;
           for (var transaction in transactions) {
+            if (transaction.date.isBefore(monthStart) ||
+                !transaction.date.isBefore(monthEnd)) {
+              continue;
+            }
             if (transaction.isTransfer) continue;
             final amt = transactionProvider.baseAmount(transaction);
             if (transaction.isExpense) {
@@ -389,6 +399,16 @@ class _ChartsScreenState extends State<ChartsScreen> {
                     YearlyExpensesChart(
                       year: _selectedMonth.year,
                       highlightMonth: _selectedMonth.month,
+                      // Tapping "View" on a bar jumps the whole Charts
+                      // screen to that month (same path as the month picker).
+                      onViewMonth: (m) {
+                        final month = DateTime(_selectedMonth.year, m);
+                        setState(() {
+                          _selectedMonth = month;
+                          _categorySelectionResetToken++;
+                        });
+                        _fetchData(context, month);
+                      },
                     ),
                   ],
 

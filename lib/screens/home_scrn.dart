@@ -75,11 +75,22 @@ class _HomePageState extends State<HomePage> {
         builder: (context, transactionProvider, settingsProvider, child) {
           final transactions = transactionProvider.transactions;
 
-          // Calculate totals
+          // Calculate totals — scoped to the selected month. The provider's
+          // transaction list is shared across tabs and may hold a wider range
+          // (e.g. the List tab prefetches 3 months), so summing it unfiltered
+          // showed a wrong balance until a refresh reloaded just this month.
+          final monthStart =
+              DateTime(_selectedMonth.year, _selectedMonth.month, 1);
+          final monthEnd =
+              DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
           double totalIncome = 0.0;
           double totalExpenses = 0.0;
 
           for (var transaction in transactions) {
+            if (transaction.date.isBefore(monthStart) ||
+                !transaction.date.isBefore(monthEnd)) {
+              continue;
+            }
             if (transaction.isTransfer) continue;
             final amt = transactionProvider.baseAmount(transaction);
             if (transaction.isExpense) {
