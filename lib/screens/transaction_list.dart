@@ -28,8 +28,13 @@ class _TransactionListState extends State<TransactionList> {
   late DateTime _startDate;
   late DateTime _endDate;
   late List<DateTime> _months;
+  // One key per month tab so _scrollToSelectedMonth can measure its real
+  // rendered position (widths vary with month-name length) instead of
+  // guessing a fixed per-item pixel width.
+  late List<GlobalKey> _monthItemKeys;
   int? _selectedCategoryFilter;
   bool _initialized = false;
+  bool _wasVisible = false;
   bool _isJumpingToMonth = false;
   VoidCallback? _pendingSettleListener;
 
@@ -42,6 +47,7 @@ class _TransactionListState extends State<TransactionList> {
     super.initState();
     _selectedDate = DateTime.now();
     _months = _generateMonths();
+    _monthItemKeys = List.generate(_months.length, (_) => GlobalKey());
     _setMonthDateBounds(_selectedDate);
 
     final initialIndex = _months.indexWhere(
@@ -50,11 +56,8 @@ class _TransactionListState extends State<TransactionList> {
     _pageController = PageController(initialPage: initialIndex);
     _scrollController = ScrollController();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollToSelectedMonth(initialIndex);
-      }
-    });
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _scrollToSelectedMonth(initialIndex));
   }
 
   @override
@@ -67,6 +70,20 @@ class _TransactionListState extends State<TransactionList> {
       _initialized = true;
       _loadTransactions();
     }
+
+    // This screen is built inside the menu's IndexedStack while hidden, so the
+    // initState centering runs before the tab is ever shown. The menu wraps
+    // each tab in a TickerMode(enabled: isSelected); reading it here makes this
+    // callback re-fire when the List tab becomes visible, so we re-center on
+    // the current month exactly when the user lands on it.
+    final visible = TickerMode.of(context);
+    if (visible && !_wasVisible) {
+      final index = _months.indexWhere((m) =>
+          m.year == _selectedDate.year && m.month == _selectedDate.month);
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _scrollToSelectedMonth(index));
+    }
+    _wasVisible = visible;
   }
 
   List<DateTime> _generateMonths() {
@@ -152,16 +169,27 @@ class _TransactionListState extends State<TransactionList> {
     scrolling.addListener(listener);
   }
 
-  void _scrollToSelectedMonth(int index) {
-    if (!_scrollController.hasClients) return;
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final double position = index * 78.0; // 70 width + 8 total margin
-    final double maxScroll = _scrollController.position.maxScrollExtent;
-    final double offset =
-        (position - (screenWidth / 2) + 40.0).clamp(0, maxScroll);
-
-    _scrollController.animateTo(
-      offset,
+  /// Centers month tab [index] in the scroller. Uses the tab's actual
+  /// rendered position (via its GlobalKey) rather than an assumed per-item
+  /// pixel width, since tab width varies with month-name length. On a cold
+  /// app start the tab may not be laid out on the very first frame — retry
+  /// on the following frames instead of silently giving up.
+  void _scrollToSelectedMonth(int index, {int retriesLeft = 5}) {
+    if (index < 0 || index >= _monthItemKeys.length) return;
+    final ctx = _monthItemKeys[index].currentContext;
+    if (ctx == null) {
+      if (retriesLeft > 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _scrollToSelectedMonth(index, retriesLeft: retriesLeft - 1);
+          }
+        });
+      }
+      return;
+    }
+    Scrollable.ensureVisible(
+      ctx,
+      alignment: 0.5,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
     );
@@ -705,83 +733,89 @@ class _TransactionListState extends State<TransactionList> {
     return Container(
       height: 60,
       margin: const EdgeInsets.only(top: 10),
-      child: ListView.builder(
+      // A plain Row (not ListView.builder) so every tab is always laid out —
+      // _scrollToSelectedMonth needs each tab's real GlobalKey context to
+      // measure its position, which lazy-built list items wouldn't have
+      // until scrolled into view.
+      child: SingleChildScrollView(
         controller: _scrollController,
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _months.length,
-        itemBuilder: (context, index) {
-          final monthDate = _months[index];
-          final isSelected = monthDate.year == _selectedDate.year &&
-              monthDate.month == _selectedDate.month;
-          final colorScheme = Theme.of(context).colorScheme;
+        child: Row(
+          children: [
+            for (int index = 0; index < _months.length; index++)
+              _buildMonthTab(index),
+          ],
+        ),
+      ),
+    );
+  }
 
-          final now = DateTime.now();
-          final isCurrentYear = monthDate.year == now.year;
+  Widget _buildMonthTab(int index) {
+    final monthDate = _months[index];
+    final isSelected = monthDate.year == _selectedDate.year &&
+        monthDate.month == _selectedDate.month;
+    final colorScheme = Theme.of(context).colorScheme;
 
-          final monthStyle = isSelected
-              ? TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: context.textPrimary)
-              : TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
-                  color: colorScheme.onSurface.withValues(alpha: 0.6));
+    final now = DateTime.now();
+    final isCurrentYear = monthDate.year == now.year;
 
-          return GestureDetector(
-            onTap: () => _goToMonth(index),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOut,
-              margin: const EdgeInsets.only(right: 24),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: isSelected
-                        ? colorScheme.primary
-                        : Colors.transparent,
-                    width: 2,
-                  ),
-                ),
-              ),
-              child: Center(
-                child: isCurrentYear
-                    ? AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeOut,
-                        style: monthStyle,
-                        child: Text(DateFormat.MMMM().format(monthDate)),
-                      )
-                    : Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 250),
-                            curve: Curves.easeOut,
-                            style: monthStyle,
-                            child: Text(DateFormat.MMMM().format(monthDate)),
-                          ),
-                          AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 250),
-                            curve: Curves.easeOut,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w400,
-                              color: isSelected
-                                  ? context.textSecondary
-                                  : colorScheme.onSurface
-                                      .withValues(alpha: 0.5),
-                            ),
-                            child: Text(DateFormat.y().format(monthDate)),
-                          ),
-                        ],
-                      ),
-              ),
+    final monthStyle = isSelected
+        ? TextStyle(
+            fontSize: 16, fontWeight: FontWeight.bold, color: context.textPrimary)
+        : TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w400,
+            color: colorScheme.onSurface.withValues(alpha: 0.6));
+
+    return GestureDetector(
+      key: _monthItemKeys[index],
+      onTap: () => _goToMonth(index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+        margin: const EdgeInsets.only(right: 24),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isSelected ? colorScheme.primary : Colors.transparent,
+              width: 2,
             ),
-          );
-        },
+          ),
+        ),
+        child: Center(
+          child: isCurrentYear
+              ? AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOut,
+                  style: monthStyle,
+                  child: Text(DateFormat.MMMM().format(monthDate)),
+                )
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeOut,
+                      style: monthStyle,
+                      child: Text(DateFormat.MMMM().format(monthDate)),
+                    ),
+                    AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeOut,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                        color: isSelected
+                            ? context.textSecondary
+                            : colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                      child: Text(DateFormat.y().format(monthDate)),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }
