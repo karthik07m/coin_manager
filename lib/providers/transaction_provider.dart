@@ -285,6 +285,17 @@ class TransactionProvider extends ChangeNotifier {
     if (transaction == null) return;
 
     if (transaction.isRecurring) {
+      // Tombstone this month so checkAndGenerateRecurringTransactions never
+      // resurrects the deleted instance on the next app start.
+      final recurrenceId = transaction.recurrenceId ?? transaction.id;
+      await _dbHelper.insertRecurringSkip(
+        recurrenceId,
+        transaction.date.year,
+        transaction.date.month,
+      );
+
+      // The series itself continues: make sure next month's instance exists
+      // even if this row was the series seed.
       final nextMonth = DateTime(
         transaction.date.year,
         transaction.date.month + 1,
@@ -540,6 +551,12 @@ class TransactionProvider extends ChangeNotifier {
         await _recurrenceIdsForMonth(targetYear, targetMonth);
 
     if (existing.contains(recurrenceId)) return;
+
+    // Never resurrect an instance the user deliberately deleted.
+    if (await _dbHelper.isRecurringSkipped(
+        recurrenceId, targetYear, targetMonth)) {
+      return;
+    }
     existing.add(recurrenceId);
 
     // Clone and Create
