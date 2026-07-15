@@ -53,6 +53,7 @@ class QuickStatsWidget extends StatelessWidget {
         final monthExpenses = transactionProvider.transactions
             .where((transaction) =>
                 transaction.isExpense &&
+                !transaction.isTransfer &&
                 !transaction.date.isBefore(startDate) &&
                 !transaction.date.isAfter(endDate))
             .toList();

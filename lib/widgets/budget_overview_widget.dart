@@ -125,11 +125,11 @@ class BudgetOverviewWidget extends StatelessWidget {
           );
         }
 
-        // Calculate summary statistics
-        double totalBudget = 0;
-        double totalSpent = 0;
+        // Per-category budgets drive the breakdown below and the on-track
+        // count, but the summary tracks the OVERALL budget so it matches the
+        // Monthly Budget card (one honest "am I over?" number).
+        double sumCategoryBudgets = 0;
         int onTrackCount = 0;
-
         for (var category in categoriesWithBudgets) {
           final budget = budgetProvider.getBudget(category.name, currentMonth);
           final spent = transactionProvider.getCategorySpending(
@@ -137,14 +137,28 @@ class BudgetOverviewWidget extends StatelessWidget {
             startDate,
             endDate,
           );
-          totalBudget += budget;
-          totalSpent += spent;
+          sumCategoryBudgets += budget;
 
           final percentSpent = budget > 0 ? (spent / budget) : 0.0;
           if (percentSpent < 0.8) {
             onTrackCount++;
           }
         }
+
+        // Overall budget = the month's total budget (fall back to the sum of
+        // category budgets if no total is set). Spent = ALL expense spending
+        // this month, excluding transfers — the same basis as the top card.
+        final overallBudget = budgetProvider.getTotalBudget(currentMonth);
+        final totalBudget =
+            overallBudget > 0 ? overallBudget : sumCategoryBudgets;
+        final totalSpent = transactionProvider.transactions
+            .where((t) =>
+                t.isExpense &&
+                !t.isTransfer &&
+                !t.date.isBefore(startDate) &&
+                !t.date.isAfter(endDate))
+            .fold(
+                0.0, (sum, t) => sum + transactionProvider.baseAmount(t));
 
         final totalPercent = totalBudget > 0 ? (totalSpent / totalBudget) : 0.0;
 
