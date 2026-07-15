@@ -639,6 +639,24 @@ class TransactionProvider extends ChangeNotifier {
         .fold(0.0, (sum, t) => sum + baseAmount(t));
   }
 
+  /// Total expenses per calendar month (index 0 = Jan .. 11 = Dec) for
+  /// [year], converted to the base currency and excluding transfers.
+  Future<List<double>> monthlyExpenseTotals(int year) async {
+    final start = DateTime(year, 1, 1);
+    final end = DateTime(year, 12, 31, 23, 59, 59);
+    final txns = await _dbHelper.getTransactionsByType(
+      isExpense: true,
+      startDate: start,
+      endDate: end,
+    );
+    final totals = List<double>.filled(12, 0.0);
+    for (final t in txns) {
+      if (t.isTransfer) continue;
+      totals[t.date.month - 1] += baseAmount(t);
+    }
+    return totals;
+  }
+
   /// Get total income for a specific day
   double getDayIncome(DateTime day) {
     return _transactions
