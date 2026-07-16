@@ -15,6 +15,9 @@ class Debt {
   // The transaction that created this debt (loan logged from the
   // transaction form), if any.
   String? transactionId;
+  // The account the loan was booked against (money out for lending, money in
+  // for borrowing), if any.
+  int? accountId;
   DebtStatus status;
   final DateTime createdOn;
   late DateTime modifiedOn;
@@ -32,6 +35,7 @@ class Debt {
     this.isRecurring = false,
     this.recurringAmount,
     this.transactionId,
+    this.accountId,
     required this.status,
     required this.createdOn,
     required this.modifiedOn,
@@ -50,6 +54,7 @@ class Debt {
     bool isRecurring = false,
     double? recurringAmount,
     String? transactionId,
+    int? accountId,
   }) {
     DateTime now = DateTime.now();
     return Debt(
@@ -65,6 +70,7 @@ class Debt {
       isRecurring: isRecurring,
       recurringAmount: recurringAmount,
       transactionId: transactionId,
+      accountId: accountId,
       status: DebtStatus.active,
       createdOn: now,
       modifiedOn: now,
@@ -153,6 +159,7 @@ class Debt {
       'is_recurring': isRecurring ? 1 : 0,
       'recurring_amount': recurringAmount,
       'transaction_id': transactionId,
+      'account_id': accountId,
       'status': status.index,
       'created_on': createdOn.toIso8601String(),
       'modified_on': modifiedOn.toIso8601String(),
@@ -174,6 +181,7 @@ class Debt {
       isRecurring: (map['is_recurring'] ?? 0) == 1,
       recurringAmount: map['recurring_amount'],
       transactionId: map['transaction_id'],
+      accountId: map['account_id'] as int?,
       status: DebtStatus.values[map['status']],
       createdOn: DateTime.parse(map['created_on']),
       modifiedOn: DateTime.parse(map['modified_on']),

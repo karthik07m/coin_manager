@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/debt_provider.dart';
+import '../providers/account_provider.dart';
+import '../providers/transaction_provider.dart';
+import '../providers/category_provider.dart';
 import '../utilities/id_generator.dart';
 import '../models/debt.dart';
+import '../models/account.dart';
+import '../models/transaction.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../widgets/calculator_field.dart';
@@ -39,6 +44,11 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
   Debt? _existingDebt;
   bool _isLoading = true;
 
+  // Account linking: book the loan against an account as a transaction.
+  List<Account> _accounts = [];
+  int? _selectedAccountId;
+  bool _bookAsTransaction = true;
+
   @override
   void initState() {
     super.initState();
@@ -57,8 +67,21 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
   }
 
   Future<void> _loadDebtDetails() async {
+    // Capture providers before any await to avoid using context across gaps.
+    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
+    final debtProvider = Provider.of<DebtProvider>(context, listen: false);
+
+    // Load accounts for the "book against account" picker.
+    if (!accountProvider.isLoaded) {
+      await accountProvider.loadAccounts();
+    }
+    if (!mounted) return;
+    _accounts = List<Account>.from(accountProvider.accounts);
+    final defaultId = accountProvider.defaultAccount?.id;
+    _selectedAccountId =
+        defaultId ?? (_accounts.isNotEmpty ? _accounts.first.id : null);
+
     if (widget.debtId != null) {
-      final debtProvider = Provider.of<DebtProvider>(context, listen: false);
       _existingDebt = debtProvider.getDebtById(widget.debtId!);
 
       if (_existingDebt != null) {
@@ -81,6 +104,9 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
           if (_existingDebt!.recurringAmount != null) {
             _recurringAmountController.text =
                 _existingDebt!.recurringAmount!.toStringAsFixed(2);
+          }
+          if (_existingDebt!.accountId != null) {
+            _selectedAccountId = _existingDebt!.accountId;
           }
         });
       }
@@ -131,6 +157,23 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
         backgroundColor: AppColors.negative,
       ),
     );
+  }
+
+  /// "Miscellaneous" category id of the right type for the booked loan
+  /// transaction, with safe fallbacks.
+  Future<int> _miscCategoryId(bool isExpense) async {
+    final categoryProvider =
+        Provider.of<CategoryProvider>(context, listen: false);
+    if (categoryProvider.categoryMap.isEmpty) {
+      await categoryProvider.fetchAllCategories();
+    }
+    for (final category in categoryProvider.categoryMap.values) {
+      if (category.isExpense == isExpense &&
+          category.name.toLowerCase() == 'miscellaneous') {
+        return category.id!;
+      }
+    }
+    return isExpense ? defaultExpenseCat : defaultIncomeCat;
   }
 
   Future<void> _saveDebt() async {
@@ -199,19 +242,48 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
       debt = _existingDebt!;
       await debtProvider.updateDebt(debt);
     } else {
+      final title = _titleController.text.trim();
+      final debtorName = _debtorNameController.text.trim();
+
+      // Book the loan against an account as a transaction so balances reflect
+      // it: lending money is money OUT (expense), borrowing is money IN
+      // (income). Skipped if the user turned booking off or picked no account.
+      String? loanTxnId;
+      if (_bookAsTransaction && _selectedAccountId != null) {
+        final txProvider =
+            Provider.of<TransactionProvider>(context, listen: false);
+        final isExpense = !_isLiability; // lend = expense, borrow = income
+        final categoryId = await _miscCategoryId(isExpense);
+        final loanTxn = Transaction.createNew(
+          id: newId(),
+          title: _isLiability
+              ? 'Borrowed from $debtorName · $title'
+              : 'Lent to $debtorName · $title',
+          amount: amount,
+          categoryId: categoryId,
+          accountId: _selectedAccountId!,
+          date: DateTime.now(),
+          isExpense: isExpense,
+        );
+        await txProvider.addTransaction(loanTxn);
+        loanTxnId = loanTxn.id;
+      }
+
       // Create new debt
       debt = Debt.createNew(
         id: newId(),
-        title: _titleController.text.trim(),
+        title: title,
         amount: amount,
         amountPaid: amountPaid,
-        debtorName: _debtorNameController.text.trim(),
+        debtorName: debtorName,
         isLiability: _isLiability,
         dueDate: _dueDate,
         interestRate: interestRate,
         notes: notes,
         isRecurring: _isRecurring,
         recurringAmount: recurringAmount,
+        transactionId: loanTxnId,
+        accountId: _selectedAccountId,
       );
       await debtProvider.addDebt(debt);
     }
@@ -428,6 +500,12 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
 
                 const SizedBox(height: AppDimensions.spacing16),
 
+                // Account link + book-as-transaction (new debts only).
+                if (_existingDebt == null && _accounts.isNotEmpty) ...[
+                  _buildAccountSection(context),
+                  const SizedBox(height: AppDimensions.spacing16),
+                ],
+
                 // Due Date Field
                 InkWell(
                   onTap: () => _selectDate(context),
@@ -624,6 +702,90 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildAccountSection(BuildContext context) {
+    // Lending money leaves an account; borrowing adds to it.
+    final effectLabel = _isLiability
+        ? 'Adds the amount to this account (money received)'
+        : 'Deducts the amount from this account (money lent)';
+    return Container(
+      padding: const EdgeInsets.all(AppDimensions.spacing16),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+        border: Border.all(
+          color: _bookAsTransaction
+              ? context.appAccent.withValues(alpha: 0.3)
+              : context.textSecondary.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.account_balance_wallet_outlined,
+                  color: _bookAsTransaction
+                      ? context.appAccent
+                      : context.textSecondary,
+                  size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Record against account',
+                        style: AppTextStyles.bodyMedium
+                            .copyWith(fontWeight: FontWeight.bold)),
+                    Text(
+                      _bookAsTransaction
+                          ? effectLabel
+                          : 'Track this debt only, without a transaction',
+                      style: AppTextStyles.caption
+                          .copyWith(color: context.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _bookAsTransaction,
+                onChanged: (v) => setState(() => _bookAsTransaction = v),
+                activeColor: context.appAccent,
+              ),
+            ],
+          ),
+          if (_bookAsTransaction) ...[
+            const SizedBox(height: AppDimensions.spacing12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: context.appSurfaceLight,
+                borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  isExpanded: true,
+                  value: _selectedAccountId,
+                  dropdownColor: context.appSurface,
+                  borderRadius:
+                      BorderRadius.circular(AppDimensions.radiusMedium),
+                  items: _accounts
+                      .map((a) => DropdownMenuItem<int>(
+                            value: a.id,
+                            child: Text(a.name,
+                                style: AppTextStyles.bodyMedium,
+                                overflow: TextOverflow.ellipsis),
+                          ))
+                      .toList(),
+                  onChanged: (v) => setState(() => _selectedAccountId = v),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

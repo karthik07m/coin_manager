@@ -28,6 +28,7 @@ class DebtDBHelper {
   final String columnIsRecurring = 'is_recurring';
   final String columnRecurringAmount = 'recurring_amount';
   final String columnTransactionId = 'transaction_id';
+  final String columnAccountId = 'account_id';
   final String columnStatus = 'status';
   final String columnCreatedOn = 'created_on';
   final String columnModifiedOn = 'modified_on';
@@ -55,7 +56,7 @@ class DebtDBHelper {
     String path = join(documentsDirectory.path, 'debts.db');
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -77,6 +78,7 @@ class DebtDBHelper {
         $columnIsRecurring INTEGER DEFAULT 0,
         $columnRecurringAmount REAL,
         $columnTransactionId TEXT,
+        $columnAccountId INTEGER,
         $columnStatus INTEGER NOT NULL,
         $columnCreatedOn TEXT NOT NULL,
         $columnModifiedOn TEXT NOT NULL
@@ -140,6 +142,16 @@ class DebtDBHelper {
       } catch (e) {
         debugPrint(
             'Note: payment $paymentColumnTransactionId column might already exist');
+      }
+    }
+
+    if (oldVersion < 4) {
+      // Link a debt to the account its loan was booked against.
+      try {
+        await db.execute(
+            'ALTER TABLE $debtsTable ADD COLUMN $columnAccountId INTEGER');
+      } catch (e) {
+        debugPrint('Note: $columnAccountId column might already exist');
       }
     }
   }
