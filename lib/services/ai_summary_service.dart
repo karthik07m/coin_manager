@@ -10,18 +10,27 @@ class AiSummaryService {
   AiSummaryService({TransactionDBHelper? dbHelper})
       : _dbHelper = dbHelper ?? TransactionDBHelper();
 
+  /// Converts a transaction's amount into the user's base currency. Defaults
+  /// to the raw amount so the service still works standalone.
+  double Function(Transaction)? _amountOf;
+
+  double _amt(Transaction t) => _amountOf?.call(t) ?? t.amount;
+
   Future<String> buildSummary({
     required AiSummaryRequest request,
     required List<Category> categories,
     required String currencySymbol,
     required String currencyCode,
+    double Function(Transaction)? amountOf,
   }) async {
+    _amountOf = amountOf;
+
     if (request.metric == AiSummaryMetric.upcomingRecurring) {
       final upcoming = await _dbHelper.getAllUpcomingRecurringTransactions();
       return _formatUpcoming(upcoming, currencySymbol, currencyCode);
     }
 
-    final transactions = await _dbHelper.getTransactionsByType(
+    final rawTransactions = await _dbHelper.getTransactionsByType(
       startDate: request.startDate,
       endDate: DateTime(
         request.endDate.year,
@@ -33,12 +42,22 @@ class AiSummaryService {
       ),
     );
 
+    // Transfers move money between the user's own accounts — they are not
+    // spending or income, so they must never land in these totals (transfer
+    // rows carry isExpense = true). Future-dated rows (generated recurring
+    // instances later this month) are excluded too, so "you spent X this
+    // month" matches what Home reports for the same period.
+    final now = DateTime.now();
+    final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    final transactions = rawTransactions
+        .where((t) => !t.isTransfer && !t.date.isAfter(todayEnd))
+        .toList();
+
     switch (request.metric) {
       case AiSummaryMetric.totalSpending:
         final expenses =
             transactions.where((transaction) => transaction.isExpense).toList();
-        final total =
-            expenses.fold(0.0, (sum, transaction) => sum + transaction.amount);
+        final total = expenses.fold(0.0, (sum, t) => sum + _amt(t));
         if (expenses.isEmpty) {
           return '🎉 No expenses ${_periodText(request)} — your wallet thanks you!';
         }
@@ -57,15 +76,15 @@ class AiSummaryService {
       case AiSummaryMetric.totalIncome:
         final total = transactions
             .where((transaction) => !transaction.isExpense)
-            .fold(0.0, (sum, transaction) => sum + transaction.amount);
+            .fold(0.0, (sum, t) => sum + _amt(t));
         return '💰 Your income was ${_money(total, currencySymbol, currencyCode)} ${_periodText(request)}.';
       case AiSummaryMetric.netBalance:
         final income = transactions
             .where((transaction) => !transaction.isExpense)
-            .fold(0.0, (sum, transaction) => sum + transaction.amount);
+            .fold(0.0, (sum, t) => sum + _amt(t));
         final expenses = transactions
             .where((transaction) => transaction.isExpense)
-            .fold(0.0, (sum, transaction) => sum + transaction.amount);
+            .fold(0.0, (sum, t) => sum + _amt(t));
         final net = income - expenses;
         final emoji = net >= 0 ? '📈' : '📉';
         return '$emoji Your net balance was ${net >= 0 ? '+' : '-'}${_money(net.abs(), currencySymbol, currencyCode)} ${_periodText(request)} '
@@ -113,7 +132,7 @@ class AiSummaryService {
     final total = transactions
         .where((transaction) =>
             transaction.isExpense && transaction.categoryId == categoryId)
-        .fold(0.0, (sum, transaction) => sum + transaction.amount);
+        .fold(0.0, (sum, t) => sum + _amt(t));
     final categoryName = _categoryName(categories, categoryId);
     return 'You spent ${_money(total, currencySymbol, currencyCode)} on $categoryName ${_periodText(request)}.';
   }
@@ -129,7 +148,7 @@ class AiSummaryService {
     for (final transaction in transactions) {
       if (!transaction.isExpense) continue;
       totals[transaction.categoryId] =
-          (totals[transaction.categoryId] ?? 0) + transaction.amount;
+          (totals[transaction.categoryId] ?? 0) + _amt(transaction);
     }
 
     if (totals.isEmpty) {
@@ -155,7 +174,7 @@ class AiSummaryService {
     final totals = <int, double>{};
     for (final transaction in expenses) {
       totals[transaction.categoryId] =
-          (totals[transaction.categoryId] ?? 0) + transaction.amount;
+          (totals[transaction.categoryId] ?? 0) + _amt(transaction);
     }
     if (totals.length < 2) return '';
 
@@ -176,18 +195,16 @@ class AiSummaryService {
   }
 
   String _formatUpcoming(
-    List<Transaction> transactions,
+    List<Transaction> all,
     String currencySymbol,
     String currencyCode,
   ) {
+    final transactions = all.where((t) => !t.isTransfer).toList();
     if (transactions.isEmpty) {
       return '✨ No upcoming recurring payments this month — all clear!';
     }
 
-    final total = transactions.fold(
-      0.0,
-      (sum, transaction) => sum + transaction.amount,
-    );
+    final total = transactions.fold(0.0, (sum, t) => sum + _amt(t));
     final sorted = List<Transaction>.from(transactions)
       ..sort((a, b) => a.date.compareTo(b.date));
     final lines = <String>[
@@ -198,7 +215,7 @@ class AiSummaryService {
     for (final transaction in sorted.take(4)) {
       lines.add(
         '• ${transaction.title} — '
-        '${_money(transaction.amount, currencySymbol, currencyCode)} '
+        '${_money(_amt(transaction), currencySymbol, currencyCode)} '
         'on ${UtilityFunction.formatDate(transaction.date)}',
       );
     }

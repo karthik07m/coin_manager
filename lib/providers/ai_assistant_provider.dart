@@ -28,11 +28,34 @@ class AiAssistantProvider extends ChangeNotifier {
 
   final List<AiAssistantMessage> _messages = [];
   AiTransactionDraft? _pendingDraft;
+  AiTransferDraft? _pendingTransfer;
   bool _isLoading = false;
 
   List<AiAssistantMessage> get messages => List.unmodifiable(_messages);
   AiTransactionDraft? get pendingDraft => _pendingDraft;
+  AiTransferDraft? get pendingTransfer => _pendingTransfer;
   bool get isLoading => _isLoading;
+
+  static const _confirmWords = [
+    'yes',
+    'confirm',
+    'do it',
+    'go ahead',
+    'sure',
+    'ok',
+    'okay',
+    'yep',
+    'yeah',
+  ];
+  static const _cancelWords = [
+    'no',
+    'cancel',
+    'stop',
+    'nevermind',
+    'never mind',
+    'don\'t',
+    'dont',
+  ];
 
   static const _summarySuggestions = [
     'Top category this month',
@@ -55,6 +78,9 @@ class AiAssistantProvider extends ChangeNotifier {
     required String currencyCode,
     required List<Category> categories,
     required List<Account> accounts,
+    TransactionProvider? transactionProvider,
+    double? budgetTotal,
+    double? budgetSpent,
   }) async {
     final trimmed = message.trim();
     if (trimmed.isEmpty || _isLoading) return;
@@ -64,12 +90,25 @@ class AiAssistantProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // A transfer is waiting on a yes/no — resolve that before parsing
+      // anything new.
+      if (_pendingTransfer != null) {
+        final handled = await _resolvePendingTransfer(
+          trimmed.toLowerCase(),
+          transactionProvider,
+          currencySymbol,
+          currencyCode,
+        );
+        if (handled) return;
+      }
+
       // On-device parsing first: instant, offline, and doesn't need any
       // AI setup. The remote AI is only consulted for messages the local
       // parser can't confidently understand.
       AiIntent? intent = _localParser.tryParse(
         message: trimmed,
         categories: categories,
+        accounts: accounts,
       );
 
       if (intent == null) {
@@ -87,11 +126,13 @@ class AiAssistantProvider extends ChangeNotifier {
             AiAssistantMessage.assistant(
               "🤔 I didn't quite catch that. Try one of these:\n\n"
               '•  "Add expense 200 coffee"\n'
-              '•  "Spent 50 on groceries yesterday"\n'
-              '•  "How much did I spend this week?"\n'
-              '•  "Top category this month"',
+              '•  "Transfer 200 from Chase to Cash"\n'
+              '•  "What\'s my net worth?"\n'
+              '•  "How\'s my budget?"\n'
+              '•  "How much did I spend this week?"',
               suggestions: const [
-                'How much did I spend this month?',
+                'What\'s my net worth?',
+                'How\'s my budget?',
                 'Top category this month',
               ],
             ),
@@ -106,6 +147,9 @@ class AiAssistantProvider extends ChangeNotifier {
         accounts: accounts,
         currencySymbol: currencySymbol,
         currencyCode: currencyCode,
+        transactionProvider: transactionProvider,
+        budgetTotal: budgetTotal,
+        budgetSpent: budgetSpent,
       );
     } catch (error) {
       _messages.add(
@@ -122,14 +166,97 @@ class AiAssistantProvider extends ChangeNotifier {
     }
   }
 
+  /// Handles yes/no replies while a transfer is awaiting confirmation.
+  /// Returns true when the message was consumed.
+  Future<bool> _resolvePendingTransfer(
+    String lower,
+    TransactionProvider? transactionProvider,
+    String currencySymbol,
+    String currencyCode,
+  ) async {
+    final transfer = _pendingTransfer!;
+    final confirmed = _confirmWords.any(lower.contains) &&
+        !_cancelWords.any(lower.contains);
+    final cancelled = _cancelWords.any(lower.contains);
+
+    if (cancelled) {
+      _pendingTransfer = null;
+      _messages
+          .add(AiAssistantMessage.assistant('Transfer cancelled. 🗑️'));
+      return true;
+    }
+    if (!confirmed) return false; // treat as a brand-new message
+
+    _pendingTransfer = null;
+    if (transactionProvider == null) {
+      _messages.add(AiAssistantMessage.assistant(
+          '😅 I couldn\'t reach your accounts just now — please try again.'));
+      return true;
+    }
+    await transactionProvider.addTransfer(
+      fromAccountId: transfer.fromAccountId,
+      toAccountId: transfer.toAccountId,
+      amount: transfer.amount,
+      date: DateTime.now(),
+    );
+    final money = _money(transfer.amount, currencySymbol, currencyCode);
+    _messages.add(AiAssistantMessage.assistant(
+      '✅ Transferred $money from ${transfer.fromName} to ${transfer.toName}.',
+      suggestions: const [
+        'What\'s my net worth?',
+        'How\'s my budget?',
+      ],
+    ));
+    return true;
+  }
+
   Future<void> _handleIntent(
     AiIntent intent, {
     required List<Category> categories,
     required List<Account> accounts,
     required String currencySymbol,
     required String currencyCode,
+    TransactionProvider? transactionProvider,
+    double? budgetTotal,
+    double? budgetSpent,
   }) async {
     switch (intent.type) {
+      case AiIntentType.transfer:
+        final transfer = intent.transfer;
+        if (transfer == null) {
+          _messages.add(
+              AiAssistantMessage.assistant(AiIntent.unsupported().message));
+          return;
+        }
+        _pendingTransfer = transfer;
+        final money = _money(transfer.amount, currencySymbol, currencyCode);
+        _messages.add(AiAssistantMessage.assistant(
+          '🔁 Transfer $money from ${transfer.fromName} to '
+          '${transfer.toName}?\n\nReply "confirm" to move the money or '
+          '"cancel" to discard.',
+          suggestions: const ['Confirm', 'Cancel'],
+        ));
+        return;
+      case AiIntentType.accountQuery:
+        _messages.add(AiAssistantMessage.assistant(
+          _accountAnswer(
+              intent.accountQuery, accounts, currencySymbol, currencyCode),
+          suggestions: const [
+            'How\'s my budget?',
+            'How much did I spend this month?',
+          ],
+        ));
+        return;
+      case AiIntentType.budgetQuery:
+        _messages.add(AiAssistantMessage.assistant(
+          _budgetAnswer(
+              budgetTotal, budgetSpent, currencySymbol, currencyCode),
+          suggestions: const [
+            'Top category this month',
+            'What\'s my net worth?',
+          ],
+        ));
+        return;
       case AiIntentType.addTransaction:
         final draft = intent.transaction;
         if (draft == null) {
@@ -163,6 +290,7 @@ class AiAssistantProvider extends ChangeNotifier {
           categories: categories,
           currencySymbol: currencySymbol,
           currencyCode: currencyCode,
+          amountOf: transactionProvider?.baseAmount,
         );
         _messages.add(AiAssistantMessage.assistant(
           summary,
@@ -206,6 +334,7 @@ class AiAssistantProvider extends ChangeNotifier {
   void clearMessages() {
     _messages.clear();
     _pendingDraft = null;
+    _pendingTransfer = null;
     notifyListeners();
   }
 
@@ -328,6 +457,74 @@ class AiAssistantProvider extends ChangeNotifier {
       currencySymbol: symbol,
       currencyCode: code,
     );
+  }
+
+  /// Answers "what's my net worth" / "chase balance" from loaded accounts.
+  String _accountAnswer(
+    AiAccountQuery? query,
+    List<Account> accounts,
+    String symbol,
+    String code,
+  ) {
+    if (accounts.isEmpty) {
+      return 'You don\'t have any accounts yet — add one in Manage Accounts.';
+    }
+
+    String money(double v) => _money(v, symbol, code);
+
+    if (query?.accountId != null) {
+      final acc = accounts.firstWhere(
+        (a) => a.id == query!.accountId,
+        orElse: () => accounts.first,
+      );
+      if (acc.isLiability) {
+        final available = acc.availableCredit;
+        final owed = money(acc.currentBalance);
+        return available != null
+            ? '💳 ${acc.name}: $owed owed · ${money(available)} '
+                'available of ${money(acc.creditLimit!)}.'
+            : '💳 ${acc.name}: $owed owed.';
+      }
+      return '🏦 ${acc.name} balance: ${money(acc.currentBalance)}.';
+    }
+
+    double assets = 0, liabilities = 0;
+    final lines = <String>[];
+    for (final a in accounts) {
+      if (a.isLiability) {
+        liabilities += a.currentBalance;
+        lines.add('•  ${a.name}: ${money(a.currentBalance)} owed');
+      } else {
+        assets += a.currentBalance;
+        lines.add('•  ${a.name}: ${money(a.currentBalance)}');
+      }
+    }
+    final net = assets - liabilities;
+    return '💰 Net worth: ${money(net)}\n'
+        '(assets ${money(assets)} − debts ${money(liabilities)})\n\n'
+        '${lines.join('\n')}';
+  }
+
+  /// Answers "how's my budget" from this month's budget vs spending.
+  String _budgetAnswer(
+    double? total,
+    double? spent,
+    String symbol,
+    String code,
+  ) {
+    if (total == null || total <= 0) {
+      return 'You haven\'t set a monthly budget yet — set one in the Budget '
+          'tab and I\'ll track it for you. 📊';
+    }
+    final used = spent ?? 0;
+    final pct = (used / total * 100).round();
+    String money(double v) => _money(v, symbol, code);
+    if (used > total) {
+      return '🚨 You\'re over budget: spent ${money(used)} of '
+          '${money(total)} ($pct%). Over by ${money(used - total)}.';
+    }
+    return '📊 Budget check: ${money(used)} spent of ${money(total)} '
+        '($pct%). ${money(total - used)} left this month.';
   }
 
   int _fallbackCategoryId(List<Category> categories, bool isExpense) {
