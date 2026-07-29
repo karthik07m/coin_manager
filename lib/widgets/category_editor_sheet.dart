@@ -224,11 +224,14 @@ class _CategoryEditorPageState extends State<_CategoryEditorPage> {
                     SliverPadding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       sliver: SliverGrid(
+                        // Max-extent adapts the column count to the width:
+                        // ~5 across on phones, more on tablets.
                         gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 5,
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 76,
                           crossAxisSpacing: 10,
                           mainAxisSpacing: 10,
+                          childAspectRatio: 1,
                         ),
                         delegate: SliverChildBuilderDelegate(
                           (context, index) => _iconTile(group.icons[index]),

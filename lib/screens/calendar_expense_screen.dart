@@ -87,15 +87,10 @@ class _CalendarExpenseScreenState extends State<CalendarExpenseScreen>
     )!;
   }
 
+  /// Compact day-cell amount in the selected currency's notation
+  /// (lakh/crore for INR, k/M otherwise). No symbol — the cell is tiny.
   String _formatAmount(double amount) {
-    if (amount >= 1000) {
-      double kAmount = amount / 1000;
-      if (kAmount == kAmount.toInt()) {
-        return '${kAmount.toInt()}k';
-      }
-      return '${kAmount.toStringAsFixed(1)}k';
-    }
-    return amount.toInt().toString();
+    return UtilityFunction.formatCompactMoney(amount, symbol: '');
   }
 
   void _showDayDetails(DateTime day, List<Transaction> transactions) {
@@ -630,9 +625,11 @@ class _DayDetailsSheet extends StatelessWidget {
                         borderRadius:
                             BorderRadius.circular(AppDimensions.radiusMedium),
                         border: Border.all(
-                          color: (transaction.isExpense
-                                  ? AppColors.negative
-                                  : AppColors.positive)
+                          color: (transaction.isTransfer
+                                  ? context.appAccent
+                                  : (transaction.isExpense
+                                      ? AppColors.negative
+                                      : AppColors.positive))
                               .withValues(alpha: 0.2),
                           width: 1,
                         ),
@@ -643,17 +640,25 @@ class _DayDetailsSheet extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: (transaction.isExpense
-                                      ? AppColors.negative
-                                      : AppColors.positive)
+                              color: (transaction.isTransfer
+                                      ? context.appAccent
+                                      : (transaction.isExpense
+                                          ? AppColors.negative
+                                          : AppColors.positive))
                                   .withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Image.asset(
-                              category.icon,
-                              width: 24,
-                              height: 24,
-                            ),
+                            child: transaction.isTransfer
+                                ? Icon(
+                                    Icons.swap_horiz_rounded,
+                                    size: 24,
+                                    color: context.appAccent,
+                                  )
+                                : Image.asset(
+                                    category.icon,
+                                    width: 24,
+                                    height: 24,
+                                  ),
                           ),
                           const SizedBox(width: AppDimensions.spacing12),
 
@@ -663,7 +668,11 @@ class _DayDetailsSheet extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  transaction.title,
+                                  transaction.isTransfer
+                                      ? 'Transfer'
+                                      : (transaction.title.isEmpty
+                                          ? category.name
+                                          : transaction.title),
                                   style: AppTextStyles.bodyMedium.copyWith(
                                     color: context.textPrimary,
                                     fontWeight: FontWeight.w600,
@@ -671,7 +680,9 @@ class _DayDetailsSheet extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  category.name,
+                                  transaction.isTransfer
+                                      ? 'Account Transfer'
+                                      : category.name,
                                   style: AppTextStyles.caption.copyWith(
                                     color: context.textSecondary,
                                   ),
@@ -687,9 +698,11 @@ class _DayDetailsSheet extends StatelessWidget {
                               currencySymbol: settingsProvider.currencySymbol,
                             ),
                             style: AppTextStyles.bodyLarge.copyWith(
-                              color: transaction.isExpense
-                                  ? AppColors.negative
-                                  : AppColors.positive,
+                              color: transaction.isTransfer
+                                  ? context.textSecondary
+                                  : (transaction.isExpense
+                                      ? AppColors.negative
+                                      : AppColors.positive),
                               fontWeight: FontWeight.bold,
                             ),
                           ),

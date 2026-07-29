@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/receipt_scanner_service.dart';
 import '../utilities/constants.dart';
+import '../utilities/responsive.dart';
 import '../utilities/theme_helper.dart';
 
 class ReceiptScanScreen extends StatefulWidget {
@@ -122,7 +123,9 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
           children: [
             // Image preview area with modern styling
             Container(
-              height: 280,
+              // Scales with the viewport so the preview and the action
+              // buttons below both stay visible on short screens.
+              height: context.chartHeight(fraction: 0.32, min: 200, max: 320),
               decoration: BoxDecoration(
                 gradient: _scanResult == null
                     ? LinearGradient(

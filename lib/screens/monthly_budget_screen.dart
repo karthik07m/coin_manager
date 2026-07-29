@@ -5,6 +5,7 @@ import '../providers/monthly_budget_provider.dart';
 import '../widgets/budget_overview_widget.dart';
 import '../widgets/quick_stats_widget.dart';
 import '../utilities/constants.dart';
+import '../utilities/responsive.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/budget_period.dart';
 import 'package:intl/intl.dart';
@@ -122,8 +123,8 @@ class _MonthlyBudgetScreenState extends State<MonthlyBudgetScreen> {
                       child: GridView.builder(
                         physics: const NeverScrollableScrollPhysics(),
                         gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 160,
                           childAspectRatio: 1.8,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
@@ -248,21 +249,26 @@ class _MonthlyBudgetScreenState extends State<MonthlyBudgetScreen> {
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(AppDimensions.spacing16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Quick Stats
-                  QuickStatsWidget(
-                    selectedMonth: _selectedMonth,
-                  ),
+              child: context.constrainedContent(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Quick Stats
+                    QuickStatsWidget(
+                      selectedMonth: _selectedMonth,
+                    ),
 
-                  const SizedBox(height: AppDimensions.spacing24),
+                    const SizedBox(height: AppDimensions.spacing24),
 
-                  // Budget Overview with all categories
-                  BudgetOverviewWidget(selectedMonth: _selectedMonth),
+                    // Budget Overview with all categories
+                    BudgetOverviewWidget(
+                      selectedMonth: _selectedMonth,
+                      onMonthChanged: _selectMonth,
+                    ),
 
-                  const SizedBox(height: 80),
-                ],
+                    const SizedBox(height: 80),
+                  ],
+                ),
               ),
             ),
           );

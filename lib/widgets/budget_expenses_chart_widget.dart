@@ -8,9 +8,11 @@ import '../providers/transaction_provider.dart';
 import '../providers/monthly_budget_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utilities/constants.dart';
+import '../utilities/functions.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/budget_period.dart';
 import '../utilities/budget_projection.dart';
+import '../utilities/responsive.dart';
 
 class BudgetExpensesChartWidget extends StatefulWidget {
   final DateTime selectedMonth;
@@ -108,7 +110,7 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
               animation: _animation,
               builder: (context, child) {
                 return SizedBox(
-                  height: 200,
+                  height: context.chartHeight(fraction: 0.24, min: 160, max: 260),
                   child: LineChart(
                     _buildChartData(data, _animation.value, currencySymbol),
                     duration: const Duration(milliseconds: 250),
@@ -395,16 +397,10 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
     );
   }
 
+  // Axis labels follow the selected currency's conventions (lakh/crore for
+  // INR, k/M otherwise) instead of always using "k".
   String _formatCurrency(double value, String symbol) {
-    if (value >= 1000) {
-      return '$symbol${(value / 1000).toStringAsFixed(1)}k';
-    } else if (value >= 100) {
-      return '$symbol${value.toStringAsFixed(0)}';
-    } else if (value > 0) {
-      return '$symbol${value.toStringAsFixed(1)}';
-    } else {
-      return '${symbol}0';
-    }
+    return UtilityFunction.formatCompactMoney(value, symbol: symbol);
   }
 
   double _getValueAtDay(List<FlSpot> spots, double day) {

@@ -6,6 +6,7 @@ import '../providers/settings_provider.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
+import '../utilities/responsive.dart';
 
 /// A card showing net worth over the last few months as an area line chart,
 /// with the current value and the change across the period.
@@ -55,7 +56,14 @@ class _NetWorthTrendChartState extends State<NetWorthTrendChart> {
       decoration: BoxDecoration(
         color: context.appSurface,
         borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-        border: Border.all(color: context.textSecondary.withValues(alpha: 0.08)),
+        border: Border.all(color: context.appAccent.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: _loading
           ? const SizedBox(
@@ -126,26 +134,29 @@ class _NetWorthTrendChartState extends State<NetWorthTrendChart> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: changeColor.withValues(alpha: 0.12),
+                color: changeColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: changeColor.withValues(alpha: 0.2),
+                  width: 1,
+                ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     up
-                        ? Icons.arrow_upward_rounded
-                        : Icons.arrow_downward_rounded,
+                        ? Icons.trending_up
+                        : Icons.trending_down,
                     size: 14,
                     color: changeColor,
                   ),
-                  const SizedBox(width: 3),
+                  const SizedBox(width: 4),
                   Text(
-                    UtilityFunction.formatMoney(change.abs(),
-                        symbol: currency, showDecimals: true),
+                    '${up ? '+' : ''}${UtilityFunction.formatMoney(change.abs(), symbol: currency, showDecimals: true)}',
                     style: AppTextStyles.bodySmall.copyWith(
                       color: changeColor,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],
@@ -161,7 +172,7 @@ class _NetWorthTrendChartState extends State<NetWorthTrendChart> {
         ),
         const SizedBox(height: 20),
         SizedBox(
-          height: 170,
+          height: context.chartHeight(fraction: 0.21, min: 140, max: 240),
           child: LineChart(
             LineChartData(
               minY: minY,
@@ -196,12 +207,14 @@ class _NetWorthTrendChartState extends State<NetWorthTrendChart> {
                       if (i < 0 || i >= _points.length) {
                         return const SizedBox.shrink();
                       }
+                      final isLast = i == _points.length - 1;
                       return Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
                           _monthAbbr[_points[i].month.month - 1],
                           style: AppTextStyles.caption.copyWith(
-                            color: context.textSecondary,
+                            color: isLast ? context.appAccent : context.textSecondary,
+                            fontWeight: isLast ? FontWeight.bold : FontWeight.w500,
                             fontSize: 10,
                           ),
                         ),
@@ -212,23 +225,33 @@ class _NetWorthTrendChartState extends State<NetWorthTrendChart> {
               ),
               lineTouchData: LineTouchData(
                 touchTooltipData: LineTouchTooltipData(
-                  getTooltipColor: (_) => context.appSurfaceLight,
+                  getTooltipColor: (_) => context.appSurface,
+                  tooltipBorder: BorderSide(
+                    color: lineColor.withValues(alpha: 0.2),
+                    width: 1,
+                  ),
+                  tooltipPadding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  fitInsideHorizontally: true,
+                  fitInsideVertically: true,
                   getTooltipItems: (spots) => spots.map((s) {
                     final p = _points[s.x.round()];
                     return LineTooltipItem(
                       '${_monthAbbr[p.month.month - 1]} ${p.month.year}\n',
-                      AppTextStyles.caption
-                          .copyWith(color: context.textSecondary),
+                      AppTextStyles.caption.copyWith(
+                        color: context.textSecondary,
+                        fontWeight: FontWeight.bold,
+                      ),
                       children: [
                         TextSpan(
                           text: UtilityFunction.formatMoney(p.netWorth,
-                              symbol: context
-                                  .read<SettingsProvider>()
-                                  .currencySymbol,
-                              showDecimals: true),
-                          style: AppTextStyles.bodySmall.copyWith(
+                              symbol: currency,
+                              showDecimals: false),
+                          style: AppTextStyles.bodyMedium.copyWith(
                             color: context.textPrimary,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
@@ -240,17 +263,17 @@ class _NetWorthTrendChartState extends State<NetWorthTrendChart> {
                 LineChartBarData(
                   spots: spots,
                   isCurved: true,
-                  curveSmoothness: 0.3,
+                  curveSmoothness: 0.35,
                   color: lineColor,
-                  barWidth: 3,
+                  barWidth: 3.5,
                   isStrokeCapRound: true,
                   dotData: FlDotData(
                     show: true,
                     getDotPainter: (spot, pct, bar, i) =>
                         FlDotCirclePainter(
-                      radius: i == _points.length - 1 ? 4 : 0,
+                      radius: i == _points.length - 1 ? 5 : 0,
                       color: lineColor,
-                      strokeWidth: 2,
+                      strokeWidth: 3,
                       strokeColor: context.appSurface,
                     ),
                   ),
@@ -260,7 +283,7 @@ class _NetWorthTrendChartState extends State<NetWorthTrendChart> {
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        lineColor.withValues(alpha: 0.25),
+                        lineColor.withValues(alpha: 0.2),
                         lineColor.withValues(alpha: 0.0),
                       ],
                     ),
@@ -276,7 +299,7 @@ class _NetWorthTrendChartState extends State<NetWorthTrendChart> {
 
   Widget _empty(BuildContext context) {
     return SizedBox(
-      height: 160,
+      height: context.chartHeight(fraction: 0.2, min: 130, max: 220),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

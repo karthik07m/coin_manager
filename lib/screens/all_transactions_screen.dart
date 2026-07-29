@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/transaction_provider.dart';
@@ -40,7 +41,8 @@ class AllTransactionsScreen extends StatefulWidget {
   State<AllTransactionsScreen> createState() => _AllTransactionsScreenState();
 }
 
-class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
+class _AllTransactionsScreenState extends State<AllTransactionsScreen>
+    with SingleTickerProviderStateMixin {
   late DateTime _startDate;
   late DateTime _endDate;
   final TextEditingController _searchController = TextEditingController();
@@ -56,7 +58,16 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   bool? _receiptFilter;
   TransactionSortOption _sortOption = TransactionSortOption.newest;
   String _selectedDatePreset = 'This Month';
-  late bool _showFilters;
+
+  // The header can be dismissed two ways, tracked separately so an auto-hide
+  // from scrolling never overrides an explicit "hide" from the app bar.
+  late bool _filtersHiddenByUser;
+  bool _filtersHiddenByScroll = false;
+  bool get _filtersVisible => !_filtersHiddenByUser && !_filtersHiddenByScroll;
+
+  final ScrollController _scrollController = ScrollController();
+  late final AnimationController _filterAnimController;
+  late final Animation<double> _filterAnim;
 
   @override
   void initState() {
@@ -82,7 +93,20 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     }
 
     // Hide filters initially if requested (e.g., when coming from drill-down)
-    _showFilters = !widget.hideFiltersInitially;
+    _filtersHiddenByUser = widget.hideFiltersInitially;
+
+    _filterAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+      reverseDuration: const Duration(milliseconds: 200),
+      value: _filtersVisible ? 1.0 : 0.0,
+    );
+    _filterAnim = CurvedAnimation(
+      parent: _filterAnimController,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    _scrollController.addListener(_onScroll);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadTransactions();
@@ -102,7 +126,51 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    _filterAnimController.dispose();
     super.dispose();
+  }
+
+  /// Collapses the filter header while scrolling down and brings it back on
+  /// the first upward flick, so the list gets the full screen when reading.
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+
+    // Always reveal near the top — otherwise a short list could leave the
+    // header stuck hidden with no way to scroll up far enough to restore it.
+    if (_scrollController.offset <= 8) {
+      _setFiltersHiddenByScroll(false);
+      return;
+    }
+
+    switch (_scrollController.position.userScrollDirection) {
+      case ScrollDirection.reverse:
+        _setFiltersHiddenByScroll(true);
+        break;
+      case ScrollDirection.forward:
+        _setFiltersHiddenByScroll(false);
+        break;
+      case ScrollDirection.idle:
+        break;
+    }
+  }
+
+  void _setFiltersHiddenByScroll(bool hidden) {
+    if (_filtersHiddenByScroll == hidden) return;
+    // Don't leave the search field focused (and the keyboard up) behind a
+    // header that just scrolled away.
+    if (hidden) FocusScope.of(context).unfocus();
+    setState(() => _filtersHiddenByScroll = hidden);
+    _syncFilterAnimation();
+  }
+
+  void _syncFilterAnimation() {
+    if (_filtersVisible) {
+      _filterAnimController.forward();
+    } else {
+      _filterAnimController.reverse();
+    }
   }
 
   void _loadTransactions() {
@@ -260,14 +328,18 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         elevation: 0,
         actions: [
           IconButton(
-            icon:
-                Icon(_showFilters ? Icons.filter_list : Icons.filter_list_off),
+            icon: Icon(_filtersHiddenByUser
+                ? Icons.filter_list_off
+                : Icons.filter_list),
             onPressed: () {
               setState(() {
-                _showFilters = !_showFilters;
+                _filtersHiddenByUser = !_filtersHiddenByUser;
+                // Showing again should win over an earlier scroll-away.
+                if (!_filtersHiddenByUser) _filtersHiddenByScroll = false;
               });
+              _syncFilterAnimation();
             },
-            tooltip: _showFilters ? 'Hide Filters' : 'Show Filters',
+            tooltip: _filtersHiddenByUser ? 'Show Filters' : 'Hide Filters',
           ),
           IconButton(
             icon: Stack(
@@ -304,14 +376,13 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       ),
       body: Column(
         children: [
-          // Collapsible Header Section
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            height: _showFilters ? null : 0,
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 200),
-              opacity: _showFilters ? 1.0 : 0.0,
+          // Collapsible header — slides up out of the way on scroll down and
+          // eases back in on scroll up.
+          SizeTransition(
+            sizeFactor: _filterAnim,
+            axisAlignment: -1.0,
+            child: FadeTransition(
+              opacity: _filterAnim,
               child: Container(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 decoration: BoxDecoration(
@@ -357,15 +428,13 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('From',
-                                  style: TextStyle(
-                                      fontSize: 10,
-                                      color: context.textSecondary)),
+                                  style: AppTextStyles.caption
+                                      .copyWith(color: context.textSecondary)),
                               GestureDetector(
                                 onTap: _selectStartDate,
                                 child: Text(
                                   DateFormat('MMM dd, yyyy').format(_startDate),
-                                  style: TextStyle(
-                                    fontSize: 14,
+                                  style: AppTextStyles.bodyMedium.copyWith(
                                     fontWeight: FontWeight.w600,
                                     color: context.textPrimary,
                                   ),
@@ -384,15 +453,13 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('To',
-                                  style: TextStyle(
-                                      fontSize: 10,
-                                      color: context.textSecondary)),
+                                  style: AppTextStyles.caption
+                                      .copyWith(color: context.textSecondary)),
                               GestureDetector(
                                 onTap: _selectEndDate,
                                 child: Text(
                                   DateFormat('MMM dd, yyyy').format(_endDate),
-                                  style: TextStyle(
-                                    fontSize: 14,
+                                  style: AppTextStyles.bodyMedium.copyWith(
                                     fontWeight: FontWeight.w600,
                                     color: context.textPrimary,
                                   ),
@@ -598,6 +665,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     Expanded(
                       child: ListView.builder(
                         key: const PageStorageKey('all_transactions_list'),
+                        controller: _scrollController,
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                         itemCount: filteredTransactions.length,
                         cacheExtent: 600,
@@ -660,8 +728,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             ),
             child: Text(
               label,
-              style: TextStyle(
-                fontSize: 11,
+              style: AppTextStyles.caption.copyWith(
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                 color: isSelected
                     ? Theme.of(context).colorScheme.onPrimary

@@ -1,4 +1,5 @@
 import 'package:coin_manager/utilities/constants.dart';
+import 'package:coin_manager/utilities/responsive.dart';
 import 'package:flutter/material.dart';
 
 import 'package:provider/provider.dart';
@@ -404,8 +405,12 @@ class MyApp extends StatelessWidget {
                 ? const OnboardingScreen()
                 : const MenuScrn(),
             debugShowCheckedModeBanner: false,
-            builder: (context, child) =>
-                AppLockGate(child: child ?? const SizedBox.shrink()),
+            // Clamp the OS text-scale factor app-wide so large accessibility
+            // font settings still enlarge text without overflowing fixed-height
+            // rows, cards and chips.
+            builder: (context, child) => ClampedTextScale(
+              child: AppLockGate(child: child ?? const SizedBox.shrink()),
+            ),
             // onGenerateRoute provides context-aware transitions:
             // form screens slide up from bottom, detail screens scale+fade,
             // all others slide from right. Falls back to named routes table.

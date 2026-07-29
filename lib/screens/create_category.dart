@@ -62,8 +62,9 @@ class CreateCategoryScreenState extends State<CreateCategoryScreen> {
               const SizedBox(height: 16.0),
               const Text('Select Icon:'),
               GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
+                gridDelegate:
+                    const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 120,
                 ),
                 shrinkWrap: true, // Use only the space needed
                 physics:

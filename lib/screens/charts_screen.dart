@@ -14,6 +14,7 @@ import '../providers/account_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utilities/constants.dart';
 import '../utilities/functions.dart';
+import '../utilities/responsive.dart';
 import '../utilities/theme_helper.dart';
 import 'package:intl/intl.dart';
 
@@ -190,8 +191,8 @@ class _ChartsScreenState extends State<ChartsScreen> {
                       child: GridView.builder(
                         physics: const NeverScrollableScrollPhysics(),
                         gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 160,
                           childAspectRatio: 1.8,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
@@ -321,7 +322,8 @@ class _ChartsScreenState extends State<ChartsScreen> {
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(AppDimensions.spacing16),
-              child: Column(
+              child: context.constrainedContent(
+                Column(
                 children: [
                   // Chart Selector
                   Container(
@@ -418,6 +420,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                     const NetWorthTrendChart(),
                   ],
                 ],
+                ),
               ),
             ),
           );

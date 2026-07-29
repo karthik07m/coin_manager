@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +10,7 @@ import '../../providers/settings_provider.dart';
 import '../../utilities/constants.dart';
 import '../../utilities/theme_helper.dart';
 import '../../utilities/functions.dart';
+import '../../utilities/responsive.dart';
 import '../../screens/all_transactions_screen.dart';
 
 class AccountsPieChart extends StatefulWidget {
@@ -57,6 +60,18 @@ class _AccountsPieChartState extends State<AccountsPieChart>
     _animationController.dispose();
     super.dispose();
   }
+
+  // Donut geometry scaled to the chart box so the ring fits narrow phones
+  // and fills the space on tablets.
+  double get _donutExtent {
+    final size = MediaQuery.sizeOf(context);
+    final chartBox = context.chartHeight(fraction: 0.32, min: 220, max: 320);
+    final widthBox = size.width - 80; // card + page horizontal padding
+    return math.min(chartBox, widthBox);
+  }
+
+  double get _centerSpaceRadius => (_donutExtent * 0.29).clamp(52.0, 92.0);
+  double get _sectionRadius => (_donutExtent * 0.19).clamp(34.0, 62.0);
 
   void _initializeSelection(List<Account> accounts) {
     if (!_initialized) {
@@ -189,7 +204,7 @@ class _AccountsPieChartState extends State<AccountsPieChart>
             // Pie Chart
             if (hasSelection && filteredTotal > 0)
               SizedBox(
-                height: 260,
+                height: context.chartHeight(fraction: 0.32, min: 220, max: 320),
                 child: AnimatedBuilder(
                   animation: _animation,
                   builder: (context, child) {
@@ -200,7 +215,7 @@ class _AccountsPieChartState extends State<AccountsPieChart>
                             sections: _buildPieChartSections(displayAccounts,
                                 filteredTotal, accountSpending),
                             sectionsSpace: 2,
-                            centerSpaceRadius: 75,
+                            centerSpaceRadius: _centerSpaceRadius,
                             borderData: FlBorderData(show: false),
                             startDegreeOffset: 270,
                             pieTouchData: PieTouchData(
@@ -351,7 +366,7 @@ class _AccountsPieChartState extends State<AccountsPieChart>
                                               0.0,
                                           currencySymbol: currencySymbol)
                                       : UtilityFunction.addCommaWithSign(
-                                          widget.totalExpenses,
+                                          filteredTotal,
                                           currencySymbol: currencySymbol),
                                   style: AppTextStyles.h2.copyWith(
                                     color: context.appAccent,
@@ -509,23 +524,12 @@ class _AccountsPieChartState extends State<AccountsPieChart>
                                 : AppColors.divider.withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Image.asset(
-                            account.icon,
-                            width: 20,
-                            height: 20,
-                            errorBuilder: (context, error, stackTrace) => Icon(
-                              Icons.account_balance_wallet,
-                              size: 20,
-                              color: isSelected
-                                  ? color
-                                  : context.textSecondary
-                                      .withValues(alpha: 0.3),
-                            ),
-                            colorBlendMode:
-                                isSelected ? null : BlendMode.saturation,
+                          child: Icon(
+                            _getIconData(account.icon),
+                            size: 20,
                             color: isSelected
-                                ? null
-                                : context.textSecondary.withValues(alpha: 0.3),
+                                ? color
+                                : context.textSecondary.withValues(alpha: 0.6),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -605,7 +609,8 @@ class _AccountsPieChartState extends State<AccountsPieChart>
       if (spentAmount <= 0) continue;
 
       final isTouched = _touchedIndex == i;
-      final radius = isTouched ? 55.0 : 50.0;
+      final radius =
+          isTouched ? _sectionRadius * 1.1 : _sectionRadius;
       final percentage =
           totalVisible > 0 ? (spentAmount / totalVisible * 100) : 0.0;
       final color = Color(Account.colorFromHex(acc.color));
@@ -649,7 +654,7 @@ class _AccountsPieChartState extends State<AccountsPieChart>
     return sections;
   }
 
-  Widget _buildBadge(String iconPath) {
+  Widget _buildBadge(String iconName) {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
@@ -663,16 +668,28 @@ class _AccountsPieChartState extends State<AccountsPieChart>
         ],
       ),
       padding: const EdgeInsets.all(6),
-      child: Image.asset(
-        iconPath,
-        width: 16,
-        height: 16,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) => const Icon(
-          Icons.account_balance_wallet,
-          size: 16,
-        ),
+      child: Icon(
+        _getIconData(iconName),
+        size: 16,
+        color: context.textPrimary,
       ),
     );
+  }
+
+  IconData _getIconData(String iconName) {
+    switch (iconName) {
+      case 'wallet':
+        return Icons.account_balance_wallet;
+      case 'account_balance':
+        return Icons.account_balance;
+      case 'credit_card':
+        return Icons.credit_card;
+      case 'payment':
+        return Icons.payment;
+      case 'savings':
+        return Icons.savings;
+      default:
+        return Icons.account_balance_wallet;
+    }
   }
 }

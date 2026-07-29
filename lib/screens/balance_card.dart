@@ -576,8 +576,8 @@ class _MonthPickerDialogState extends State<_MonthPickerDialog> {
               height: 240,
               child: GridView.builder(
                 physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 160,
                   childAspectRatio: 1.8,
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,

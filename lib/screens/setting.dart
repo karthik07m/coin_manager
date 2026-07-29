@@ -14,6 +14,7 @@ import 'privacy_policy.dart';
 import 'activity_history_screen.dart';
 import 'cloud_backup_screen.dart';
 import '../utilities/constants.dart';
+import '../utilities/responsive.dart';
 
 class SettingsScreen extends StatelessWidget {
   static const routeName = '/settings';
@@ -27,7 +28,12 @@ class SettingsScreen extends StatelessWidget {
         title: const Text('Settings'),
         elevation: 0,
       ),
-      body: ListView(
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          // Keeps settings rows readable instead of full-bleed on tablets.
+          constraints: BoxConstraints(maxWidth: context.maxContentWidth),
+          child: ListView(
         padding: const EdgeInsets.all(AppDimensions.spacing16),
         children: [
           _buildSection(
@@ -380,10 +386,10 @@ class SettingsScreen extends StatelessWidget {
                 context,
                 icon: Icons.table_view_outlined,
                 activeIcon: Icons.table_view,
-                title: 'Export Transactions CSV',
-                subtitle: 'Share a spreadsheet-friendly transaction file',
+                title: 'Export Transactions (Excel)',
+                subtitle: 'A formatted .xlsx report with summary & totals',
                 onTap: () async {
-                  await _exportTransactionsCsv(context);
+                  await _exportTransactionsExcel(context);
                 },
               ),
               _buildSettingTile(
@@ -424,6 +430,8 @@ class SettingsScreen extends StatelessWidget {
             ],
           ),
         ],
+          ),
+        ),
       ),
     );
   }
@@ -648,7 +656,8 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _exportTransactionsCsv(BuildContext context) async {
+  Future<void> _exportTransactionsExcel(BuildContext context) async {
+    final settings = context.read<SettingsProvider>();
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -657,7 +666,7 @@ class SettingsScreen extends StatelessWidget {
           children: [
             CircularProgressIndicator(),
             SizedBox(width: 20),
-            Text('Creating CSV export...'),
+            Text('Building Excel report...'),
           ],
         ),
       ),
@@ -665,7 +674,10 @@ class SettingsScreen extends StatelessWidget {
 
     try {
       final exportService = ExportService();
-      final result = await exportService.createTransactionsCsvExport();
+      final result = await exportService.createTransactionsExcelExport(
+        currencySymbol: settings.currencySymbol,
+        currencyCode: settings.currencyCode,
+      );
 
       if (!context.mounted) return;
       Navigator.of(context).pop();
@@ -675,7 +687,8 @@ class SettingsScreen extends StatelessWidget {
         builder: (ctx) => AlertDialog(
           title: const Text('Transactions Exported'),
           content: Text(
-            '${result.rowCount} transactions were exported to ${result.fileName}.',
+            '${result.rowCount} transactions were exported to ${result.fileName}, '
+            'with a summary sheet and formatted totals.',
           ),
           actions: [
             TextButton(
@@ -688,7 +701,7 @@ class SettingsScreen extends StatelessWidget {
                 await exportService.shareExport(result);
               },
               icon: const Icon(Icons.share),
-              label: const Text('Share CSV'),
+              label: const Text('Share Excel'),
             ),
           ],
         ),

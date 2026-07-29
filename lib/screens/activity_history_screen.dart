@@ -4,6 +4,7 @@ import '../db/activity_db_helper.dart';
 import '../models/activity_log.dart';
 import '../providers/settings_provider.dart';
 import '../utilities/constants.dart';
+import '../utilities/responsive.dart';
 import '../utilities/functions.dart';
 import '../utilities/theme_helper.dart';
 
@@ -47,7 +48,7 @@ class _ActivityHistoryScreenState extends State<ActivityHistoryScreen> {
           if (logs.isEmpty) return _buildEmptyState(context);
 
           final groups = _groupByDay(logs);
-          return ListView.builder(
+          return context.constrainedContent(ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             itemCount: groups.length,
             itemBuilder: (context, i) {
@@ -72,7 +73,7 @@ class _ActivityHistoryScreenState extends State<ActivityHistoryScreen> {
                 ],
               );
             },
-          );
+          ));
         },
       ),
     );

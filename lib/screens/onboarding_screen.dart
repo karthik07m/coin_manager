@@ -608,147 +608,146 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _buildWelcomePage() {
     return FadeTransition(
       opacity: _fadeAnimation,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(32),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: constraints.maxHeight - 64, // Account for padding
+      // A plain top-down Column (no forced full-height centering) so short
+      // content doesn't get stretched with dead space, and on the shortest
+      // phones it simply scrolls instead of clipping behind the nav bar.
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(28, 8, 28, 8),
+        child: AnimationLimiter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: AnimationConfiguration.toStaggeredList(
+              duration: const Duration(milliseconds: 450),
+              childAnimationBuilder: (widget) => SlideAnimation(
+                verticalOffset: 30,
+                child: FadeInAnimation(child: widget),
               ),
-              child: AnimationLimiter(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: AnimationConfiguration.toStaggeredList(
-                    duration: const Duration(milliseconds: 500),
-                    childAnimationBuilder: (widget) => SlideAnimation(
-                      verticalOffset: 40,
-                      child: FadeInAnimation(child: widget),
+              children: [
+                ScaleTransition(
+                  scale: Tween<double>(begin: 0.98, end: 1.02).animate(
+                    CurvedAnimation(
+                      parent: _pulseController,
+                      curve: Curves.easeInOut,
                     ),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(26),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.3),
+                          blurRadius: 28,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(23),
+                      child: Image.asset(
+                        'assets/app_icon/coinly_android_icon_1024.png',
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'WELCOME TO',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 3,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Coinly',
+                  style: TextStyle(
+                    fontSize: 38,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                    height: 1.0,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Your smart financial companion',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      ScaleTransition(
-                        scale: Tween<double>(begin: 0.96, end: 1.04).animate(
-                          CurvedAnimation(
-                            parent: _pulseController,
-                            curve: Curves.easeInOut,
-                          ),
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [
-                                Theme.of(context).colorScheme.primary,
-                                Theme.of(context)
-                                    .colorScheme
-                                    .primary
-                                    .withValues(alpha: 0.7),
-                              ],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .primary
-                                    .withValues(alpha: 0.4),
-                                blurRadius: 30,
-                                spreadRadius: 10,
-                              ),
-                            ],
-                          ),
-                          child: const Icon(Icons.account_balance_wallet,
-                              size: 80, color: Colors.white),
-                        ),
-                      ),
-                      const SizedBox(height: 40),
-                      const Text(
-                        'Welcome to',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 24,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w300,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ShaderMask(
-                        shaderCallback: (bounds) => LinearGradient(
-                          colors: [
-                            Theme.of(context).colorScheme.primary,
-                            Theme.of(context).colorScheme.secondary,
-                          ],
-                        ).createShader(bounds),
-                        child: const Text(
-                          'Coinly',
-                          style: TextStyle(
-                            fontSize: 48,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
+                      Icon(Icons.bolt_rounded,
+                          size: 15,
+                          color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 5),
                       Text(
-                        'Your smart financial companion',
+                        'Setup takes under a minute',
                         style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.white.withValues(alpha: 0.7),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '⚡ Setup takes under a minute',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          color: Theme.of(context).colorScheme.primary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 32),
-                      _buildFeature(Icons.insights, 'Smart expense tracking'),
-                      const SizedBox(height: 20),
-                      _buildFeature(Icons.pie_chart, 'Visual spending insights'),
-                      const SizedBox(height: 20),
-                      _buildFeature(Icons.savings, 'Achieve savings goals'),
                     ],
                   ),
                 ),
-              ),
+                const SizedBox(height: 22),
+                _buildFeature(Icons.insights, 'Smart expense tracking'),
+                const SizedBox(height: 10),
+                _buildFeature(Icons.pie_chart, 'Visual spending insights'),
+                const SizedBox(height: 10),
+                _buildFeature(Icons.savings, 'Achieve savings goals'),
+              ],
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildFeature(IconData icon, String text) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
@@ -756,16 +755,16 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
                 ],
               ),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(11),
             ),
-            child: Icon(icon, color: Colors.white, size: 24),
+            child: Icon(icon, color: Colors.white, size: 20),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Text(
               text,
               style: const TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 color: Colors.white,
                 fontWeight: FontWeight.w500,
               ),
@@ -784,7 +783,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 16),
+            const SizedBox(height: 4),
             const Text(
               'Select Currency 💱',
               style: TextStyle(
@@ -936,7 +935,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 40),
+            const SizedBox(height: 4),
             const Text(
               'Monthly Income 💰',
               style: TextStyle(
@@ -953,7 +952,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 color: Colors.white.withValues(alpha: 0.7),
               ),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 24),
             CalculatorTextFormField(
               controller: _incomeController,
               currencySymbol: _selectedCurrencySymbol,
@@ -1167,7 +1166,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 40),
+            const SizedBox(height: 4),
             const Text(
               'Savings Goal 🎯',
               style: TextStyle(
@@ -1184,7 +1183,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 color: Colors.white.withValues(alpha: 0.7),
               ),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 24),
             // Percentage Slider
             Container(
               padding: const EdgeInsets.all(24),

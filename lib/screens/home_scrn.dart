@@ -14,7 +14,13 @@ import '../widgets/goal_summary_widget.dart';
 import '../utilities/constants.dart';
 import '../widgets/upcoming_payments_widget.dart';
 import '../utilities/theme_helper.dart';
+import '../utilities/responsive.dart';
 import '../widgets/shimmer_loading.dart';
+import '../utilities/functions.dart';
+import 'package:flutter/services.dart';
+import '../models/account.dart';
+import 'account_management_screen.dart';
+import 'all_transactions_screen.dart';
 
 class HomePage extends StatefulWidget {
   final Function(int)? onTabSelected;
@@ -105,7 +111,10 @@ class _HomePageState extends State<HomePage> {
             color: Theme.of(context).colorScheme.primary,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              child: transactionProvider.isTransactionsLoaded
+              // Cap and center the column on tablets/desktop so cards don't
+              // stretch to uncomfortable widths; a no-op on phones.
+              child: context.constrainedContent(
+                transactionProvider.isTransactionsLoaded
                   ? _buildContent(
                       context,
                       transactionProvider,
@@ -114,6 +123,7 @@ class _HomePageState extends State<HomePage> {
                       totalExpenses,
                     )
                   : _buildShimmer(context, settingsProvider),
+              ),
             ),
           );
         },
@@ -143,6 +153,23 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: AppDimensions.spacing20),
             ],
+            SizedBox(
+              height: 106,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: 3,
+                itemBuilder: (_, __) => Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: ShimmerBox(
+                    height: 106,
+                    width: 154,
+                    borderRadius: 16.0,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacing20),
             if (settingsProvider.showHomeQuickStats) ...[
               ShimmerBox(
                 height: 100,
@@ -258,6 +285,9 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: AppDimensions.spacing20),
         ],
+
+        // Accounts list
+        _buildAccountsList(context),
 
         // Budget Quick Stats
         if (settingsProvider.showHomeQuickStats) ...[
@@ -405,5 +435,183 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+  }
+
+  Widget _buildAccountsList(BuildContext context) {
+    return Consumer<AccountProvider>(
+      builder: (context, accountProvider, child) {
+        final accounts = accountProvider.accounts;
+        if (accounts.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.spacing16,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'ACCOUNTS',
+                    style: AppTextStyles.caption.copyWith(
+                      color: context.textSecondary,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pushNamed(
+                        context,
+                        AccountManagementScreen.routeName,
+                      );
+                    },
+                    child: Text(
+                      'Manage',
+                      style: AppTextStyles.caption.copyWith(
+                        color: context.appAccent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacing4),
+            SizedBox(
+              height: 106,
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimensions.spacing16,
+                ),
+                scrollDirection: Axis.horizontal,
+                itemCount: accounts.length,
+                itemBuilder: (context, index) {
+                  final acc = accounts[index];
+                  final color = Color(Account.colorFromHex(acc.color));
+                  final isLiability = acc.type.isLiability;
+                  
+                  // Get currency symbol (either account-specific or system default)
+                  final currencySymbol = acc.currency.isNotEmpty
+                      ? currencySymbolForCode(acc.currency)
+                      : Provider.of<SettingsProvider>(context, listen: false).currencySymbol;
+
+                  return Container(
+                    margin: const EdgeInsets.only(right: 12),
+                    width: 154,
+                    child: Material(
+                      color: color.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(16),
+                      child: InkWell(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => AllTransactionsScreen(
+                                initialAccountId: acc.id,
+                                initialStartDate: DateTime(2000, 1, 1),
+                                initialEndDate: DateTime.now(),
+                              ),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.all(AppDimensions.spacing12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: color.withValues(alpha: 0.15),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 14,
+                                    backgroundColor: color.withValues(alpha: 0.12),
+                                    child: Icon(
+                                      _getAccountIcon(acc.icon),
+                                      size: 14,
+                                      color: color,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      acc.name,
+                                      style: AppTextStyles.bodyMedium.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: context.textPrimary,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Spacer(),
+                              Text(
+                                UtilityFunction.formatMoney(
+                                  acc.currentBalance,
+                                  symbol: currencySymbol,
+                                  showDecimals: true,
+                                ),
+                                style: AppTextStyles.bodyLarge.copyWith(
+                                  color: isLiability
+                                      ? AppColors.negative
+                                      : context.textPrimary,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                isLiability ? 'Amount Owed' : 'Balance',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: context.textSecondary,
+                                  fontSize: 9,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacing20),
+          ],
+        );
+      },
+    );
+  }
+
+  IconData _getAccountIcon(String iconName) {
+    switch (iconName) {
+      case 'wallet':
+        return Icons.account_balance_wallet;
+      case 'account_balance':
+        return Icons.account_balance;
+      case 'credit_card':
+        return Icons.credit_card;
+      case 'payment':
+        return Icons.payment;
+      case 'savings':
+        return Icons.savings;
+      default:
+        return Icons.account_balance_wallet;
+    }
   }
 }

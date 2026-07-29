@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/category_provider.dart';
@@ -14,10 +15,12 @@ import 'package:intl/intl.dart';
 
 class BudgetOverviewWidget extends StatelessWidget {
   final DateTime selectedMonth;
+  final ValueChanged<DateTime>? onMonthChanged;
 
   const BudgetOverviewWidget({
     super.key,
     required this.selectedMonth,
+    this.onMonthChanged,
   });
 
   @override
@@ -373,9 +376,10 @@ class BudgetOverviewWidget extends StatelessWidget {
               );
             }),
 
-            const SizedBox(height: AppDimensions.spacing24),
-
-            _BudgetPeriodHistoryStrip(selectedMonth: selectedMonth),
+            _BudgetPeriodHistoryStrip(
+              selectedMonth: selectedMonth,
+              onMonthChanged: onMonthChanged,
+            ),
           ],
         );
       },
@@ -444,8 +448,12 @@ class _BudgetHistoryItem {
 
 class _BudgetPeriodHistoryStrip extends StatefulWidget {
   final DateTime selectedMonth;
+  final ValueChanged<DateTime>? onMonthChanged;
 
-  const _BudgetPeriodHistoryStrip({required this.selectedMonth});
+  const _BudgetPeriodHistoryStrip({
+    required this.selectedMonth,
+    this.onMonthChanged,
+  });
 
   @override
   State<_BudgetPeriodHistoryStrip> createState() =>
@@ -582,81 +590,94 @@ class _BudgetPeriodHistoryStripState extends State<_BudgetPeriodHistoryStrip> {
                 ? 'Close'
                 : 'Good';
 
-    return Container(
-      width: 132,
-      padding: const EdgeInsets.all(AppDimensions.spacing12),
-      decoration: BoxDecoration(
-        color: context.appSurface,
-        borderRadius: BorderRadius.circular(AppDimensions.radiusSmall),
-        border: Border.all(
-          color: isSelected
-              ? context.appAccent
-              : statusColor.withValues(alpha: 0.25),
-          width: isSelected ? 1.4 : 1,
+    return GestureDetector(
+      onTap: () {
+        if (widget.onMonthChanged != null) {
+          HapticFeedback.selectionClick();
+          widget.onMonthChanged!(item.month);
+        }
+      },
+      child: Container(
+        width: 140,
+        padding: const EdgeInsets.all(AppDimensions.spacing12),
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? context.appAccent
+                : context.appBorder.withValues(alpha: 0.5),
+            width: isSelected ? 1.5 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
-        boxShadow: AppShadows.card,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                DateFormat('MMM').format(item.month),
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: context.textPrimary,
-                  fontWeight: FontWeight.bold,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  DateFormat('MMM').format(item.month),
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: context.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: statusColor,
-                  shape: BoxShape.circle,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 5,
+                backgroundColor: AppColors.divider.withValues(alpha: 0.25),
+                valueColor: AlwaysStoppedAnimation<Color>(statusColor),
               ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.spacing8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 6,
-              backgroundColor: AppColors.divider.withValues(alpha: 0.25),
-              valueColor: AlwaysStoppedAnimation<Color>(statusColor),
             ),
-          ),
-          const SizedBox(height: AppDimensions.spacing8),
-          Text(
-            statusText,
-            style: AppTextStyles.caption.copyWith(
-              color: statusColor,
-              fontSize: 10,
+            const Spacer(),
+            Text(
+              UtilityFunction.formatMoney(item.spent, symbol: currencySymbol),
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: context.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
-          ),
-          const Spacer(),
-          Text(
-            UtilityFunction.formatMoney(item.spent, symbol: currencySymbol),
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: context.textPrimary,
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
+            const SizedBox(height: 2),
+            Text(
+              'of ${UtilityFunction.formatMoney(item.budget, symbol: currencySymbol)}',
+              style: AppTextStyles.caption.copyWith(
+                color: context.textSecondary,
+                fontSize: 10,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'of ${UtilityFunction.formatMoney(item.budget, symbol: currencySymbol)}',
-            style: AppTextStyles.caption.copyWith(
-              color: context.textSecondary,
-              fontSize: 10,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

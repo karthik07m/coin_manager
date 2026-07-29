@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/notification_service.dart';
 import '../services/bill_reminder_scheduler.dart';
 import '../utilities/budget_rules.dart';
+import '../utilities/functions.dart';
 
 class AccentColorOption {
   final String name;
@@ -118,6 +119,9 @@ class SettingsProvider extends ChangeNotifier {
         prefs.getInt('accentColorValue') ?? defaultAccentColorValue;
     _currencyCode = prefs.getString('currencyCode') ?? 'INR';
     _currencySymbol = prefs.getString('currencySymbol') ?? '₹';
+    // Keep the formatter in sync so amounts use this currency's rules
+    // (minor units, digit grouping) everywhere.
+    UtilityFunction.activeCurrencyCode = _currencyCode;
     _isFirstLaunch = prefs.getBool('isFirstLaunch') ?? true;
     _defaultIncome = prefs.getDouble('defaultIncome') ?? 0.0;
     _monthlyIncome = prefs.getDouble('monthlyIncome') ?? 0.0;
@@ -175,6 +179,7 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> setCurrency(String code, String symbol) async {
     _currencyCode = code;
     _currencySymbol = symbol;
+    UtilityFunction.activeCurrencyCode = code;
     if (code == 'INR' && _usesGenericBudgetRule) {
       _budgetRule = indianBudgetRule.name;
     } else if (code != 'INR' && _budgetRule == indianBudgetRule.name) {

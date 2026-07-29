@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -5,6 +7,7 @@ import '../../models/category_amount.dart';
 import '../../utilities/constants.dart';
 import '../../utilities/theme_helper.dart';
 import '../../utilities/functions.dart';
+import '../../utilities/responsive.dart';
 import '../../screens/all_transactions_screen.dart';
 
 class CategoriesPieChart extends StatefulWidget {
@@ -187,7 +190,7 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
           child: hasSelection
               ? SizedBox(
                   key: const ValueKey('category-chart'),
-                  height: 300,
+                  height: context.chartHeight(fraction: 0.36, min: 240, max: 360),
                   child: AnimatedBuilder(
                     animation: _animation,
                     builder: (context, child) {
@@ -530,7 +533,7 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
   Widget _buildEmptyState(BuildContext context) {
     return Container(
       key: const ValueKey('category-chart-empty'),
-      height: 260,
+      height: context.chartHeight(fraction: 0.3, min: 200, max: 300),
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: context.appSurfaceLight.withValues(alpha: 0.3),
@@ -570,10 +573,19 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
   }
 
   // Uses a Dummy Section to simulate "Sweeping" animation
-  // Donut geometry (must match PieChartData below).
-  static const double _centerSpaceRadius = 74;
-  static const double _sectionRadius = 50;
-  static const double _sectionRadiusTouched = 58;
+  // Donut geometry — scaled to the chart box so the ring never overflows on
+  // narrow phones and fills the space properly on tablets. The available box
+  // is the smaller of the chart height and the card's inner width.
+  double get _donutExtent {
+    final size = MediaQuery.sizeOf(context);
+    final chartBox = context.chartHeight(fraction: 0.36, min: 240, max: 360);
+    final widthBox = size.width - 80; // card + page horizontal padding
+    return math.min(chartBox, widthBox);
+  }
+
+  double get _centerSpaceRadius => (_donutExtent * 0.245).clamp(48.0, 90.0);
+  double get _sectionRadius => (_donutExtent * 0.167).clamp(34.0, 62.0);
+  double get _sectionRadiusTouched => _sectionRadius * 1.16;
 
   void _openTransactions(int? categoryId) {
     final startDate =

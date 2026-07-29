@@ -121,22 +121,32 @@ class RecentTransactionsWidget extends StatelessWidget {
                       height: 40,
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: (transaction.isExpense
-                                ? AppColors.negative
-                                : AppColors.positive)
+                        color: (transaction.isTransfer
+                                ? context.appAccent
+                                : (transaction.isExpense
+                                    ? AppColors.negative
+                                    : AppColors.positive))
                             .withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: Image.asset(
-                        category.icon,
-                        width: 24,
-                        height: 24,
-                      ),
+                      child: transaction.isTransfer
+                          ? Icon(
+                              Icons.swap_horiz_rounded,
+                              size: 24,
+                              color: context.appAccent,
+                            )
+                          : Image.asset(
+                              category.icon,
+                              width: 24,
+                              height: 24,
+                            ),
                     ),
                     title: Text(
-                      transaction.title.isEmpty
-                          ? category.name
-                          : transaction.title,
+                      transaction.isTransfer
+                          ? 'Transfer'
+                          : (transaction.title.isEmpty
+                              ? category.name
+                              : transaction.title),
                       style: AppTextStyles.bodyMedium.copyWith(
                         fontWeight: FontWeight.w600,
                         color: context.textPrimary,
@@ -151,11 +161,15 @@ class RecentTransactionsWidget extends StatelessWidget {
                       ),
                     ),
                     trailing: Text(
-                      '${transaction.isExpense ? '-' : '+'}${UtilityFunction.addCommaWithSign(transaction.amount, currencySymbol: currencySymbol).substring(1)}',
+                      transaction.isTransfer
+                          ? UtilityFunction.addCommaWithSign(transaction.amount, currencySymbol: currencySymbol)
+                          : '${transaction.isExpense ? '-' : '+'}${UtilityFunction.addCommaWithSign(transaction.amount, currencySymbol: currencySymbol).substring(1)}',
                       style: AppTextStyles.bodyLarge.copyWith(
-                        color: transaction.isExpense
-                            ? AppColors.negative
-                            : AppColors.positive,
+                        color: transaction.isTransfer
+                            ? context.textSecondary
+                            : (transaction.isExpense
+                                ? AppColors.negative
+                                : AppColors.positive),
                         fontWeight: FontWeight.bold,
                       ),
                     ),

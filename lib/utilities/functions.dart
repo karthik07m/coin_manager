@@ -1,5 +1,7 @@
 import 'package:intl/intl.dart';
 
+import 'constants.dart';
+
 class UtilityFunction {
   static String currency = "₹";
   static String formateDate(DateTime date) {
@@ -150,42 +152,126 @@ class UtilityFunction {
     return isNegative ? '-$amount' : amount;
   }
 
-  static String addCommaWithSign(double value,
-      {String currencySymbol = '\$', String currencyCode = 'USD'}) {
-    String formattedAmount;
+  /// The user's selected currency code, kept in sync by SettingsProvider.
+  ///
+  /// Most call sites only pass a symbol (not a code), and symbols are
+  /// ambiguous — ¥ is both JPY and CNY. This lets the formatter resolve the
+  /// right currency without threading the code through every widget.
+  static String activeCurrencyCode = 'USD';
 
-    if (isIndianCurrency(symbol: currencySymbol, code: currencyCode)) {
-      formattedAmount = formatIndianNumber(value);
-    } else {
-      String amount = value.toStringAsFixed(2);
-      formattedAmount = amount.replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => "${m[1]},");
-    }
+  /// Resolves the currency rules (decimal digits, grouping) to apply for a
+  /// given symbol/code pair, falling back to the active currency.
+  static AppCurrency _resolveCurrency(String? symbol, String? code) {
+    // An explicitly passed, non-default code always wins.
+    final byCode = currencyForCode(code);
+    if (byCode != null && byCode.symbol == symbol) return byCode;
 
-    return "$currencySymbol$formattedAmount";
+    final bySymbol = currencyForSymbol(symbol, preferCode: activeCurrencyCode);
+    if (bySymbol != null) return bySymbol;
+
+    return byCode ??
+        currencyForCode(activeCurrencyCode) ??
+        const AppCurrency('USD', '\$', 'US Dollar', '🇺🇸');
   }
 
-  /// Format money with commas. Shows exact cents by default; pass
-  /// showDecimals:false only where a rounded figure is explicitly wanted.
-  /// Example: 1234.56 => "$1,234.56"
+  /// Groups the integer part in the western style: 1,234,567.
+  static String _groupWestern(String intPart) {
+    return intPart.replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},',
+    );
+  }
+
+  /// Formats [value] using the rules of the resolved currency: correct minor
+  /// units (Yen shows none), correct digit grouping (Indian lakh/crore vs
+  /// western thousands), and the minus sign before the symbol.
+  static String _formatWithCurrency(
+    double value, {
+    required String symbol,
+    required String? code,
+    required bool showDecimals,
+  }) {
+    final currency = _resolveCurrency(symbol, code);
+    // A currency without minor units never shows decimals, even when the
+    // caller asks for them.
+    final digits = showDecimals ? currency.decimalDigits : 0;
+
+    final isNegative = value < 0;
+    final abs = value.abs();
+
+    String body;
+    if (currency.indianGrouping) {
+      body = formatIndianNumber(abs, showDecimals: digits > 0);
+    } else {
+      final fixed = abs.toStringAsFixed(digits);
+      final parts = fixed.split('.');
+      body = _groupWestern(parts[0]);
+      if (parts.length > 1) body = '$body.${parts[1]}';
+    }
+
+    // Sign goes outside the symbol: -$1,234.56 (not $-1,234.56).
+    return '${isNegative ? '-' : ''}$symbol$body';
+  }
+
+  static String addCommaWithSign(double value,
+      {String currencySymbol = '\$', String currencyCode = 'USD'}) {
+    return _formatWithCurrency(
+      value,
+      symbol: currencySymbol,
+      code: currencyCode,
+      showDecimals: true,
+    );
+  }
+
+  /// Format money for the selected currency. Rounded by default; callers that
+  /// need minor units (account balances, single transactions) opt in with
+  /// showDecimals. Currencies without a subunit (e.g. JPY) stay whole either
+  /// way, and Indian currencies use lakh/crore grouping.
+  /// Example: 1234.56 => "$1,234.56" / "₹1,234.56" / "¥1,235"
   static String formatMoney(
     double value, {
-    bool showDecimals = true,
+    // Summaries and KPIs read better rounded; callers that need cents
+    // (account balances, single transactions) opt in explicitly.
+    bool showDecimals = false,
     String symbol = '\$',
     String currencyCode = 'USD',
   }) {
-    if (isIndianCurrency(symbol: symbol, code: currencyCode)) {
-      return '$symbol${formatIndianNumber(
-        value,
-        showDecimals: showDecimals,
-      )}';
+    return _formatWithCurrency(
+      value,
+      symbol: symbol,
+      code: currencyCode,
+      showDecimals: showDecimals,
+    );
+  }
+
+  /// Short money label for dense places like chart axes, using the notation
+  /// the selected currency's users expect: lakh/crore for Indian currencies,
+  /// k/M elsewhere.
+  static String formatCompactMoney(
+    double value, {
+    String symbol = '\$',
+    String? currencyCode,
+  }) {
+    final currency = _resolveCurrency(symbol, currencyCode);
+    if (currency.indianGrouping) {
+      return formatIndianCompact(value, currencySymbol: symbol);
     }
 
-    final formatter = NumberFormat.currency(
-      symbol: symbol,
-      decimalDigits: showDecimals ? 2 : 0,
-    );
-    return formatter.format(value);
+    final isNegative = value < 0;
+    final abs = value.abs();
+    final sign = isNegative ? '-' : '';
+
+    String body;
+    if (abs >= 1000000) {
+      body = '${(abs / 1000000).toStringAsFixed(abs >= 10000000 ? 0 : 1)}M';
+    } else if (abs >= 1000) {
+      body = '${(abs / 1000).toStringAsFixed(abs >= 10000 ? 0 : 1)}k';
+    } else if (currency.decimalDigits == 0 || abs >= 100 || abs == 0) {
+      body = abs.toStringAsFixed(0);
+    } else {
+      body = abs.toStringAsFixed(1);
+    }
+    return '$sign$symbol$body';
   }
 
   static String formatIndianCompact(double value,

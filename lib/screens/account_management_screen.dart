@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/account_provider.dart';
 import '../models/account.dart';
 import '../utilities/constants.dart';
+import '../utilities/responsive.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
 import '../providers/settings_provider.dart';
@@ -91,7 +92,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
           final showCreditUsage = accountProvider.hasCreditCardsWithLimit;
           final leadingCount = showCreditUsage ? 2 : 1;
 
-          return ListView.builder(
+          return context.constrainedContent(ListView.builder(
             padding: const EdgeInsets.all(AppDimensions.spacing16),
             itemCount: accounts.length + leadingCount,
             itemBuilder: (context, index) {
@@ -107,7 +108,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
               return _buildAccountCard(
                   context, account, accountProvider, currencySymbol);
             },
-          );
+          ));
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -216,20 +217,30 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
           children: [
             Icon(icon, size: 14, color: color),
             const SizedBox(width: 5),
-            Text(
-              label,
-              style: AppTextStyles.caption.copyWith(
-                color: context.textSecondary,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption.copyWith(
+                  color: context.textSecondary,
+                ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 4),
-        Text(
-          value,
-          style: AppTextStyles.bodyLarge.copyWith(
-            color: color,
-            fontWeight: FontWeight.w700,
+        // Large balances (and bigger accessibility fonts) shrink to fit
+        // instead of overflowing this half-width column.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            maxLines: 1,
+            style: AppTextStyles.bodyLarge.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ],
@@ -291,25 +302,30 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                money(used),
-                style: AppTextStyles.h2.copyWith(
-                  color: context.textPrimary,
-                  fontWeight: FontWeight.w800,
+          // Big totals shrink together rather than overflowing narrow phones.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  money(used),
+                  style: AppTextStyles.h2.copyWith(
+                    color: context.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'of ${money(limit)}',
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: context.textSecondary,
+                const SizedBox(width: 6),
+                Text(
+                  'of ${money(limit)}',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: context.textSecondary,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           ClipRRect(
@@ -452,23 +468,28 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(
-                        UtilityFunction.formatMoney(
-                          headlineNative,
-                          symbol: acctSymbol,
-                          showDecimals: true,
-                        ),
-                        style: AppTextStyles.bodyLarge.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: hasLimit
-                              ? (available < 0
-                                  ? AppColors.negative
-                                  : AppColors.positive)
-                              : (isLiability
-                                  ? AppColors.negative
-                                  : (account.currentBalance < 0
-                                      ? AppColors.negative
-                                      : context.textPrimary)),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          UtilityFunction.formatMoney(
+                            headlineNative,
+                            symbol: acctSymbol,
+                            showDecimals: true,
+                          ),
+                          maxLines: 1,
+                          style: AppTextStyles.bodyLarge.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: hasLimit
+                                ? (available < 0
+                                    ? AppColors.negative
+                                    : AppColors.positive)
+                                : (isLiability
+                                    ? AppColors.negative
+                                    : (account.currentBalance < 0
+                                        ? AppColors.negative
+                                        : context.textPrimary)),
+                          ),
                         ),
                       ),
                       Text(

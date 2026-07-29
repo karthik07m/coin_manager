@@ -540,15 +540,32 @@ class AppCurrency {
   final String symbol;
   final String name;
   final String flag;
-  const AppCurrency(this.code, this.symbol, this.name, this.flag);
+
+  /// Minor units the currency actually uses. Yen-style currencies have no
+  /// subunit, so amounts must never show ".00".
+  final int decimalDigits;
+
+  /// Indian currencies group by lakh/crore (12,34,567) rather than the
+  /// western thousands grouping (1,234,567).
+  final bool indianGrouping;
+
+  const AppCurrency(
+    this.code,
+    this.symbol,
+    this.name,
+    this.flag, {
+    this.decimalDigits = 2,
+    this.indianGrouping = false,
+  });
 }
 
 const List<AppCurrency> appCurrencies = [
-  AppCurrency('INR', '₹', 'Indian Rupee', '🇮🇳'),
+  AppCurrency('INR', '₹', 'Indian Rupee', '🇮🇳', indianGrouping: true),
   AppCurrency('USD', '\$', 'US Dollar', '🇺🇸'),
   AppCurrency('EUR', '€', 'Euro', '🇪🇺'),
   AppCurrency('GBP', '£', 'British Pound', '🇬🇧'),
-  AppCurrency('JPY', '¥', 'Japanese Yen', '🇯🇵'),
+  // Yen has no minor unit — amounts are always whole.
+  AppCurrency('JPY', '¥', 'Japanese Yen', '🇯🇵', decimalDigits: 0),
   AppCurrency('AUD', 'A\$', 'Australian Dollar', '🇦🇺'),
   AppCurrency('CAD', 'C\$', 'Canadian Dollar', '🇨🇦'),
   AppCurrency('CNY', '¥', 'Chinese Yuan', '🇨🇳'),
@@ -556,6 +573,28 @@ const List<AppCurrency> appCurrencies = [
   AppCurrency('AED', 'د.إ', 'UAE Dirham', '🇦🇪'),
   AppCurrency('CHF', 'Fr', 'Swiss Franc', '🇨🇭'),
 ];
+
+/// Currency for a code, or null when unknown.
+AppCurrency? currencyForCode(String? code) {
+  if (code == null || code.isEmpty) return null;
+  for (final c in appCurrencies) {
+    if (c.code == code) return c;
+  }
+  return null;
+}
+
+/// Currency for a symbol. Symbols aren't unique (¥ is both JPY and CNY), so
+/// [preferCode] disambiguates when the caller knows the active currency.
+AppCurrency? currencyForSymbol(String? symbol, {String? preferCode}) {
+  if (symbol == null || symbol.isEmpty) return null;
+  AppCurrency? first;
+  for (final c in appCurrencies) {
+    if (c.symbol != symbol) continue;
+    first ??= c;
+    if (preferCode != null && c.code == preferCode) return c;
+  }
+  return first;
+}
 
 /// Currency symbol for a code (falls back to the code itself).
 String currencySymbolForCode(String? code) {

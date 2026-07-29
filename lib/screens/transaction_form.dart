@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../models/category.dart';
 import '../utilities/id_generator.dart';
 import '../models/debt.dart';
+import '../models/debt_payment.dart';
 import '../models/transaction.dart';
 import '../models/receipt.dart';
 import '../models/account.dart';
@@ -18,6 +19,7 @@ import '../providers/category_provider.dart';
 import '../providers/account_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utilities/constants.dart';
+import '../utilities/functions.dart';
 import '../utilities/theme_helper.dart';
 import '../db/receipt_db_helper.dart';
 import 'create_category.dart';
@@ -65,6 +67,7 @@ class TransactionFormState extends State<TransactionForm> {
 
   // Loan marker (lent/borrowed) — creates a Debt Tracker entry on save.
   _LoanKind? _loanKind;
+  String? _linkedDebtId;
   final TextEditingController _loanPersonController = TextEditingController();
 
   bool get _hasOperator => _amountExpression.contains(RegExp(r'[+\-×÷]'));
@@ -302,6 +305,12 @@ class TransactionFormState extends State<TransactionForm> {
     return categoryMap[categoryId]?.icon ?? 'assets/categories/other.png';
   }
 
+  String getDebtTitle(String debtId) {
+    final debtProvider = Provider.of<DebtProvider>(context, listen: false);
+    final debt = debtProvider.getDebtById(debtId);
+    return debt != null ? '"${debt.title}" (${debt.debtorName})' : 'Debt';
+  }
+
   String getAccountName(int accountId) {
     final account = accountMap[accountId];
     if (account == null) return 'Cash';
@@ -488,9 +497,11 @@ class TransactionFormState extends State<TransactionForm> {
                       .toList();
                   return GridView.builder(
                     padding: const EdgeInsets.all(AppDimensions.spacing16),
+                    // Adapts column count to the available width instead of
+                    // forcing 4 across on every device.
                     gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 104,
                       childAspectRatio: 0.82,
                       crossAxisSpacing: AppDimensions.spacing12,
                       mainAxisSpacing: AppDimensions.spacing12,
@@ -646,12 +657,16 @@ class TransactionFormState extends State<TransactionForm> {
     );
   }
 
-  /// Cashew-style loan sheet: mark this transaction as money lent or
-  /// borrowed, with the person's name. Saving then also creates a matching
-  /// entry in the Debt Tracker.
   void _showLoanOptions() {
     FocusScope.of(context).unfocus();
+    final debtProvider = Provider.of<DebtProvider>(context, listen: false);
+    final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+    final currencySymbol = settingsProvider.currencySymbol;
+
     _LoanKind? pendingKind = _loanKind;
+    String? pendingLinkedDebtId = _linkedDebtId;
+    bool isRepaymentMode = _linkedDebtId != null;
+    bool sheetIsExpense = _isExpense;
 
     showModalBottomSheet(
       context: context,
@@ -664,18 +679,27 @@ class TransactionFormState extends State<TransactionForm> {
         builder: (ctx, setSheetState) {
           final colorScheme = Theme.of(ctx).colorScheme;
 
+          final activeDebts = debtProvider.debts
+              .where((d) => d.status == DebtStatus.active && d.isLiability == sheetIsExpense)
+              .toList();
+
+          if (isRepaymentMode && activeDebts.isNotEmpty) {
+            if (pendingLinkedDebtId == null || !activeDebts.any((d) => d.id == pendingLinkedDebtId)) {
+              pendingLinkedDebtId = activeDebts.first.id;
+            }
+          }
+
           Widget option({
-            required _LoanKind? kind,
+            required bool active,
+            required bool selected,
+            required VoidCallback onTap,
             required IconData icon,
             required String title,
             required String subtitle,
           }) {
-            final selected = pendingKind == kind;
             return ListTile(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                setSheetState(() => pendingKind = kind);
-              },
+              enabled: active,
+              onTap: onTap,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -683,18 +707,19 @@ class TransactionFormState extends State<TransactionForm> {
                 icon,
                 color: selected
                     ? colorScheme.primary
-                    : colorScheme.onSurface.withValues(alpha: 0.6),
+                    : colorScheme.onSurface.withValues(alpha: active ? 0.6 : 0.3),
               ),
               title: Text(
                 title,
                 style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
                       fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                      color: active ? null : colorScheme.onSurface.withValues(alpha: 0.3),
                     ),
               ),
               subtitle: Text(
                 subtitle,
                 style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: 0.55),
+                      color: colorScheme.onSurface.withValues(alpha: active ? 0.55 : 0.3),
                       fontSize: 12,
                     ),
               ),
@@ -716,28 +741,118 @@ class TransactionFormState extends State<TransactionForm> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Center(
-                      child: Text('Loan', style: AppTextStyles.h3),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: colorScheme.onSurface.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Center(
+                      child: Text('Loan Settings', style: AppTextStyles.h3),
                     ),
                     const SizedBox(height: 12),
                     option(
-                      kind: null,
+                      active: true,
+                      selected: pendingKind == null && !isRepaymentMode,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setSheetState(() {
+                          pendingKind = null;
+                          pendingLinkedDebtId = null;
+                          isRepaymentMode = false;
+                        });
+                      },
                       icon: Icons.block_outlined,
                       title: 'Not a loan',
                       subtitle: 'Just a regular transaction',
                     ),
                     option(
-                      kind: _LoanKind.lent,
+                      active: true,
+                      selected: pendingKind == _LoanKind.lent,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setSheetState(() {
+                          pendingKind = _LoanKind.lent;
+                          sheetIsExpense = true;
+                          pendingLinkedDebtId = null;
+                          isRepaymentMode = false;
+                        });
+                      },
                       icon: Icons.call_made_rounded,
-                      title: 'I lent money',
-                      subtitle: 'Someone owes me · tracked in Debt Tracker',
+                      title: 'I lent money (New Loan)',
+                      subtitle: 'Someone owes me · will create a new entry',
                     ),
                     option(
-                      kind: _LoanKind.borrowed,
+                      active: true,
+                      selected: pendingKind == _LoanKind.borrowed,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setSheetState(() {
+                          pendingKind = _LoanKind.borrowed;
+                          sheetIsExpense = false;
+                          pendingLinkedDebtId = null;
+                          isRepaymentMode = false;
+                        });
+                      },
                       icon: Icons.call_received_rounded,
-                      title: 'I borrowed money',
-                      subtitle: 'I owe someone · tracked in Debt Tracker',
+                      title: 'I borrowed money (New Loan)',
+                      subtitle: 'I owe someone · will create a new entry',
+                    ),
+                    option(
+                      active: debtProvider.debts.any((d) => d.status == DebtStatus.active && d.isLiability == true),
+                      selected: isRepaymentMode && sheetIsExpense,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setSheetState(() {
+                          pendingKind = null;
+                          sheetIsExpense = true;
+                          isRepaymentMode = true;
+                          final liabilities = debtProvider.debts
+                              .where((d) => d.status == DebtStatus.active && d.isLiability == true)
+                              .toList();
+                          if (liabilities.isNotEmpty) {
+                            pendingLinkedDebtId = liabilities.first.id;
+                          }
+                        });
+                      },
+                      icon: Icons.assignment_turned_in_rounded,
+                      title: 'Repay existing debt',
+                      subtitle: 'I am paying back money I owe',
+                    ),
+                    option(
+                      active: debtProvider.debts.any((d) => d.status == DebtStatus.active && d.isLiability == false),
+                      selected: isRepaymentMode && !sheetIsExpense,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setSheetState(() {
+                          pendingKind = null;
+                          sheetIsExpense = false;
+                          isRepaymentMode = true;
+                          final receivables = debtProvider.debts
+                              .where((d) => d.status == DebtStatus.active && d.isLiability == false)
+                              .toList();
+                          if (receivables.isNotEmpty) {
+                            pendingLinkedDebtId = receivables.first.id;
+                          }
+                        });
+                      },
+                      icon: Icons.assignment_return_rounded,
+                      title: 'Collect repayment on active debt',
+                      subtitle: 'Someone is paying me back',
                     ),
                     if (pendingKind != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Person Details',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: context.textSecondary,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       TextField(
                         controller: _loanPersonController,
@@ -757,7 +872,83 @@ class TransactionFormState extends State<TransactionForm> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 16),
+                    if (isRepaymentMode && activeDebts.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Select Active Debt',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: context.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: activeDebts.length,
+                        itemBuilder: (ctx, idx) {
+                          final d = activeDebts[idx];
+                          final isSelected = pendingLinkedDebtId == d.id;
+                          final remaining = d.getRemainingAmount();
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? colorScheme.primary.withValues(alpha: 0.1)
+                                  : context.appBackground,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? colorScheme.primary
+                                    : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
+                            child: ListTile(
+                              onTap: () {
+                                HapticFeedback.selectionClick();
+                                setSheetState(() {
+                                  pendingLinkedDebtId = d.id;
+                                });
+                              },
+                              leading: CircleAvatar(
+                                radius: 16,
+                                backgroundColor: isSelected
+                                    ? colorScheme.primary
+                                    : colorScheme.surfaceContainerHighest,
+                                child: Icon(
+                                  sheetIsExpense ? Icons.payment_rounded : Icons.monetization_on_rounded,
+                                  size: 16,
+                                  color: isSelected
+                                      ? colorScheme.onPrimary
+                                      : colorScheme.onSurface,
+                                ),
+                              ),
+                              title: Text(
+                                d.title,
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              subtitle: Text(
+                                d.debtorName,
+                                style: AppTextStyles.caption.copyWith(
+                                  color: context.textSecondary,
+                                ),
+                              ),
+                              trailing: Text(
+                                UtilityFunction.addCommaWithSign(remaining, currencySymbol: currencySymbol),
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: sheetIsExpense ? AppColors.negative : AppColors.positive,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
                       height: 48,
@@ -766,13 +957,10 @@ class TransactionFormState extends State<TransactionForm> {
                           HapticFeedback.selectionClick();
                           setState(() {
                             _loanKind = pendingKind;
-                            if (_loanKind == _LoanKind.lent) {
-                              // Lending is money going out.
-                              _isExpense = true;
-                            } else if (_loanKind == _LoanKind.borrowed) {
-                              // Borrowing is money coming in.
-                              _isExpense = false;
-                            }
+                            _linkedDebtId = pendingLinkedDebtId;
+                            _isExpense = sheetIsExpense;
+                            selectedCategory =
+                                _isExpense ? defaultExpenseCat : defaultIncomeCat;
                             _fetchAndMapCategories(
                                 Provider.of<CategoryProvider>(context,
                                     listen: false));
@@ -787,7 +975,7 @@ class TransactionFormState extends State<TransactionForm> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Text('Done', style: AppTextStyles.button),
+                        child: const Text('Confirm', style: AppTextStyles.button),
                       ),
                     ),
                   ],
@@ -980,6 +1168,23 @@ class TransactionFormState extends State<TransactionForm> {
         isLiability: _loanKind == _LoanKind.borrowed,
         transactionId: id,
       ));
+    } else if (!isUpdate && _linkedDebtId != null) {
+      final debt = debtProvider.getDebtById(_linkedDebtId!);
+      if (debt != null) {
+        final payment = DebtPayment.createNew(
+          id: newId(),
+          debtId: _linkedDebtId!,
+          amount: roundedAmount,
+          paymentDate: _selectedDate,
+          notes: _titleController.text.trim().isNotEmpty
+              ? _titleController.text.trim()
+              : (_isExpense
+                  ? 'Repayment towards debt'
+                  : 'Collected repayment'),
+          transactionId: id,
+        );
+        await debtProvider.recordPayment(_linkedDebtId!, payment);
+      }
     }
   }
 
@@ -1152,7 +1357,7 @@ class TransactionFormState extends State<TransactionForm> {
                           if (_transaction == null) ...[
                             _buildIconChip(
                               icon: Icons.handshake_outlined,
-                              active: _loanKind != null,
+                              active: _loanKind != null || _linkedDebtId != null,
                               tooltip: 'Loan (lent / borrowed)',
                               onTap: _showLoanOptions,
                             ),
@@ -1188,6 +1393,26 @@ class TransactionFormState extends State<TransactionForm> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                        )
+                      else if (_linkedDebtId != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8, left: 4),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              _isExpense
+                                  ? '🤝 Repaying debt: ${getDebtTitle(_linkedDebtId!)} · will update Debt Tracker'
+                                  : '🤝 Collecting repayment for: ${getDebtTitle(_linkedDebtId!)} · will update Debt Tracker',
+                              style: AppTextStyles.caption.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ),
                     ],
                   ),
@@ -1212,7 +1437,7 @@ class TransactionFormState extends State<TransactionForm> {
                       SizedBox(
                         width: double.infinity,
                         height: 50,
-                        child: ElevatedButton.icon(
+                        child: ElevatedButton(
                           onPressed: () {
                             if (_hasOperator) {
                               _onEvaluate();
@@ -1228,22 +1453,28 @@ class TransactionFormState extends State<TransactionForm> {
                               borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                          icon: Icon(
-                            _hasOperator
-                                ? Icons.drag_handle_rounded
-                                : Icons.check_rounded,
-                            size: 22,
-                          ),
-                          label: Text(
-                            _hasOperator
-                                ? '='
-                                : (_transaction?.id == null
-                                    ? 'Save'
-                                    : 'Update'),
-                            style: AppTextStyles.button.copyWith(
-                              color: colorScheme.onPrimary,
-                              fontSize: 16,
-                            ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // Only the Save/Update state gets a check icon —
+                              // showing an icon next to the literal "=" text
+                              // for the evaluate state doubled up as "= =".
+                              if (!_hasOperator) ...[
+                                const Icon(Icons.check_rounded, size: 22),
+                                const SizedBox(width: 8),
+                              ],
+                              Text(
+                                _hasOperator
+                                    ? '='
+                                    : (_transaction?.id == null
+                                        ? 'Save'
+                                        : 'Update'),
+                                style: AppTextStyles.button.copyWith(
+                                  color: colorScheme.onPrimary,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -1288,6 +1519,9 @@ class TransactionFormState extends State<TransactionForm> {
           HapticFeedback.selectionClick();
           setState(() {
             _isExpense = expenseSegment;
+            _loanKind = null;
+            _linkedDebtId = null;
+            _loanPersonController.clear();
             selectedCategory =
                 expenseSegment ? defaultExpenseCat : defaultIncomeCat;
             _fetchAndMapCategories(

@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../models/ai_intent.dart';
 import '../models/ai_message.dart';
 import '../providers/account_provider.dart';
 import '../providers/ai_assistant_provider.dart';
 import '../providers/category_provider.dart';
+import '../providers/monthly_budget_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/transaction_provider.dart';
+import '../utilities/budget_period.dart';
 import '../utilities/constants.dart';
 import '../utilities/functions.dart';
 import '../utilities/theme_helper.dart';
@@ -31,6 +36,67 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   final ScrollController _scrollController = ScrollController();
   final FocusNode _inputFocusNode = FocusNode();
 
+  // Voice input: on-device speech recognition feeding the same text pipeline.
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _speechReady = false;
+  bool _isListening = false;
+
+  Future<void> _toggleListening() async {
+    if (_isListening) {
+      await _speech.stop();
+      setState(() => _isListening = false);
+      return;
+    }
+
+    if (!_speechReady) {
+      _speechReady = await _speech.initialize(
+        onStatus: (status) {
+          // The engine stops itself on silence — reflect that in the UI.
+          if (status == 'notListening' || status == 'done') {
+            if (mounted && _isListening) {
+              setState(() => _isListening = false);
+            }
+          }
+        },
+        onError: (_) {
+          if (mounted) setState(() => _isListening = false);
+        },
+      );
+      if (!_speechReady) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Voice input unavailable — check the microphone permission.'),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    HapticFeedback.lightImpact();
+    setState(() => _isListening = true);
+    await _speech.listen(
+      listenOptions: stt.SpeechListenOptions(
+        listenMode: stt.ListenMode.dictation,
+        partialResults: true,
+      ),
+      onResult: _onSpeechResult,
+    );
+  }
+
+  void _onSpeechResult(SpeechRecognitionResult result) {
+    // Live transcript in the input field; auto-send on the final result.
+    _controller.text = result.recognizedWords;
+    _controller.selection =
+        TextSelection.collapsed(offset: _controller.text.length);
+    if (result.finalResult && result.recognizedWords.trim().isNotEmpty) {
+      setState(() => _isListening = false);
+      _send();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -51,6 +117,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
   @override
   void dispose() {
+    _speech.stop();
     _controller.dispose();
     _scrollController.dispose();
     _inputFocusNode.dispose();
@@ -71,6 +138,23 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     final accountProvider =
         Provider.of<AccountProvider>(context, listen: false);
     final aiProvider = Provider.of<AiAssistantProvider>(context, listen: false);
+    final transactionProvider =
+        Provider.of<TransactionProvider>(context, listen: false);
+    final budgetProvider =
+        Provider.of<MonthlyBudgetProvider>(context, listen: false);
+
+    // This month's budget status, so "how's my budget?" can be answered.
+    final now = DateTime.now();
+    final monthStart = BudgetPeriod.startOfMonth(now);
+    final monthEnd = BudgetPeriod.endOfMonth(now);
+    final budgetTotal = budgetProvider.getTotalBudget(BudgetPeriod.keyFor(now));
+    final budgetSpent = transactionProvider.transactions
+        .where((t) =>
+            t.isExpense &&
+            !t.isTransfer &&
+            !t.date.isBefore(monthStart) &&
+            !t.date.isAfter(monthEnd))
+        .fold(0.0, (sum, t) => sum + transactionProvider.baseAmount(t));
 
     await aiProvider.submitMessage(
       message: text,
@@ -80,6 +164,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       currencyCode: settings.currencyCode,
       categories: categoryProvider.categories,
       accounts: accountProvider.accounts,
+      transactionProvider: transactionProvider,
+      budgetTotal: budgetTotal,
+      budgetSpent: budgetSpent,
     );
 
     _scrollToBottom();
@@ -568,6 +655,26 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                     ),
                   );
                 },
+              ),
+            ),
+            const SizedBox(width: AppDimensions.spacing8),
+            // Voice input: tap to speak, the transcript auto-sends.
+            SizedBox(
+              width: 48,
+              height: 48,
+              child: IconButton(
+                onPressed: _toggleListening,
+                tooltip: _isListening ? 'Stop listening' : 'Speak a command',
+                style: IconButton.styleFrom(
+                  backgroundColor: _isListening
+                      ? AppColors.negative.withValues(alpha: 0.15)
+                      : context.appAccent.withValues(alpha: 0.10),
+                ),
+                icon: Icon(
+                  _isListening ? Icons.mic : Icons.mic_none_rounded,
+                  color:
+                      _isListening ? AppColors.negative : context.appAccent,
+                ),
               ),
             ),
             const SizedBox(width: AppDimensions.spacing8),

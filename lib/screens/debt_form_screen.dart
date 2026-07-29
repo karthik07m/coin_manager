@@ -48,6 +48,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
   List<Account> _accounts = [];
   int? _selectedAccountId;
   bool _bookAsTransaction = true;
+  int? _selectedCategoryId;
 
   @override
   void initState() {
@@ -81,6 +82,13 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
     _selectedAccountId =
         defaultId ?? (_accounts.isNotEmpty ? _accounts.first.id : null);
 
+    // Load categories
+    final categoryProvider = Provider.of<CategoryProvider>(context, listen: false);
+    if (categoryProvider.categoryMap.isEmpty) {
+      await categoryProvider.fetchAllCategories();
+    }
+    if (!mounted) return;
+
     if (widget.debtId != null) {
       _existingDebt = debtProvider.getDebtById(widget.debtId!);
 
@@ -110,6 +118,11 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
           }
         });
       }
+    } else {
+      setState(() {
+        final isTxExpense = !_isLiability;
+        _selectedCategoryId = isTxExpense ? defaultExpenseCat : defaultIncomeCat;
+      });
     }
     setState(() {
       _isLoading = false;
@@ -150,6 +163,152 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
     }
   }
 
+  String getCategoryName(int categoryId) {
+    final categoryProvider = Provider.of<CategoryProvider>(context, listen: false);
+    final category = categoryProvider.categoryMap[categoryId];
+    return category?.name ?? 'Category';
+  }
+
+  String getCategoryIcon(int categoryId) {
+    final categoryProvider = Provider.of<CategoryProvider>(context, listen: false);
+    return categoryProvider.categoryMap[categoryId]?.icon ?? 'assets/categories/other.png';
+  }
+
+  void _showCategorySelector(
+    BuildContext context,
+    bool isExpense,
+    int currentCategoryId,
+    Function(int) onSelected,
+  ) {
+    FocusScope.of(context).unfocus();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext sheetContext) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppDimensions.spacing16),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .outline
+                        .withValues(alpha: 0.1),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Select Category',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(sheetContext),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Consumer<CategoryProvider>(
+                builder: (context, categoryProvider, child) {
+                  final categories = categoryProvider.categories
+                      .where((c) => c.isExpense == isExpense)
+                      .toList();
+                  return GridView.builder(
+                    padding: const EdgeInsets.all(AppDimensions.spacing16),
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 104,
+                      childAspectRatio: 0.82,
+                      crossAxisSpacing: AppDimensions.spacing12,
+                      mainAxisSpacing: AppDimensions.spacing12,
+                    ),
+                    itemCount: categories.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      final category = categories[index];
+                      final isSelected = currentCategoryId == category.id;
+                      final colorScheme = Theme.of(context).colorScheme;
+                      return GestureDetector(
+                        onTap: () {
+                          onSelected(category.id!);
+                          Navigator.pop(sheetContext);
+                        },
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isSelected
+                                    ? colorScheme.primary
+                                        .withValues(alpha: 0.18)
+                                    : colorScheme.surfaceContainerHighest
+                                        .withValues(alpha: 0.5),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? colorScheme.primary
+                                      : Colors.transparent,
+                                  width: 2,
+                                ),
+                              ),
+                              child: Image.asset(
+                                category.icon,
+                                width: 30,
+                                height: 30,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Icon(
+                                  Icons.category,
+                                  size: 30,
+                                  color: colorScheme.onSurface
+                                      .withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              category.name,
+                              style: AppTextStyles.caption.copyWith(
+                                fontSize: 11,
+                                letterSpacing: 0,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.w500,
+                                color: isSelected
+                                    ? colorScheme.primary
+                                    : colorScheme.onSurface
+                                        .withValues(alpha: 0.8),
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showFormError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -159,22 +318,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
     );
   }
 
-  /// "Miscellaneous" category id of the right type for the booked loan
-  /// transaction, with safe fallbacks.
-  Future<int> _miscCategoryId(bool isExpense) async {
-    final categoryProvider =
-        Provider.of<CategoryProvider>(context, listen: false);
-    if (categoryProvider.categoryMap.isEmpty) {
-      await categoryProvider.fetchAllCategories();
-    }
-    for (final category in categoryProvider.categoryMap.values) {
-      if (category.isExpense == isExpense &&
-          category.name.toLowerCase() == 'miscellaneous') {
-        return category.id!;
-      }
-    }
-    return isExpense ? defaultExpenseCat : defaultIncomeCat;
-  }
+
 
   Future<void> _saveDebt() async {
     if (!_formKey.currentState!.validate()) return;
@@ -253,7 +397,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
         final txProvider =
             Provider.of<TransactionProvider>(context, listen: false);
         final isExpense = !_isLiability; // lend = expense, borrow = income
-        final categoryId = await _miscCategoryId(isExpense);
+        final categoryId = _selectedCategoryId ?? (isExpense ? defaultExpenseCat : defaultIncomeCat);
         final loanTxn = Transaction.createNew(
           id: newId(),
           title: _isLiability
@@ -305,49 +449,149 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
   Future<void> _deleteDebt() async {
     if (_existingDebt == null) return;
 
+    final debtProvider = Provider.of<DebtProvider>(context, listen: false);
+    final payments = await debtProvider.getPaymentHistory(_existingDebt!.id);
+    if (!mounted) return;
+
+    final paymentCount = payments.length;
+    final linkedTxnCount =
+        payments.where((p) => p.transactionId != null).length +
+            (_existingDebt!.transactionId != null ? 1 : 0);
+    bool deleteLinkedTransactions = linkedTxnCount > 0;
+
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: context.appSurface,
-        title: Row(
-          children: [
-            const Icon(Icons.warning, color: AppColors.negative, size: 24),
-            const SizedBox(width: 8),
-            Text('Delete Debt', style: AppTextStyles.h3),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: context.appSurface,
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.negative.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.delete_forever_rounded,
+                    color: AppColors.negative, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Text('Delete Debt', style: AppTextStyles.h3),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              RichText(
+                text: TextSpan(
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: context.textPrimary,
+                  ),
+                  children: [
+                    const TextSpan(text: 'This will permanently delete '),
+                    TextSpan(
+                      text: '"${_existingDebt!.title}"',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    if (paymentCount > 0)
+                      TextSpan(
+                        text:
+                            ' and $paymentCount payment record${paymentCount == 1 ? '' : 's'}',
+                      ),
+                    const TextSpan(text: '.'),
+                  ],
+                ),
+              ),
+              if (linkedTxnCount > 0) ...[
+                const SizedBox(height: 16),
+                Container(
+                  decoration: BoxDecoration(
+                    color: context.appBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: context.textSecondary.withValues(alpha: 0.1),
+                    ),
+                  ),
+                  child: CheckboxListTile(
+                    value: deleteLinkedTransactions,
+                    onChanged: (v) => setDialogState(
+                        () => deleteLinkedTransactions = v ?? true),
+                    activeColor: AppColors.negative,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 8),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: Text(
+                      'Also delete $linkedTxnCount linked transaction${linkedTxnCount == 1 ? '' : 's'}',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Reverses the effect on account balances',
+                      style: AppTextStyles.caption.copyWith(
+                        color: context.textSecondary,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(
+                'Cancel',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: context.textSecondary,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(
+                backgroundColor: AppColors.negative.withValues(alpha: 0.1),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                'Delete',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.negative,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
           ],
         ),
-        content: Text(
-          'Are you sure you want to delete this debt?',
-          style: AppTextStyles.bodyMedium,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              'Cancel',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: context.textSecondary,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              'Delete',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.negative,
-              ),
-            ),
-          ),
-        ],
       ),
     );
 
     if (confirmed == true && mounted) {
-      final debtProvider = Provider.of<DebtProvider>(context, listen: false);
-      await debtProvider.deleteDebt(_existingDebt!.id);
+      final transactionProvider =
+          Provider.of<TransactionProvider>(context, listen: false);
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
+
+      final success = await debtProvider.deleteDebt(
+        _existingDebt!.id,
+        transactionProvider:
+            deleteLinkedTransactions ? transactionProvider : null,
+      );
+
       if (!mounted) return;
-      Navigator.pop(context);
+      if (success) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('"${_existingDebt!.title}" deleted'),
+            backgroundColor: AppColors.positive,
+          ),
+        );
+      }
+      navigator.pop();
     }
   }
 
@@ -784,6 +1028,56 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: AppDimensions.spacing12),
+            InkWell(
+              onTap: () {
+                final isExpense = !_isLiability;
+                _showCategorySelector(
+                  context,
+                  isExpense,
+                  _selectedCategoryId ?? (isExpense ? defaultExpenseCat : defaultIncomeCat),
+                  (catId) {
+                    setState(() {
+                      _selectedCategoryId = catId;
+                    });
+                  },
+                );
+              },
+              borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: context.appSurfaceLight,
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+                ),
+                child: Row(
+                  children: [
+                    Image.asset(
+                      getCategoryIcon(_selectedCategoryId ?? (!_isLiability ? defaultExpenseCat : defaultIncomeCat)),
+                      width: 22,
+                      height: 22,
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.category_outlined,
+                        size: 22,
+                        color: context.appAccent,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        getCategoryName(_selectedCategoryId ?? (!_isLiability ? defaultExpenseCat : defaultIncomeCat)),
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                    ),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 20,
+                      color: context.textSecondary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ],
       ),
@@ -797,6 +1091,8 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
         onTap: () {
           setState(() {
             _isLiability = isLiabilityType;
+            final isTxExpense = !_isLiability;
+            _selectedCategoryId = isTxExpense ? defaultExpenseCat : defaultIncomeCat;
           });
         },
         child: Container(
