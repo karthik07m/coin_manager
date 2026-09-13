@@ -7,6 +7,15 @@ import '../models/ai_intent.dart';
 import '../models/category.dart';
 
 class AiAssistantService {
+  /// Supabase's public anon key. The function runs with verify_jwt on, so
+  /// every call must carry a project JWT. Not a secret (it ships in the
+  /// binary like the URL): it stops drive-by calls, not a determined caller.
+  static const _anonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZycGdhYXBrYW5peGJxdXJ4cXd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNTc0MjUsImV4cCI6MjA5NzgzMzQyNX0.Fe7c8FlF7gmzrQ3X-18XfMl9pGJDWPxXIu25w0n8MiU',
+  );
+
   final http.Client _client;
 
   AiAssistantService({http.Client? client}) : _client = client ?? http.Client();
@@ -30,7 +39,11 @@ class AiAssistantService {
 
     final response = await _client.post(
       uri,
-      headers: const {'Content-Type': 'application/json'},
+      headers: const {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_anonKey',
+        'apikey': _anonKey,
+      },
       body: jsonEncode({
         'message': message,
         'mode': 'parse',

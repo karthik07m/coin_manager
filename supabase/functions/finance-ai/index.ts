@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import Anthropic from "npm:@anthropic-ai/sdk@0.125.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,46 +32,39 @@ serve(async (req) => {
     const body = (await req.json()) as FinanceAiRequest;
     validateRequest(body);
 
-    const apiKey = Deno.env.get("GEMINI_API_KEY");
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {
-      return json({ error: "GEMINI_API_KEY is not configured" }, 500);
+      return json({ error: "ANTHROPIC_API_KEY is not configured" }, 500);
     }
 
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: "application/json",
-          },
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: buildPrompt(body) }],
-            },
-          ],
-        }),
-      },
-    );
+    const response = await new Anthropic({ apiKey }).messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 16000,
+      output_config: { effort: "low" }, // short extraction task
+      messages: [{ role: "user", content: buildPrompt(body) }],
+    });
 
-    if (!geminiResponse.ok) {
-      return json(
-        { error: `Gemini request failed: ${geminiResponse.status}` },
-        502,
-      );
+    if (response.stop_reason === "refusal") {
+      return json({
+        intent: "unsupported",
+        confidence: 0,
+        message:
+          "I can help with adding transactions and basic spending summaries.",
+      });
     }
 
-    const geminiJson = await geminiResponse.json();
     const text =
-      geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+      response.content.find(
+        (b): b is Anthropic.TextBlock => b.type === "text",
+      )?.text ?? "{}";
     const parsed = JSON.parse(text);
     const validated = validateAiResponse(parsed);
 
     return json(validated);
   } catch (error) {
+    if (error instanceof Anthropic.APIError) {
+      return json({ error: `Claude request failed: ${error.status}` }, 502);
+    }
     return json(
       {
         intent: "unsupported",
