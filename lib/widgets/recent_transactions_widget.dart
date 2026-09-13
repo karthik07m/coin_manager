@@ -163,7 +163,7 @@ class RecentTransactionsWidget extends StatelessWidget {
                     trailing: Text(
                       transaction.isTransfer
                           ? UtilityFunction.addCommaWithSign(transaction.amount, currencySymbol: currencySymbol)
-                          : '${transaction.isExpense ? '-' : '+'}${UtilityFunction.addCommaWithSign(transaction.amount, currencySymbol: currencySymbol).substring(1)}',
+                          : '${transaction.isExpense ? '-' : '+'}${UtilityFunction.addCommaWithSign(transaction.amount.abs(), currencySymbol: currencySymbol)}',
                       style: AppTextStyles.bodyLarge.copyWith(
                         color: transaction.isTransfer
                             ? context.textSecondary
