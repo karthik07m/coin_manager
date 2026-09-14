@@ -1,15 +1,16 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/account.dart';
 import '../models/ai_intent.dart';
 import '../models/category.dart';
 
 class AiAssistantService {
-  /// Supabase's public anon key. The function runs with verify_jwt on, so
-  /// every call must carry a project JWT. Not a secret (it ships in the
-  /// binary like the URL): it stops drive-by calls, not a determined caller.
+  /// Supabase's public anon key, sent as the project `apikey`. Not a secret
+  /// (it ships in the binary like the URL); the per-user session below is
+  /// what the function actually checks.
   static const _anonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
     defaultValue:
@@ -37,39 +38,38 @@ class AiAssistantService {
       throw AiAssistantException('The Supabase AI Function URL is invalid.');
     }
 
-    final response = await _client.post(
-      uri,
-      headers: const {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $_anonKey',
-        'apikey': _anonKey,
-      },
-      body: jsonEncode({
-        'message': message,
-        'mode': 'parse',
-        'locale': 'en-US',
-        'timezone': DateTime.now().timeZoneName,
-        'now': _localNow(),
-        'currencyCode': currencyCode,
-        'currencySymbol': currencySymbol,
-        'categories': categories
-            .where((category) => category.id != null)
-            .map((category) => {
-                  'id': category.id,
-                  'name': category.name,
-                  'isExpense': category.isExpense,
-                })
-            .toList(),
-        'accounts': accounts
-            .where((account) => account.id != null)
-            .map((account) => {
-                  'id': account.id,
-                  'name': account.name,
-                  'isDefault': account.isDefault,
-                })
-            .toList(),
-      }),
-    );
+    final body = jsonEncode({
+      'message': message,
+      'mode': 'parse',
+      'locale': 'en-US',
+      'timezone': DateTime.now().timeZoneName,
+      'now': _localNow(),
+      'currencyCode': currencyCode,
+      'currencySymbol': currencySymbol,
+      'categories': categories
+          .where((category) => category.id != null)
+          .map((category) => {
+                'id': category.id,
+                'name': category.name,
+                'isExpense': category.isExpense,
+              })
+          .toList(),
+      'accounts': accounts
+          .where((account) => account.id != null)
+          .map((account) => {
+                'id': account.id,
+                'name': account.name,
+                'isDefault': account.isDefault,
+              })
+          .toList(),
+    });
+
+    var response = await _post(uri, body, await _accessToken(uri));
+    if (response.statusCode == 401) {
+      // Token revoked or expired early: refresh once and retry.
+      response = await _post(
+          uri, body, await _accessToken(uri, forceRefresh: true));
+    }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AiAssistantException(
@@ -87,6 +87,75 @@ class AiAssistantService {
     } on FormatException catch (error) {
       throw AiAssistantException(error.message);
     }
+  }
+
+  // Per-install anonymous Supabase user. The function charges the monthly
+  // AI allowance to this user's id, which (unlike a device id) can't be
+  // forged. The tokens only unlock this install's AI quota, so plain
+  // SharedPreferences is enough.
+  static const _prefsAccess = 'ai_session_access_token';
+  static const _prefsRefresh = 'ai_session_refresh_token';
+  static const _prefsExpiry = 'ai_session_expires_at';
+
+  Future<http.Response> _post(Uri uri, String body, String accessToken) {
+    return _client.post(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+        'apikey': _anonKey,
+      },
+      body: body,
+    );
+  }
+
+  Future<String> _accessToken(Uri functionUri, {bool forceRefresh = false}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final access = prefs.getString(_prefsAccess);
+    final refresh = prefs.getString(_prefsRefresh);
+    final expiresAt = prefs.getInt(_prefsExpiry) ?? 0;
+    final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    if (!forceRefresh && access != null && nowSec < expiresAt - 60) {
+      return access;
+    }
+
+    final auth = '${functionUri.scheme}://${functionUri.authority}/auth/v1';
+    const headers = {'Content-Type': 'application/json', 'apikey': _anonKey};
+
+    if (refresh != null) {
+      final res = await _client.post(
+        Uri.parse('$auth/token?grant_type=refresh_token'),
+        headers: headers,
+        body: jsonEncode({'refresh_token': refresh}),
+      );
+      if (res.statusCode == 200) return _saveSession(prefs, res.body);
+      // Only a rejected refresh token starts over. A server or network error
+      // must not mint a fresh user, or retries would reset the allowance.
+      if (res.statusCode != 400 && res.statusCode != 401 && res.statusCode != 403) {
+        throw AiAssistantException(
+            'AI sign-in failed (${res.statusCode}). Try again later.');
+      }
+    }
+
+    final res = await _client.post(Uri.parse('$auth/signup'),
+        headers: headers, body: '{}');
+    if (res.statusCode != 200) {
+      throw AiAssistantException(
+          'Could not start an AI session (${res.statusCode}). Try again later.');
+    }
+    return _saveSession(prefs, res.body);
+  }
+
+  Future<String> _saveSession(SharedPreferences prefs, String body) async {
+    final session = jsonDecode(body) as Map<String, dynamic>;
+    final access = session['access_token'] as String;
+    final expiresAt = (session['expires_at'] as num?)?.toInt() ??
+        DateTime.now().millisecondsSinceEpoch ~/ 1000 +
+            ((session['expires_in'] as num?)?.toInt() ?? 3600);
+    await prefs.setString(_prefsAccess, access);
+    await prefs.setString(_prefsRefresh, session['refresh_token'] as String);
+    await prefs.setInt(_prefsExpiry, expiresAt);
+    return access;
   }
 
   /// The phone's wall-clock time with its UTC offset, e.g.
