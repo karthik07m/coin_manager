@@ -99,7 +99,9 @@ class AiTransactionDraft {
 
   factory AiTransactionDraft.fromJson(Map<String, dynamic> json) {
     final amount = (json['amount'] as num?)?.toDouble();
-    final date = DateTime.tryParse(json['date'] as String? ?? '');
+    // toLocal: a trailing Z or offset would otherwise parse as UTC and can
+    // land an evening entry on the next day.
+    final date = DateTime.tryParse(json['date'] as String? ?? '')?.toLocal();
     if (amount == null || amount <= 0 || date == null) {
       throw const FormatException('Invalid AI transaction draft');
     }
@@ -192,8 +194,8 @@ class AiSummaryRequest {
   });
 
   factory AiSummaryRequest.fromJson(Map<String, dynamic> json) {
-    final startDate = DateTime.tryParse(json['startDate'] as String? ?? '');
-    final endDate = DateTime.tryParse(json['endDate'] as String? ?? '');
+    final startDate = DateTime.tryParse(json['startDate'] as String? ?? '')?.toLocal();
+    final endDate = DateTime.tryParse(json['endDate'] as String? ?? '')?.toLocal();
 
     if (startDate == null || endDate == null) {
       throw const FormatException('Invalid AI summary date range');

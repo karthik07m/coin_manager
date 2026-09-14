@@ -49,6 +49,7 @@ class AiAssistantService {
         'mode': 'parse',
         'locale': 'en-US',
         'timezone': DateTime.now().timeZoneName,
+        'now': _localNow(),
         'currencyCode': currencyCode,
         'currencySymbol': currencySymbol,
         'categories': categories
@@ -86,6 +87,19 @@ class AiAssistantService {
     } on FormatException catch (error) {
       throw AiAssistantException(error.message);
     }
+  }
+
+  /// The phone's wall-clock time with its UTC offset, e.g.
+  /// 2026-09-13T21:08:00-04:00. The function resolves "today" / "this
+  /// morning" against this; its own clock is UTC, which is already tomorrow
+  /// for evening users west of Greenwich.
+  static String _localNow() {
+    final now = DateTime.now();
+    final offset = now.timeZoneOffset;
+    final sign = offset.isNegative ? '-' : '+';
+    final hours = offset.inHours.abs().toString().padLeft(2, '0');
+    final minutes = (offset.inMinutes.abs() % 60).toString().padLeft(2, '0');
+    return '${now.toIso8601String().split('.').first}$sign$hours:$minutes';
   }
 
   Uri? _resolveFunctionUri(String functionUrl) {

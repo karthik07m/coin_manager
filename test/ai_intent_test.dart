@@ -53,4 +53,34 @@ void main() {
     expect(intent.type, AiIntentType.summaryRequest);
     expect(intent.summaryRequest?.metric, AiSummaryMetric.totalSpending);
   });
+
+  test('reads AI dates as local time, even with a trailing Z', () {
+    // 01:08 UTC is still the previous evening west of Greenwich; parsed as
+    // UTC it would date an evening expense tomorrow.
+    final utc = DateTime.utc(2026, 9, 14, 1, 8);
+
+    final draft = AiIntent.fromJson({
+      'intent': 'add_transaction',
+      'transaction': {
+        'title': 'Auto rickshaw',
+        'amount': 120,
+        'isExpense': true,
+        'date': '2026-09-14T01:08:00Z',
+      },
+    }).transaction!;
+    expect(draft.date.isUtc, isFalse);
+    expect(draft.date, utc.toLocal());
+
+    final summary = AiIntent.fromJson({
+      'intent': 'summary_request',
+      'summary': {
+        'metric': 'total_spending',
+        'startDate': '2026-09-01T00:00:00',
+        'endDate': '2026-09-14T01:08:00Z',
+      },
+    }).summaryRequest!;
+    expect(summary.startDate, DateTime(2026, 9, 1));
+    expect(summary.endDate.isUtc, isFalse);
+    expect(summary.endDate, utc.toLocal());
+  });
 }

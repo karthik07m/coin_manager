@@ -13,6 +13,7 @@ type FinanceAiRequest = {
   mode?: string;
   locale?: string;
   timezone?: string;
+  now?: string; // user's local time with UTC offset
   currencyCode?: string;
   currencySymbol?: string;
   categories?: Array<{ id: number; name: string; isExpense: boolean }>;
@@ -92,12 +93,11 @@ function validateRequest(body: FinanceAiRequest) {
 }
 
 function buildPrompt(body: FinanceAiRequest) {
-  const today = new Date().toISOString();
   return `
 You are the finance parser for Coin Manager.
 Return JSON only. Do not include markdown.
 
-Today: ${today}
+Current time for the user: ${body.now ?? new Date().toISOString()}
 Timezone: ${body.timezone ?? "local"}
 Locale: ${body.locale ?? "en-US"}
 Currency: ${body.currencyCode ?? "USD"} ${body.currencySymbol ?? "$"}
@@ -143,6 +143,9 @@ ${JSON.stringify(body.categories)}
 
 Use only these accounts:
 ${JSON.stringify(body.accounts)}
+
+Resolve relative dates (today, this morning, yesterday, this month) against the user's current time above, not UTC.
+Return every datetime as the user's local wall-clock time in the form YYYY-MM-DDTHH:MM:SS, with no Z and no UTC offset.
 
 If you are unsure about category or account, set the id to null and mark the matching needsReview flag true.
 If the user asks for anything outside adding transactions or basic summaries, return unsupported.
