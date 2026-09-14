@@ -1,13 +1,53 @@
 import 'package:flutter/material.dart';
 import '../db/debt_db_helper.dart';
+import '../models/activity_log.dart';
+import '../providers/transaction_provider.dart';
+import '../services/activity_logger.dart';
 import '../services/bill_reminder_scheduler.dart';
 import '../utilities/id_generator.dart';
 import '../models/debt.dart';
 import '../models/debt_payment.dart';
 
+/// Why a transaction exists in the Debt Tracker: the debt it belongs to and a
+/// human label such as "Lent to Ravi" or "Repaid to Ravi".
+class DebtLink {
+  final String debtId;
+  final String label;
+  const DebtLink({required this.debtId, required this.label});
+}
+
 class DebtProvider with ChangeNotifier {
   List<Debt> _debts = [];
+  Map<String, DebtLink> _links = {};
   final DebtDBHelper _dbHelper = DebtDBHelper();
+
+  /// The debt a transaction was booked for, or null for a plain transaction.
+  DebtLink? linkFor(String transactionId) => _links[transactionId];
+
+  Future<void> _refreshLinks() async {
+    final rows = await _dbHelper.getTransactionLinks();
+    _links = {
+      for (final row in rows)
+        row['transaction_id'] as String: DebtLink(
+          debtId: row['debt_id'] as String,
+          label: _linkLabel(
+            debtorName: row['debtor_name'] as String,
+            isLiability: row['is_liability'] == 1,
+            isPayment: row['is_payment'] == 1,
+          ),
+        ),
+    };
+  }
+
+  static String _linkLabel(
+      {required String debtorName,
+      required bool isLiability,
+      required bool isPayment}) {
+    if (isPayment) {
+      return isLiability ? 'Repaid to $debtorName' : 'Repayment from $debtorName';
+    }
+    return isLiability ? 'Borrowed from $debtorName' : 'Lent to $debtorName';
+  }
 
   List<Debt> get debts => [..._debts];
 
@@ -25,6 +65,9 @@ class DebtProvider with ChangeNotifier {
 
   List<Debt> get paidDebts =>
       _debts.where((debt) => debt.status == DebtStatus.paid).toList();
+
+  Future<Set<String>> getLinkedTransactionIds() =>
+      _dbHelper.getLinkedTransactionIds();
 
   double get totalLiabilities {
     return _debts
@@ -57,9 +100,11 @@ class DebtProvider with ChangeNotifier {
           await _dbHelper.updateDebt(debt);
         }
       }
+      await _refreshLinks();
       notifyListeners();
     } catch (e) {
       _debts = [];
+      _links = {};
       notifyListeners();
     }
   }
@@ -85,8 +130,14 @@ class DebtProvider with ChangeNotifier {
       final result = await _dbHelper.insertDebt(debt);
       if (result != -1) {
         _debts.add(debt);
+        await _refreshLinks();
         notifyListeners();
         _refreshReminders();
+        ActivityLogger().created(
+          ActivityEntity.debt,
+          debt.title,
+          amount: debt.amount,
+        );
         return true;
       }
       return false;
@@ -103,8 +154,14 @@ class DebtProvider with ChangeNotifier {
         final index = _debts.indexWhere((d) => d.id == debt.id);
         if (index != -1) {
           _debts[index] = debt;
+          await _refreshLinks();
           notifyListeners();
           _refreshReminders();
+          ActivityLogger().updated(
+            ActivityEntity.debt,
+            debt.title,
+            amount: debt.amount,
+          );
           return true;
         }
       }
@@ -114,14 +171,47 @@ class DebtProvider with ChangeNotifier {
     }
   }
 
-  // Delete a debt
-  Future<bool> deleteDebt(String id) async {
+  // Delete a debt and cascade-clean all linked data.
+  //
+  // When [transactionProvider] is supplied the method also deletes:
+  //   • Every settlement transaction linked to the debt's payments.
+  //   • The initial loan-booking transaction linked to the debt itself.
+  // This keeps account balances accurate after a debt is removed.
+  Future<bool> deleteDebt(
+    String id, {
+    TransactionProvider? transactionProvider,
+  }) async {
     try {
+      final debt = getDebtById(id);
+      final title = debt?.title ?? 'Debt';
+      final amount = debt?.amount ?? 0.0;
+
+      // Clean up linked transactions before deleting the debt row.
+      if (transactionProvider != null) {
+        // 1. Delete settlement transactions linked to each payment.
+        final payments = await _dbHelper.getPaymentsByDebtId(id);
+        for (final payment in payments) {
+          if (payment.transactionId != null) {
+            await transactionProvider.deleteTransaction(payment.transactionId!);
+          }
+        }
+        // 2. Delete the loan-booking transaction linked to the debt.
+        if (debt?.transactionId != null) {
+          await transactionProvider.deleteTransaction(debt!.transactionId!);
+        }
+      }
+
       final result = await _dbHelper.deleteDebt(id);
       if (result != -1) {
         _debts.removeWhere((debt) => debt.id == id);
+        await _refreshLinks();
         notifyListeners();
         _refreshReminders();
+        ActivityLogger().deleted(
+          ActivityEntity.debt,
+          title,
+          amount: amount,
+        );
         return true;
       }
       return false;
@@ -130,39 +220,74 @@ class DebtProvider with ChangeNotifier {
     }
   }
 
+  // Delete a single payment and recalculate the parent debt's balance.
+  //
+  // When [transactionProvider] is supplied the linked settlement
+  // transaction (if any) is deleted as well, keeping account balances
+  // accurate.
+  Future<bool> deletePayment(
+    String paymentId, {
+    TransactionProvider? transactionProvider,
+  }) async {
+    try {
+      // Fetch the payment so we know which debt to adjust.
+      final payment = await _dbHelper.getPaymentById(paymentId);
+      if (payment == null) return false;
+
+      // Delete the payment row.
+      final result = await _dbHelper.deletePayment(paymentId);
+      if (result == -1) return false;
+
+      // Recalculate the parent debt's amountPaid & status.
+      final debt = getDebtById(payment.debtId);
+      if (debt != null) {
+        debt.amountPaid =
+            (debt.amountPaid - payment.amount).clamp(0, double.infinity);
+        debt.updateStatus();
+        debt.modifiedOn = DateTime.now();
+        await _dbHelper.updateDebt(debt);
+      }
+
+      // Delete the linked settlement transaction if requested — after the
+      // payment row is gone, so the transaction delete hook has nothing
+      // left to reverse.
+      if (transactionProvider != null && payment.transactionId != null) {
+        await transactionProvider.deleteTransaction(payment.transactionId!);
+      }
+
+      await _refreshLinks();
+      notifyListeners();
+      _refreshReminders();
+      ActivityLogger().deleted(
+        ActivityEntity.debt,
+        'Payment of ${payment.amount.toStringAsFixed(2)}',
+        amount: payment.amount,
+      );
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Record a payment for a debt
   Future<bool> recordPayment(String debtId, DebtPayment payment) async {
     try {
-      // Fetch the debt and guard BEFORE any write, so a rejected payment
-      // never leaves an orphaned payment row behind.
-      final debt = getDebtById(debtId);
-      if (debt == null) return false;
-
-      // Reject overpayment. Epsilon (0.005) tolerates floating-point drift —
-      // markAsPaid records exactly the remaining amount, which can carry
-      // rounding error like 33.333333333333336.
-      final remaining = debt.getRemainingAmount();
-      if (payment.amount > remaining + 0.005) {
-        return false;
+      if (payment.debtId != debtId) return false;
+      final ok = await _dbHelper.recordPayment(payment);
+      if (!ok) return false;
+      final updated = await _dbHelper.getDebtById(debtId);
+      if (updated != null) {
+        final index = _debts.indexWhere((d) => d.id == debtId);
+        if (index == -1) {
+          _debts.add(updated);
+        } else {
+          _debts[index] = updated;
+        }
       }
-
-      // Insert payment record
-      final paymentResult = await _dbHelper.insertPayment(payment);
-      if (paymentResult == -1) return false;
-
-      // Update debt's amount paid
-      debt.amountPaid += payment.amount;
-      debt.updateStatus();
-      debt.modifiedOn = DateTime.now();
-
-      // Save updated debt
-      final debtResult = await _dbHelper.updateDebt(debt);
-      if (debtResult != -1) {
-        notifyListeners();
-        _refreshReminders();
-        return true;
-      }
-      return false;
+      await _refreshLinks();
+      notifyListeners();
+      _refreshReminders();
+      return true;
     } catch (e) {
       return false;
     }
@@ -195,11 +320,27 @@ class DebtProvider with ChangeNotifier {
           notes: 'Final payment',
           transactionId: transactionId,
         );
-        return await recordPayment(debtId, payment);
+        final ok = await recordPayment(debtId, payment);
+        if (ok) {
+          ActivityLogger().updated(
+            ActivityEntity.debt,
+            '${debt.title} marked as paid',
+            amount: debt.amount,
+          );
+        }
+        return ok;
       } else {
         debt.status = DebtStatus.paid;
         debt.modifiedOn = DateTime.now();
-        return await updateDebt(debt);
+        final ok = await updateDebt(debt);
+        if (ok) {
+          ActivityLogger().updated(
+            ActivityEntity.debt,
+            '${debt.title} marked as paid',
+            amount: debt.amount,
+          );
+        }
+        return ok;
       }
     } catch (e) {
       return false;

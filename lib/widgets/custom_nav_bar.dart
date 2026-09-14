@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../utilities/constants.dart';
+import '../utilities/theme_helper.dart';
 
 class CustomNavBar extends StatelessWidget {
   final int selectedIndex;
@@ -12,124 +13,108 @@ class CustomNavBar extends StatelessWidget {
     required this.onItemSelected,
   });
 
+  static const _destinations = [
+    (Icons.home_outlined, Icons.home_rounded, 'Home'),
+    (Icons.receipt_long_outlined, Icons.receipt_long, 'List'),
+    (
+      Icons.account_balance_wallet_outlined,
+      Icons.account_balance_wallet,
+      'Budget'
+    ),
+    (Icons.pie_chart_outline, Icons.pie_chart, 'Charts'),
+    (Icons.auto_awesome_outlined, Icons.auto_awesome, 'AI'),
+    (Icons.settings_outlined, Icons.settings, 'Settings'),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      decoration: BoxDecoration(
-        color: colorScheme.surface.withAlpha(230),
-        borderRadius: BorderRadius.circular(AppDimensions.radiusExtraLarge),
-        border: Border.all(
-          color: colorScheme.primary.withValues(alpha: 0.1),
-          width: 1,
+    final scheme = Theme.of(context).colorScheme;
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+      child: Material(
+        color: context.appSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: context.appBorder.withValues(alpha: 0.7)),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.primary.withValues(alpha: 0.3),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppDimensions.radiusExtraLarge),
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimensions.spacing8,
-            vertical: AppDimensions.spacing8,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
-            children: [
-              _buildNavItem(
-                  context, 0, Icons.home_outlined, Icons.home, 'Home'),
-              _buildNavItem(context, 1, Icons.receipt_long_outlined,
-                  Icons.receipt_long, 'List'),
-              _buildNavItem(context, 2, Icons.account_balance_wallet_outlined,
-                  Icons.account_balance_wallet, 'Budget'),
-              _buildNavItem(context, 3, Icons.pie_chart_outline,
-                  Icons.pie_chart, 'Charts'),
-              _buildNavItem(context, 4, Icons.auto_awesome_outlined,
-                  Icons.auto_awesome, 'AI'),
-              _buildNavItem(context, 5, Icons.settings_outlined, Icons.settings,
-                  'Settings'),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(BuildContext context, int index, IconData outlinedIcon,
-      IconData filledIcon, String label) {
-    final isSelected = selectedIndex == index;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          if (!isSelected) {
-            HapticFeedback.selectionClick();
-          }
-          onItemSelected(index);
-        },
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: AppDurations.fast,
-          curve: Curves.easeOutCubic,
-          height: 58,
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimensions.spacing8,
-            vertical: AppDimensions.spacing8,
-          ),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? colorScheme.primary.withValues(alpha: 0.15)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AnimatedSwitcher(
-                duration: AppDurations.fast,
-                transitionBuilder: (child, animation) => ScaleTransition(
-                  scale: Tween<double>(begin: 0.8, end: 1.0).animate(
-                    CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeOutCubic,
+            children: List.generate(_destinations.length, (index) {
+              final (outlined, filled, label) = _destinations[index];
+              final selected = index == selectedIndex;
+              final accessibleLabel = label == 'List'
+                  ? 'Transactions'
+                  : label == 'AI'
+                      ? 'AI assistant'
+                      : label;
+              return Expanded(
+                child: Semantics(
+                  selected: selected,
+                  button: true,
+                  label: accessibleLabel,
+                  child: Tooltip(
+                    message: accessibleLabel,
+                    excludeFromSemantics: true,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: () {
+                        if (!selected) HapticFeedback.selectionClick();
+                        onItemSelected(index);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 2, vertical: 4),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AnimatedContainer(
+                              duration: MediaQuery.disableAnimationsOf(context)
+                                  ? Duration.zero
+                                  : AppDurations.fast,
+                              curve: Curves.easeOutCubic,
+                              // The pill grows out from the icon, like M3's
+                              // navigation indicator.
+                              width: selected ? 48 : 28,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: selected
+                                    ? context.appAccentSurface
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(selected ? filled : outlined,
+                                  size: 22,
+                                  color: selected
+                                      ? scheme.primary
+                                      : context.textSecondary),
+                            ),
+                            const SizedBox(height: 4),
+                            ExcludeSemantics(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(label,
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                        fontSize: 10.5,
+                                        height: 1.2,
+                                        fontWeight: selected
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        color: selected
+                                            ? context.textPrimary
+                                            : context.textSecondary)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                  child: FadeTransition(opacity: animation, child: child),
                 ),
-                child: Icon(
-                  isSelected ? filledIcon : outlinedIcon,
-                  key: ValueKey('${label}_$isSelected'),
-                  color: isSelected
-                      ? colorScheme.primary
-                      : colorScheme.onSurface.withValues(alpha: 0.6),
-                  size: AppDimensions.iconMedium,
-                ),
-              ),
-              const SizedBox(height: 3),
-              AnimatedOpacity(
-                opacity: isSelected ? 1 : 0,
-                duration: AppDurations.fast,
-                curve: Curves.easeOutCubic,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.fade,
-                  softWrap: false,
-                  style: AppTextStyles.caption.copyWith(
-                    color: colorScheme.primary,
-                    fontSize: 10,
-                  ),
-                ),
-              ),
-            ],
+              );
+            }),
           ),
         ),
       ),

@@ -8,6 +8,7 @@ import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
 import '../utilities/responsive.dart';
+import '../utilities/financial_year.dart';
 
 /// Interactive yearly expenses card: animated per-month bars, a dashed
 /// average line, and tap-to-inspect. Tapping a bar selects the month and
@@ -16,11 +17,13 @@ import '../utilities/responsive.dart';
 class YearlyExpensesChart extends StatefulWidget {
   final int year;
   final int highlightMonth;
-  final ValueChanged<int>? onViewMonth;
+  final int startMonth;
+  final ValueChanged<DateTime>? onViewMonth;
   const YearlyExpensesChart({
     super.key,
     required this.year,
     required this.highlightMonth,
+    this.startMonth = 1,
     this.onViewMonth,
   });
 
@@ -31,7 +34,13 @@ class YearlyExpensesChart extends StatefulWidget {
 class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
   List<double> _totals = List<double>.filled(12, 0.0);
   bool _loading = true;
+  bool _loadFailed = false;
+  int _loadGeneration = 0;
   int? _selectedBar; // 0-11; null → follow the screen's selected month
+
+  FinancialYear get _period => FinancialYear.containing(
+      DateTime(widget.year, widget.highlightMonth), startMonth: widget.startMonth);
+  int get _highlightIndex => _period.indexOf(DateTime(widget.year, widget.highlightMonth));
 
   static const List<String> _monthLetters = [
     'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D',
@@ -42,15 +51,21 @@ class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
   ];
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Currency/rate changes and transaction mutations invalidate the totals.
+    context.watch<SettingsProvider>();
+    context.watch<TransactionProvider>();
+    _load();
   }
 
   @override
   void didUpdateWidget(covariant YearlyExpensesChart oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.year != widget.year) {
+    if (oldWidget.year != widget.year ||
+        oldWidget.startMonth != widget.startMonth ||
+        FinancialYear.containing(DateTime(oldWidget.year, oldWidget.highlightMonth),
+            startMonth: oldWidget.startMonth).start != _period.start) {
       setState(() {
         _loading = true;
         _selectedBar = null;
@@ -63,11 +78,23 @@ class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
   }
 
   Future<void> _load() async {
+    final generation = ++_loadGeneration;
+    _loading = true;
+    _loadFailed = false;
     final tp = context.read<TransactionProvider>();
-    final totals = await tp.monthlyExpenseTotals(widget.year);
-    if (mounted) {
+    final period = _period;
+    try {
+      final totals = await tp.monthlyExpenseTotals(period.startYear,
+          startMonth: period.startMonth);
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _totals = totals;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _loadFailed = true;
         _loading = false;
       });
     }
@@ -87,7 +114,10 @@ class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
       child: _loading
           ? const SizedBox(
               height: 200, child: Center(child: CircularProgressIndicator()))
-          : _content(context, currency),
+          : _loadFailed
+              ? TextButton(onPressed: () => setState(() { _load(); }),
+                  child: const Text('Could not load yearly expenses. Retry'))
+              : _content(context, currency),
     );
   }
 
@@ -100,23 +130,22 @@ class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
     final activeMonths = _totals.where((v) => v > 0).length;
     final avg = activeMonths > 0 ? yearTotal / activeMonths : 0.0;
 
-    final selIdx = _selectedBar ?? widget.highlightMonth - 1;
+    final selIdx = _selectedBar ?? _highlightIndex;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 12,
+          runSpacing: 8,
           children: [
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('YEARLY EXPENSES',
-                    style: AppTextStyles.caption.copyWith(
+                Text(widget.startMonth == 1 ? 'Yearly expenses' : 'Financial year expenses',
+                    style: AppTextStyles.sectionTitle.copyWith(
                       color: context.textSecondary,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.1,
                     )),
                 const SizedBox(height: 6),
                 Text(
@@ -137,7 +166,7 @@ class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                '${widget.year}',
+                _period.label,
                 style: AppTextStyles.bodySmall.copyWith(
                   color: context.appAccent,
                   fontWeight: FontWeight.w700,
@@ -162,7 +191,7 @@ class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
                 )
               // Bars grow in on load / year change.
               : TweenAnimationBuilder<double>(
-                  key: ValueKey('year-anim-${widget.year}'),
+                  key: ValueKey('year-anim-${_period.start}'),
                   tween: Tween(begin: 0.0, end: 1.0),
                   duration: const Duration(milliseconds: 700),
                   curve: Curves.easeOutCubic,
@@ -236,7 +265,7 @@ class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
                                     fontSize: 9,
                                     fontWeight: FontWeight.w700,
                                   ),
-                                  labelResolver: (_) => 'AVG',
+                                  labelResolver: (_) => 'Avg',
                                 ),
                               ),
                             ])
@@ -260,11 +289,11 @@ class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
                               }
                               final isSel = i == selIdx;
                               final isNow =
-                                  (i + 1) == widget.highlightMonth;
+                                  i == _highlightIndex;
                               return Padding(
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Text(
-                                  _monthLetters[i],
+                                  _monthLetters[_period.monthAt(i).month - 1],
                                   style: AppTextStyles.caption.copyWith(
                                     color: isSel
                                         ? context.appAccent
@@ -344,7 +373,8 @@ class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
     final avgColor = aboveAvg ? AppColors.negative : AppColors.positive;
     final maxV = _totals.reduce((a, b) => a > b ? a : b);
     final isPeak = value > 0 && value >= maxV;
-    final isCurrent = (selIdx + 1) == widget.highlightMonth;
+    final isCurrent = selIdx == _highlightIndex;
+    final month = _period.monthAt(selIdx);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -369,7 +399,9 @@ class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  runSpacing: 6,
                   children: [
                     Icon(
                       Icons.calendar_month_outlined,
@@ -378,7 +410,7 @@ class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      '${_monthAbbr[selIdx]} ${widget.year}',
+                      '${_monthAbbr[month.month - 1]} ${month.year}',
                       style: AppTextStyles.bodyMedium.copyWith(
                         fontWeight: FontWeight.bold,
                         color: context.textPrimary,
@@ -403,7 +435,7 @@ class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
                             ),
                             const SizedBox(width: 2),
                             Text(
-                              'PEAK MONTH',
+                              'Peak month',
                               style: AppTextStyles.caption.copyWith(
                                 color: AppColors.warning,
                                 fontWeight: FontWeight.w800,
@@ -453,7 +485,7 @@ class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
             TextButton(
               onPressed: () {
                 HapticFeedback.lightImpact();
-                widget.onViewMonth!(selIdx + 1);
+                widget.onViewMonth!(month);
               },
               style: TextButton.styleFrom(
                 foregroundColor: context.appAccent,
@@ -492,12 +524,14 @@ class _YearlyExpensesChartState extends State<YearlyExpensesChart> {
         children: [
           Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: AppTextStyles.caption.copyWith(
-              color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: 10,
+          Flexible(
+            child: Text(
+              label,
+              style: AppTextStyles.caption.copyWith(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 10,
+              ),
             ),
           ),
         ],

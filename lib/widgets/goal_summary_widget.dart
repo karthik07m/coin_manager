@@ -6,6 +6,7 @@ import '../utilities/constants.dart';
 import '../utilities/functions.dart';
 import '../utilities/theme_helper.dart';
 import '../screens/goal_list_screen.dart';
+import 'tappable.dart';
 
 class GoalSummaryWidget extends StatelessWidget {
   const GoalSummaryWidget({super.key});
@@ -23,32 +24,17 @@ class GoalSummaryWidget extends StatelessWidget {
         final overallProgress =
             totalTarget > 0 ? (totalSaved / totalTarget * 100).clamp(0, 100) : 0.0;
 
-        return InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const GoalListScreen(),
-              ),
-            );
-          },
-          borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
+        return Tappable(
+          openPage: const GoalListScreen(),
+          color: context.appSurface,
+          borderRadius: AppDimensions.radiusLarge,
           child: Container(
             padding: const EdgeInsets.all(AppDimensions.spacing20),
             decoration: BoxDecoration(
-              color: context.appSurface,
               borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-              border: Border.all(
-                color: context.appAccent.withValues(alpha: 0.2),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+              // No shadow: 5% black on a near-black page was invisible, yet
+              // still blurred on every frame this card scrolled.
+              border: context.cardBorder,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

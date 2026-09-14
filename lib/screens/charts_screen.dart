@@ -186,14 +186,16 @@ class _ChartsScreenState extends State<ChartsScreen> {
                     ),
                     const SizedBox(height: AppDimensions.spacing20),
                     // Month Grid
-                    SizedBox(
-                      height: 240, // Fixed height for grid
+                    // Sizes to its 12 months instead of being clipped to a
+                    // fixed height, which hid Jul-Dec entirely.
+                    Flexible(
                       child: GridView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
+                        shrinkWrap: true,
+                        physics: const ClampingScrollPhysics(),
                         gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 160,
-                          childAspectRatio: 1.8,
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          childAspectRatio: 1.6,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
                         ),
@@ -401,10 +403,11 @@ class _ChartsScreenState extends State<ChartsScreen> {
                     YearlyExpensesChart(
                       year: _selectedMonth.year,
                       highlightMonth: _selectedMonth.month,
+                      startMonth: context.watch<SettingsProvider>()
+                          .regionalPreferences.financialYearStartMonth,
                       // Tapping "View" on a bar jumps the whole Charts
                       // screen to that month (same path as the month picker).
-                      onViewMonth: (m) {
-                        final month = DateTime(_selectedMonth.year, m);
+                      onViewMonth: (month) {
                         setState(() {
                           _selectedMonth = month;
                           _categorySelectionResetToken++;
@@ -810,12 +813,11 @@ class _ChartsScreenState extends State<ChartsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            label.toUpperCase(),
+            label,
             style: AppTextStyles.caption.copyWith(
               color: context.textSecondary,
               fontSize: 10,
               fontWeight: FontWeight.w600,
-              letterSpacing: 0.4,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

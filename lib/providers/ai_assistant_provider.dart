@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart' show ChangeNotifier;
 
+import '../db/transaction_db_helper.dart';
 import '../models/account.dart';
 import '../models/ai_intent.dart';
 import '../models/ai_message.dart';
@@ -10,6 +11,7 @@ import '../providers/transaction_provider.dart';
 import '../services/ai_assistant_service.dart';
 import '../services/ai_local_parser.dart';
 import '../services/ai_summary_service.dart';
+import '../utilities/budget_period.dart';
 import '../utilities/functions.dart';
 
 class AiAssistantProvider extends ChangeNotifier {
@@ -18,18 +20,34 @@ class AiAssistantProvider extends ChangeNotifier {
   final AiLocalParser _localParser;
   final Random _random = Random();
 
+  /// Category last used for an identical title, so "coffee 200" lands in
+  /// whatever the user filed coffee under before. Injected so tests run
+  /// without a database.
+  final Future<int?> Function(String title, bool isExpense) _lastCategoryFor;
+
   AiAssistantProvider({
     AiAssistantService? assistantService,
     AiSummaryService? summaryService,
     AiLocalParser? localParser,
+    Future<int?> Function(String title, bool isExpense)? lastCategoryFor,
   })  : _assistantService = assistantService ?? AiAssistantService(),
         _summaryService = summaryService ?? AiSummaryService(),
-        _localParser = localParser ?? AiLocalParser();
+        _localParser = localParser ?? AiLocalParser(),
+        _lastCategoryFor = lastCategoryFor ??
+            ((title, isExpense) =>
+                TransactionDBHelper().getLastCategoryIdForTitle(title, isExpense));
 
   final List<AiAssistantMessage> _messages = [];
   AiTransactionDraft? _pendingDraft;
   AiTransferDraft? _pendingTransfer;
   bool _isLoading = false;
+
+  /// The last summary asked for, so "and last month?" can re-ask it.
+  AiSummaryRequest? _lastSummary;
+
+  /// Id of the transaction the chat saved most recently, for "undo".
+  String? _lastSavedId;
+  String? _lastSavedLabel;
 
   List<AiAssistantMessage> get messages => List.unmodifiable(_messages);
   AiTransactionDraft? get pendingDraft => _pendingDraft;
@@ -55,9 +73,27 @@ class AiAssistantProvider extends ChangeNotifier {
     'never mind',
     'don\'t',
     'dont',
+    'discard',
   ];
 
+  static const _helpText = 'Here\'s what I can do:\n\n'
+      '**Log money**\n'
+      '•  "coffee 150" or "spent 2k on groceries yesterday"\n'
+      '•  "got salary 50000" · "paid 300 uber from cash"\n'
+      '•  "transfer 500 from chase to cash"\n\n'
+      '**Answer questions**\n'
+      '•  "how much did I spend this week?"\n'
+      '•  "top category last month" · "biggest expense"\n'
+      '•  "find netflix" · "when did I last pay rent?"\n'
+      '•  "what\'s my net worth?" · "how\'s my budget?"\n\n'
+      '**Advise**\n'
+      '•  "my spending habits" · "how can I save money?"\n'
+      '•  "compare this month vs last"\n\n'
+      'I remember context: after a question, just say "and last month?". '
+      'Made a mistake? Say "undo".';
+
   static const _summarySuggestions = [
+    'My spending habits',
     'Top category this month',
     'What is my income this month?',
     'Net balance this month',
@@ -65,9 +101,9 @@ class AiAssistantProvider extends ChangeNotifier {
   ];
 
   static const _afterSaveSuggestions = [
-    'How much did I spend this month?',
-    'How much did I spend this week?',
-    'Top category this month',
+    'How much did I spend today?',
+    'How\'s my budget?',
+    'Undo',
   ];
 
   Future<void> submitMessage({
@@ -102,6 +138,17 @@ class AiAssistantProvider extends ChangeNotifier {
         if (handled) return;
       }
 
+      // Likewise a draft: "yes" / "save" saves it, "no" discards it.
+      if (_pendingDraft != null && transactionProvider != null) {
+        final handled = await _resolvePendingDraft(
+          trimmed.toLowerCase(),
+          transactionProvider,
+          currencySymbol,
+          currencyCode,
+        );
+        if (handled) return;
+      }
+
       // On-device parsing first: instant, offline, and doesn't need any
       // AI setup. The remote AI is only consulted for messages the local
       // parser can't confidently understand.
@@ -109,6 +156,7 @@ class AiAssistantProvider extends ChangeNotifier {
         message: trimmed,
         categories: categories,
         accounts: accounts,
+        previous: _lastSummary,
       );
 
       if (intent == null) {
@@ -124,16 +172,11 @@ class AiAssistantProvider extends ChangeNotifier {
         } else {
           _messages.add(
             AiAssistantMessage.assistant(
-              "🤔 I didn't quite catch that. Try one of these:\n\n"
-              '•  "Add expense 200 coffee"\n'
-              '•  "Transfer 200 from Chase to Cash"\n'
-              '•  "What\'s my net worth?"\n'
-              '•  "How\'s my budget?"\n'
-              '•  "How much did I spend this week?"',
+              _didNotCatch(trimmed),
               suggestions: const [
+                'Help',
                 'What\'s my net worth?',
-                'How\'s my budget?',
-                'Top category this month',
+                'My spending habits',
               ],
             ),
           );
@@ -193,12 +236,23 @@ class AiAssistantProvider extends ChangeNotifier {
           '😅 I couldn\'t reach your accounts just now — please try again.'));
       return true;
     }
-    await transactionProvider.addTransfer(
-      fromAccountId: transfer.fromAccountId,
-      toAccountId: transfer.toAccountId,
-      amount: transfer.amount,
-      date: DateTime.now(),
-    );
+    try {
+      await transactionProvider.addTransfer(
+        fromAccountId: transfer.fromAccountId,
+        toAccountId: transfer.toAccountId,
+        amount: transfer.amount,
+        date: DateTime.now(),
+      );
+    } on TransferCurrencyMismatch catch (e) {
+      _messages.add(AiAssistantMessage.assistant(
+        '🚫 ${transfer.fromName} is in ${e.fromCurrency} and '
+        '${transfer.toName} is in ${e.toCurrency}. A transfer moves one '
+        'amount, so both accounts need the same currency. Add it as an '
+        'expense on ${transfer.fromName} and an income on '
+        '${transfer.toName} instead.',
+      ));
+      return true;
+    }
     final money = _money(transfer.amount, currencySymbol, currencyCode);
     _messages.add(AiAssistantMessage.assistant(
       '✅ Transferred $money from ${transfer.fromName} to ${transfer.toName}.',
@@ -208,6 +262,53 @@ class AiAssistantProvider extends ChangeNotifier {
       ],
     ));
     return true;
+  }
+
+  /// Handles yes/no replies while a transaction draft is awaiting review.
+  /// Anything else is treated as a new message and the draft stays open.
+  Future<bool> _resolvePendingDraft(
+    String lower,
+    TransactionProvider transactionProvider,
+    String currencySymbol,
+    String currencyCode,
+  ) async {
+    final words = lower.replaceAll(RegExp(r'[^a-z\s]'), '').trim();
+    final cancelled = _cancelWords.contains(words);
+    final confirmed = !cancelled &&
+        (_confirmWords.contains(words) ||
+            const ['save', 'save it', 'add it', 'log it', 'looks good', 'correct']
+                .contains(words));
+    if (cancelled) {
+      cancelPendingDraft();
+      return true;
+    }
+    if (!confirmed) return false;
+    await confirmPendingDraft(
+      transactionProvider,
+      currencySymbol: currencySymbol,
+      currencyCode: currencyCode,
+    );
+    return true;
+  }
+
+  /// A fallback that reflects what the message looked like, instead of the
+  /// same six examples every time.
+  String _didNotCatch(String message) {
+    final hasNumber = RegExp(r'\d').hasMatch(message);
+    if (hasNumber) {
+      return '🤔 I saw a number but couldn\'t tell what to do with it. To '
+          'log it, try:\n\n'
+          '•  "coffee 150"\n'
+          '•  "spent 500 on groceries yesterday"\n'
+          '•  "got salary 50000"\n\n'
+          'Or say "help" to see everything I understand.';
+    }
+    return '🤔 I didn\'t quite catch that. Try one of these:\n\n'
+        '•  "How much did I spend this week?"\n'
+        '•  "Find netflix"\n'
+        '•  "What\'s my net worth?"\n'
+        '•  "My spending habits"\n\n'
+        'Or say "help" to see everything I understand.';
   }
 
   Future<void> _handleIntent(
@@ -221,6 +322,38 @@ class AiAssistantProvider extends ChangeNotifier {
     double? budgetSpent,
   }) async {
     switch (intent.type) {
+      case AiIntentType.help:
+        _messages.add(AiAssistantMessage.assistant(
+          _helpText,
+          suggestions: const [
+            'How much did I spend this week?',
+            'What\'s my net worth?',
+            'My spending habits',
+          ],
+        ));
+        return;
+      case AiIntentType.smallTalk:
+        _messages.add(AiAssistantMessage.assistant(
+          _smallTalkReply(intent.message),
+          suggestions: const [
+            'How\'s my budget?',
+            'How much did I spend today?',
+            'Help',
+          ],
+        ));
+        return;
+      case AiIntentType.calculation:
+        _messages.add(AiAssistantMessage.assistant(
+          '🧮 = ${intent.message}',
+          suggestions: [
+            'Add expense ${intent.message}',
+            'Add income ${intent.message}',
+          ],
+        ));
+        return;
+      case AiIntentType.undo:
+        await _undoLastSave(transactionProvider);
+        return;
       case AiIntentType.transfer:
         final transfer = intent.transfer;
         if (transfer == null) {
@@ -265,7 +398,23 @@ class AiAssistantProvider extends ChangeNotifier {
           return;
         }
 
-        final resolvedDraft = draft.withFallbacks(
+        var learned = draft;
+        if (draft.categoryId == null) {
+          try {
+            final remembered =
+                await _lastCategoryFor(draft.title, draft.isExpense);
+            if (remembered != null &&
+                categories.any((c) => c.id == remembered)) {
+              learned = draft.copyWith(
+                categoryId: remembered,
+                needsCategoryReview: false,
+              );
+            }
+          } catch (_) {
+            // History is a convenience; the fallback category still works.
+          }
+        }
+        final resolvedDraft = learned.withFallbacks(
           categoryId: _fallbackCategoryId(categories, draft.isExpense),
           accountId: _fallbackAccountId(accounts),
         );
@@ -292,6 +441,7 @@ class AiAssistantProvider extends ChangeNotifier {
           currencyCode: currencyCode,
           amountOf: transactionProvider?.baseAmount,
         );
+        _lastSummary = request;
         _messages.add(AiAssistantMessage.assistant(
           summary,
           suggestions: _followUpsFor(request.metric),
@@ -311,8 +461,11 @@ class AiAssistantProvider extends ChangeNotifier {
     final draft = _pendingDraft;
     if (draft == null) return;
 
-    await provider.addTransaction(draft.toTransaction());
+    final transaction = draft.toTransaction();
+    await provider.addTransaction(transaction);
     _pendingDraft = null;
+    _lastSavedId = transaction.id;
+    _lastSavedLabel = draft.title;
     _messages.add(
       AiAssistantMessage.assistant(
         _confirmationFor(draft, currencySymbol, currencyCode),
@@ -320,6 +473,40 @@ class AiAssistantProvider extends ChangeNotifier {
       ),
     );
     notifyListeners();
+  }
+
+  Future<void> _undoLastSave(TransactionProvider? provider) async {
+    final id = _lastSavedId;
+    if (id == null || provider == null) {
+      _messages.add(AiAssistantMessage.assistant(
+        'Nothing to undo — I haven\'t saved anything in this chat yet.',
+      ));
+      return;
+    }
+    await provider.deleteTransaction(id);
+    _lastSavedId = null;
+    _messages.add(AiAssistantMessage.assistant(
+      '↩️ Removed "$_lastSavedLabel". As if it never happened.',
+      suggestions: const ['How much did I spend today?'],
+    ));
+    _lastSavedLabel = null;
+  }
+
+  String _smallTalkReply(String greeting) {
+    if (greeting.startsWith('thank')) {
+      return 'Anytime! 🙌 Anything else you want to check?';
+    }
+    if (const ['ok', 'okay', 'cool', 'nice', 'great'].contains(greeting)) {
+      return '👍 Here whenever you need me.';
+    }
+    final hour = DateTime.now().hour;
+    final time = hour < 12
+        ? 'morning'
+        : hour < 17
+            ? 'afternoon'
+            : 'evening';
+    return 'Hey! 👋 Good $time. Log something like "coffee 150", or ask me '
+        'how your month is going.';
   }
 
   void cancelPendingDraft() {
@@ -335,6 +522,7 @@ class AiAssistantProvider extends ChangeNotifier {
     _messages.clear();
     _pendingDraft = null;
     _pendingTransfer = null;
+    _lastSummary = null;
     notifyListeners();
   }
 
@@ -420,14 +608,28 @@ class AiAssistantProvider extends ChangeNotifier {
     return confirmations[_random.nextInt(confirmations.length)];
   }
 
+  /// Suggestion chip that opens the Charts tab instead of sending a prompt.
+  static const openChartsChip = 'Open Charts';
+
   List<String> _followUpsFor(AiSummaryMetric metric) {
+    return [..._promptsFor(metric), openChartsChip];
+  }
+
+  List<String> _promptsFor(AiSummaryMetric metric) {
     switch (metric) {
+      case AiSummaryMetric.monthComparison:
       case AiSummaryMetric.totalSpending:
       case AiSummaryMetric.categorySpending:
         return const [
+          'My spending habits',
+          'Top category this month',
+          'How much did I spend last month?',
+        ];
+      case AiSummaryMetric.spendingHabits:
+        return const [
           'Top category this month',
           'Net balance this month',
-          'How much did I spend last month?',
+          'My spending habits last month',
         ];
       case AiSummaryMetric.totalIncome:
         return const [
@@ -448,6 +650,14 @@ class AiAssistantProvider extends ChangeNotifier {
         return _summarySuggestions
             .where((s) => !s.contains('upcoming'))
             .toList();
+      case AiSummaryMetric.largestExpense:
+      case AiSummaryMetric.recentTransactions:
+      case AiSummaryMetric.searchTransactions:
+        return const [
+          'And last month?',
+          'How much did I spend this month?',
+          'Top category this month',
+        ];
     }
   }
 
@@ -523,8 +733,21 @@ class AiAssistantProvider extends ChangeNotifier {
       return '🚨 You\'re over budget: spent ${money(used)} of '
           '${money(total)} ($pct%). Over by ${money(used - total)}.';
     }
-    return '📊 Budget check: ${money(used)} spent of ${money(total)} '
-        '($pct%). ${money(total - used)} left this month.';
+    final now = DateTime.now();
+    final daysLeft = BudgetPeriod.daysRemaining(now);
+    final left = total - used;
+    final perDay = daysLeft > 0 ? left / daysLeft : left;
+    // Pace: are they ahead of or behind an even spread of the budget?
+    final daysInMonth = BudgetPeriod.daysInMonth(now);
+    final elapsed = (BudgetPeriod.daysElapsed(now) + 1).clamp(1, daysInMonth);
+    final expected = total * elapsed / daysInMonth;
+    final pace = used <= expected
+        ? 'You\'re on track — ${money(expected - used)} under an even pace.'
+        : 'Slightly ahead of pace — ${money(used - expected)} over an even '
+            'spread.';
+    return '📊 Budget: ${money(used)} of ${money(total)} used ($pct%).\n'
+        '${money(left)} left · about ${money(perDay)} a day for the next '
+        '$daysLeft day${daysLeft == 1 ? '' : 's'}.\n\n$pace';
   }
 
   int _fallbackCategoryId(List<Category> categories, bool isExpense) {

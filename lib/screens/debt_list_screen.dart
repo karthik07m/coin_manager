@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../utilities/page_transitions.dart';
 import '../providers/debt_provider.dart';
 import '../providers/settings_provider.dart';
 import '../models/debt.dart';
@@ -106,8 +107,7 @@ class _DebtListScreenState extends State<DebtListScreen>
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => DebtFormScreen(
+            PageTransitions.fadeUp(DebtFormScreen(
                 isLiability: _tabController.index == 0,
               ),
             ),
@@ -255,8 +255,7 @@ class _DebtListScreenState extends State<DebtListScreen>
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => DebtDetailScreen(debtId: debt.id),
+            PageTransitions.fadeUp(DebtDetailScreen(debtId: debt.id),
             ),
           );
         },
@@ -327,12 +326,11 @@ class _DebtListScreenState extends State<DebtListScreen>
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  'RECURRING',
+                                  'Recurring',
                                   style: AppTextStyles.caption.copyWith(
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                     color: context.appAccent,
-                                    letterSpacing: 0.5,
                                   ),
                                 ),
                               ],
@@ -469,7 +467,7 @@ class _DebtListScreenState extends State<DebtListScreen>
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        debt.status.name.toUpperCase(),
+                        '${debt.status.name[0].toUpperCase()}${debt.status.name.substring(1)}',
                         style: AppTextStyles.caption.copyWith(
                           color: statusColor,
                           fontSize: 11,

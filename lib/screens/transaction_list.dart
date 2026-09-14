@@ -595,7 +595,7 @@ class _TransactionListState extends State<TransactionList> {
     if (_selectionMode) {
       return Container(
         padding: const EdgeInsets.fromLTRB(8, 10, 12, 0),
-        color: Theme.of(context).colorScheme.surface,
+        color: context.appBackground,
         child: Row(
           children: [
             IconButton(
@@ -610,7 +610,7 @@ class _TransactionListState extends State<TransactionList> {
             const Spacer(),
             IconButton(
               tooltip: 'Delete selected',
-              icon: const Icon(Icons.delete_outline, color: AppColors.negative),
+              icon: Icon(Icons.delete_outline, color: AppColors.negative),
               onPressed: _selectedIds.isEmpty ? null : _deleteSelected,
             ),
           ],
@@ -619,7 +619,7 @@ class _TransactionListState extends State<TransactionList> {
     }
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-      color: Theme.of(context).colorScheme.surface,
+      color: context.appBackground,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [

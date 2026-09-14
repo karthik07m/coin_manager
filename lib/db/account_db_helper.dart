@@ -125,13 +125,70 @@ class AccountDBHelper {
   }
 
   // Delete an account
-  Future<int> deleteAccount(int id) async {
+  /// How many transactions reference this account, either as their own
+  /// account or as the destination of a transfer. Used to warn before a
+  /// delete would orphan them.
+  Future<int> countTransactionsForAccount(int id) async {
+    try {
+      final db = await database;
+      final result = await db.rawQuery(
+        '''
+        SELECT COUNT(*) as c FROM transactions
+        WHERE account_id = ? OR transfer_account_id = ?
+        ''',
+        [id, id],
+      );
+      final value = result.isEmpty ? 0 : result.first['c'];
+      return value is int ? value : int.tryParse('$value') ?? 0;
+    } catch (e) {
+      debugPrint('Error counting transactions for account $id: $e');
+      return 0;
+    }
+  }
+
+  /// Deletes an account. Its transactions are either moved to
+  /// [reassignToAccountId] or deleted with it — never left orphaned, which
+  /// would keep them in spending totals while their account is gone.
+  ///
+  /// Runs in a single database transaction so the account and its
+  /// transactions can never fall out of step.
+  Future<int> deleteAccount(int id, {int? reassignToAccountId}) async {
     final db = await database;
-    return await db.delete(
-      tableName,
-      where: '$columnId = ?',
-      whereArgs: [id],
-    );
+    return await db.transaction<int>((txn) async {
+      if (reassignToAccountId != null) {
+        await txn.update(
+          'transactions',
+          {'account_id': reassignToAccountId},
+          where: 'account_id = ?',
+          whereArgs: [id],
+        );
+        await txn.update(
+          'transactions',
+          {'transfer_account_id': reassignToAccountId},
+          where: 'transfer_account_id = ?',
+          whereArgs: [id],
+        );
+        // A transfer whose two legs now point at the same account is a no-op;
+        // drop it rather than leave a self-transfer in the history.
+        await txn.delete(
+          'transactions',
+          where: 'transfer_account_id IS NOT NULL AND '
+              'account_id = transfer_account_id',
+        );
+      } else {
+        await txn.delete(
+          'transactions',
+          where: 'account_id = ? OR transfer_account_id = ?',
+          whereArgs: [id, id],
+        );
+      }
+
+      return await txn.delete(
+        tableName,
+        where: '$columnId = ?',
+        whereArgs: [id],
+      );
+    });
   }
 
   // Get all accounts
@@ -180,93 +237,47 @@ class AccountDBHelper {
     return Account.fromMap(maps.first);
   }
 
+  /// The last instant that counts toward a *current* balance.
+  ///
+  /// Recurring series are materialised ahead of time as real rows in
+  /// `transactions` (next month's instance is written on app start), and every
+  /// list in the app hides anything dated after today. A balance that counted
+  /// those future rows would show money already gone before it was spent, and
+  /// would disagree with the transactions the user can actually see.
+  static DateTime _endOfToday() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+  }
+
   // Calculate current balance  for an account from initial balance + transactions
   /// For asset accounts: initial + income - expense.
   /// For liabilities (credit cards): balance is the amount OWED, so spending
   /// increases it and payments (income) reduce it: initial + expense - income.
+  ///
+  /// Scheduled future transactions are deliberately excluded — they belong to
+  /// Upcoming Payments, not to today's balance.
   Future<double> calculateAccountBalance(int accountId,
-      {bool isLiability = false}) async {
-    try {
-      final db = await database;
-
-      // Get initial balance
-      final accountMaps = await db.query(
-        tableName,
-        columns: [columnBalance],
-        where: '$columnId = ?',
-        whereArgs: [accountId],
-      );
-
-      if (accountMaps.isEmpty) return 0.0;
-
-      // Handle both int and double from SQLite
-      final balanceValue = accountMaps.first[columnBalance];
-      final initialBalance = balanceValue is int
-          ? balanceValue.toDouble()
-          : (balanceValue as double? ?? 0.0);
-
-      // Income/expense impact — transfers (transfer_account_id set) are
-      // excluded here and handled separately below.
-      final transactionResult = await db.rawQuery(
-        '''
-      SELECT
-        SUM(CASE WHEN is_expense = 0 THEN amount ELSE 0 END) as income,
-        SUM(CASE WHEN is_expense = 1 THEN amount ELSE 0 END) as expense
-      FROM transactions
-      WHERE account_id = ? AND transfer_account_id IS NULL
-      ''',
-        [accountId],
-      );
-
-      double parseNum(Object? v) =>
-          v is int ? v.toDouble() : (v as double? ?? 0.0);
-
-      final income =
-          transactionResult.isEmpty ? 0.0 : parseNum(transactionResult.first['income']);
-      final expense = transactionResult.isEmpty
-          ? 0.0
-          : parseNum(transactionResult.first['expense']);
-
-      // Transfers: money leaving this account (it's the source) and money
-      // arriving (it's the destination).
-      final transferResult = await db.rawQuery(
-        '''
-      SELECT
-        (SELECT COALESCE(SUM(amount),0) FROM transactions
-           WHERE account_id = ? AND transfer_account_id IS NOT NULL) as out_amt,
-        (SELECT COALESCE(SUM(amount),0) FROM transactions
-           WHERE transfer_account_id = ?) as in_amt
-      ''',
-        [accountId, accountId],
-      );
-      final transfersOut =
-          transferResult.isEmpty ? 0.0 : parseNum(transferResult.first['out_amt']);
-      final transfersIn =
-          transferResult.isEmpty ? 0.0 : parseNum(transferResult.first['in_amt']);
-
-      if (isLiability) {
-        // Owed goes up with spending & outgoing transfers, down with income &
-        // incoming transfers (a payment onto the card).
-        return initialBalance +
-            expense -
-            income +
-            transfersOut -
-            transfersIn;
-      }
-      return initialBalance + income - expense + transfersIn - transfersOut;
-    } catch (e) {
-      debugPrint('Error calculating account balance for $accountId: $e');
-      return 0.0; // Return 0 on error rather than crashing
-    }
+      {bool isLiability = false}) {
+    return calculateAccountBalanceAsOf(
+      accountId,
+      _endOfToday(),
+      isLiability: isLiability,
+    );
   }
 
   /// Balance for an account considering only transactions dated on or before
-  /// [cutoff]. Used to reconstruct historical net worth. Mirrors
-  /// calculateAccountBalance's asset/liability math with a date bound.
+  /// [cutoff] — the shared implementation behind both the current balance
+  /// (cutoff = end of today) and historical net worth (cutoff = a past date).
+  ///
+  /// Assets: initial + income - expense + transfers in - transfers out.
+  /// Liabilities: the sign flips, since spending increases what is owed.
   Future<double> calculateAccountBalanceAsOf(int accountId, DateTime cutoff,
       {bool isLiability = false}) async {
     try {
       final db = await database;
+      // Self-sufficient: without this the query uses whichever column name was
+      // last detected elsewhere, throws, and reports a balance of zero.
+      await _detectBalanceColumn();
       final iso = cutoff.toIso8601String();
 
       final accountMaps = await db.query(

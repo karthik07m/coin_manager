@@ -116,6 +116,38 @@ Map<String, CategoryType> getCategoryTypeMapping() {
   };
 }
 
+/// Rounds each share to cents and pushes the leftover remainder into the
+/// largest category, so a split adds up to exactly [total].
+///
+/// Without this, splitting e.g. 50,000 across 7 categories rounds each share
+/// up and the parts total a few cents MORE than the whole — which used to read
+/// as "categories exceed your budget" the instant a budget was auto filled.
+Map<String, double> roundAllocationToTotal(
+  Map<String, double> allocations,
+  double total,
+) {
+  if (allocations.isEmpty) return allocations;
+
+  final rounded = <String, double>{};
+  var sum = 0.0;
+  for (final entry in allocations.entries) {
+    final value = double.parse(entry.value.toStringAsFixed(2));
+    rounded[entry.key] = value;
+    sum += value;
+  }
+
+  final residual = double.parse((total - sum).toStringAsFixed(2));
+  if (residual != 0) {
+    final largest =
+        rounded.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+    final adjusted =
+        double.parse((rounded[largest]! + residual).toStringAsFixed(2));
+    rounded[largest] = adjusted > 0 ? adjusted : 0.0;
+  }
+
+  return rounded;
+}
+
 // Calculate budget allocation for categories based on rule
 Map<String, double> calculateBudgetAllocation({
   required double totalBudget,

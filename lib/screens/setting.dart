@@ -1,18 +1,25 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../utilities/page_transitions.dart';
 import '../providers/settings_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../services/app_lock_service.dart';
 import '../services/backup_service.dart';
 import '../services/export_service.dart';
 import '../services/import_service.dart';
+import '../services/review_service.dart';
+import '../services/bug_report_service.dart';
 import '../utilities/budget_period.dart';
 import 'category_manger.dart';
 import 'manage_budget.dart';
 import 'privacy_policy.dart';
 import 'activity_history_screen.dart';
+import 'recurring_manager_screen.dart';
 import 'cloud_backup_screen.dart';
+import 'regional_preferences_screen.dart';
+import 'finance_templates_screen.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../utilities/constants.dart';
 import '../utilities/responsive.dart';
 
@@ -34,402 +41,468 @@ class SettingsScreen extends StatelessWidget {
           // Keeps settings rows readable instead of full-bleed on tablets.
           constraints: BoxConstraints(maxWidth: context.maxContentWidth),
           child: ListView(
-        padding: const EdgeInsets.all(AppDimensions.spacing16),
-        children: [
-          _buildSection(
-            context,
-            title: 'Finances',
+            padding: const EdgeInsets.all(AppDimensions.spacing16),
             children: [
-              _buildSettingTile(
+              _buildSection(
                 context,
-                icon: Icons.account_balance_outlined,
-                activeIcon: Icons.account_balance,
-                title: 'Manage Accounts',
-                subtitle: 'Add, edit accounts for tracking transactions',
-                onTap: () =>
-                    Navigator.pushNamed(context, '/account-management'),
-              ),
-              _buildSettingTile(
-                context,
-                icon: Icons.category_outlined,
-                activeIcon: Icons.category,
-                title: 'Manage Categories',
-                subtitle: 'Add, edit, or delete expense and income categories',
-                onTap: () => Navigator.pushNamed(
-                    context, CategoryManagementScreen.routeName),
-              ),
-              _buildSettingTile(
-                context,
-                icon: Icons.account_balance_wallet_outlined,
-                activeIcon: Icons.account_balance_wallet,
-                title: 'Manage Budget',
-                subtitle: 'Set monthly budgets for categories',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const ManageBudgetScreen()),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.spacing24),
-          _buildSection(
-            context,
-            title: 'Appearance',
-            children: [
-              Consumer<SettingsProvider>(
-                builder: (context, settings, child) {
-                  return _buildAccentColorTile(context, settings);
-                },
-              ),
-              Consumer<SettingsProvider>(
-                builder: (context, settings, child) {
-                  return _buildSettingTile(
-                    context,
-                    icon: Icons.dark_mode_outlined,
-                    activeIcon: Icons.dark_mode,
-                    title: 'Dark Mode',
-                    subtitle: 'Toggle dark/light theme',
-                    trailing: Switch(
-                      value: settings.themeMode == ThemeMode.dark,
-                      onChanged: (value) {
-                        settings.toggleTheme(value);
-                      },
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.spacing24),
-          _buildSection(
-            context,
-            title: 'General',
-            children: [
-              _buildSettingTile(
-                context,
-                icon: Icons.currency_exchange_outlined,
-                activeIcon: Icons.currency_exchange,
-                title: 'Currency',
-                subtitle: 'Change your preferred currency',
-                onTap: () {
-                  _showCurrencySelectionDialog(context);
-                },
-              ),
-              Consumer<SettingsProvider>(
-                builder: (context, settings, child) {
-                  return _buildSettingTile(
-                    context,
-                    icon: Icons.access_time_outlined,
-                    activeIcon: Icons.access_time,
-                    title: 'Time Format',
-                    subtitle: settings.use24HourFormat
-                        ? '24-hour format (14:30)'
-                        : '12-hour format (2:30 PM)',
-                    trailing: Switch(
-                      value: settings.use24HourFormat,
-                      onChanged: (value) {
-                        settings.toggleTimeFormat(value);
-                      },
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.spacing24),
-          _buildSection(
-            context,
-            title: 'Notifications',
-            children: [
-              Consumer<SettingsProvider>(
-                builder: (context, settings, child) {
-                  return _buildSettingTile(
-                    context,
-                    icon: Icons.notifications_outlined,
-                    activeIcon: Icons.notifications,
-                    title: 'Daily Reminder',
-                    subtitle: settings.enableNotifications
-                        ? 'Remind at ${settings.notificationTime.format(context)}'
-                        : 'Daily reminder disabled',
-                    trailing: Switch(
-                      value: settings.enableNotifications,
-                      onChanged: (value) {
-                        settings.toggleNotifications(value);
-                      },
-                    ),
-                    onTap: settings.enableNotifications
-                        ? () async {
-                            final TimeOfDay? picked = await showTimePicker(
-                              context: context,
-                              initialTime: settings.notificationTime,
-                            );
-                            if (picked != null) {
-                              settings.setNotificationTime(picked);
-                            }
-                          }
-                        : null,
-                  );
-                },
-              ),
-              Consumer<SettingsProvider>(
-                builder: (context, settings, child) {
-                  return _buildSettingTile(
-                    context,
-                    icon: Icons.event_available_outlined,
-                    activeIcon: Icons.event_available,
-                    title: 'Bill Reminders',
-                    subtitle: settings.billRemindersEnabled
-                        ? 'Notified the day before bills and debts are due'
-                        : 'Bill reminders disabled',
-                    trailing: Switch(
-                      value: settings.billRemindersEnabled,
-                      onChanged: (value) {
-                        settings.setBillRemindersEnabled(value);
-                      },
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.spacing24),
-          Consumer<SettingsProvider>(
-            builder: (context, settings, child) {
-              return _buildSection(
-                context,
-                title: 'Home Screen',
+                title: 'Finances',
                 children: [
-                  _buildHomeWidgetTile(
+                  _buildSettingTile(
+                    context,
+                    icon: Icons.account_balance_outlined,
+                    activeIcon: Icons.account_balance,
+                    title: 'Manage Accounts',
+                    subtitle: 'Add, edit accounts for tracking transactions',
+                    onTap: () =>
+                        Navigator.pushNamed(context, '/account-management'),
+                  ),
+                  _buildSettingTile(
+                    context,
+                    icon: Icons.category_outlined,
+                    activeIcon: Icons.category,
+                    title: 'Manage Categories',
+                    subtitle:
+                        'Add, edit, or delete expense and income categories',
+                    onTap: () => Navigator.pushNamed(
+                        context, CategoryManagementScreen.routeName),
+                  ),
+                  _buildSettingTile(
                     context,
                     icon: Icons.account_balance_wallet_outlined,
                     activeIcon: Icons.account_balance_wallet,
-                    title: 'Balance Card',
-                    subtitle: 'Show income, expenses, and monthly balance',
-                    value: settings.showHomeBalanceCard,
-                    onChanged: settings.setShowHomeBalanceCard,
+                    title: 'Manage Budget',
+                    subtitle: 'Set monthly budgets for categories',
+                    onTap: () => Navigator.push(
+                      context,
+                      PageTransitions.fadeUp(const ManageBudgetScreen()),
+                    ),
                   ),
-                  _buildHomeWidgetTile(
+                  _buildSettingTile(
                     context,
-                    icon: Icons.speed_outlined,
-                    activeIcon: Icons.speed,
-                    title: 'Monthly Budget',
-                    subtitle: 'Show budget pace, projection and insights',
-                    value: settings.showHomeQuickStats,
-                    onChanged: settings.setShowHomeQuickStats,
+                    icon: Icons.repeat_outlined,
+                    activeIcon: Icons.repeat_rounded,
+                    title: 'Recurring',
+                    subtitle: 'Stop repeating income or payments',
+                    onTap: () => Navigator.pushNamed(
+                        context, RecurringManagerScreen.routeName),
                   ),
-                  _buildHomeWidgetTile(
-                    context,
-                    icon: Icons.event_repeat_outlined,
-                    activeIcon: Icons.event_repeat,
-                    title: 'Upcoming Payments',
-                    subtitle: 'Show upcoming recurring transactions',
-                    value: settings.showHomeUpcomingPayments,
-                    onChanged: settings.setShowHomeUpcomingPayments,
-                  ),
-                  _buildHomeWidgetTile(
-                    context,
-                    icon: Icons.handshake_outlined,
-                    activeIcon: Icons.handshake,
-                    title: 'Debt Summary',
-                    subtitle: 'Show active debts and overdue totals',
-                    value: settings.showHomeDebtSummary,
-                    onChanged: settings.setShowHomeDebtSummary,
-                  ),
-                  _buildHomeWidgetTile(
-                    context,
-                    icon: Icons.savings_outlined,
-                    activeIcon: Icons.savings,
-                    title: 'Goals',
-                    subtitle: 'Show savings goals and progress',
-                    value: settings.showHomeGoals,
-                    onChanged: settings.setShowHomeGoals,
-                  ),
-                  _buildHomeWidgetTile(
-                    context,
-                    icon: Icons.bar_chart_outlined,
-                    activeIcon: Icons.bar_chart,
-                    title: 'Budget Chart',
-                    subtitle: 'Show budget vs expense chart',
-                    value: settings.showHomeBudgetChart,
-                    onChanged: settings.setShowHomeBudgetChart,
-                  ),
-                  _buildHomeWidgetTile(
-                    context,
-                    icon: Icons.receipt_long_outlined,
-                    activeIcon: Icons.receipt_long,
-                    title: 'Recent Transactions',
-                    subtitle: 'Show latest transactions on Home',
-                    value: settings.showHomeRecentTransactions,
-                    onChanged: settings.setShowHomeRecentTransactions,
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: AppDimensions.spacing24),
-          _buildSection(
-            context,
-            title: 'AI Assistant',
-            children: [
-              Consumer<SettingsProvider>(
-                builder: (context, settings, child) {
-                  return _buildSettingTile(
+                  _buildSettingTile(
                     context,
                     icon: Icons.auto_awesome_outlined,
                     activeIcon: Icons.auto_awesome,
-                    title: 'Enable AI Assistant',
-                    subtitle: settings.aiAssistantEnabled
-                        ? 'AI assistant enabled'
-                        : 'AI assistant disabled',
-                    trailing: Switch(
-                      value: settings.aiAssistantEnabled,
-                      onChanged: settings.toggleAiAssistant,
-                    ),
-                  );
-                },
+                    title: 'Payment & Savings Templates',
+                    subtitle: 'Plan household payments and future expenses',
+                    onTap: () => Navigator.push(context,
+                        PageTransitions.fadeUp(const FinanceTemplatesScreen())),
+                  ),
+                ],
               ),
+              const SizedBox(height: AppDimensions.spacing24),
+              _buildSection(
+                context,
+                title: 'Appearance',
+                children: [
+                  Consumer<SettingsProvider>(
+                    builder: (context, settings, child) {
+                      return _buildAccentColorTile(context, settings);
+                    },
+                  ),
+                  Consumer<SettingsProvider>(
+                    builder: (context, settings, child) {
+                      return _buildSettingTile(
+                        context,
+                        icon: Icons.brightness_6_outlined,
+                        activeIcon: Icons.brightness_6,
+                        title: 'Theme',
+                        subtitle: switch (settings.themeMode) {
+                          ThemeMode.light => 'Light',
+                          ThemeMode.dark => 'Dark',
+                          ThemeMode.system => 'Match phone',
+                        },
+                        trailing: SegmentedButton<ThemeMode>(
+                          showSelectedIcon: false,
+                          style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                          segments: const [
+                            ButtonSegment(
+                                value: ThemeMode.system,
+                                icon: Icon(Icons.brightness_auto_outlined,
+                                size: 18, semanticLabel: 'Match phone'),
+                                tooltip: 'Match phone'),
+                            ButtonSegment(
+                                value: ThemeMode.light,
+                                icon: Icon(Icons.light_mode_outlined,
+                                size: 18, semanticLabel: 'Light'),
+                                tooltip: 'Light'),
+                            ButtonSegment(
+                                value: ThemeMode.dark,
+                                icon: Icon(Icons.dark_mode_outlined,
+                                size: 18, semanticLabel: 'Dark'),
+                                tooltip: 'Dark'),
+                          ],
+                          selected: {settings.themeMode},
+                          onSelectionChanged: (modes) => settings.setThemeMode(modes.first),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppDimensions.spacing24),
+              _buildSection(
+                context,
+                title: 'General',
+                children: [
+                  _buildSettingTile(
+                    context,
+                    icon: Icons.currency_exchange_outlined,
+                    activeIcon: Icons.currency_exchange,
+                    title: 'Currency',
+                    subtitle: 'Change your preferred currency',
+                    onTap: () {
+                      _showCurrencySelectionDialog(context);
+                    },
+                  ),
+                  _buildSettingTile(
+                    context,
+                    icon: Icons.public_outlined,
+                    activeIcon: Icons.public,
+                    title: 'Regional Preferences',
+                    subtitle: 'Templates and financial year, for any currency',
+                    onTap: () => Navigator.push(context,
+                        PageTransitions.fadeUp(const RegionalPreferencesScreen())),
+                  ),
+                  Consumer<SettingsProvider>(
+                    builder: (context, settings, child) {
+                      return _buildSettingTile(
+                        context,
+                        icon: Icons.access_time_outlined,
+                        activeIcon: Icons.access_time,
+                        title: 'Time Format',
+                        subtitle: settings.use24HourFormat
+                            ? '24-hour format (14:30)'
+                            : '12-hour format (2:30 PM)',
+                        trailing: Switch(
+                          value: settings.use24HourFormat,
+                          onChanged: (value) {
+                            settings.toggleTimeFormat(value);
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppDimensions.spacing24),
+              _buildSection(
+                context,
+                title: 'Notifications',
+                children: [
+                  Consumer<SettingsProvider>(
+                    builder: (context, settings, child) {
+                      return _buildSettingTile(
+                        context,
+                        icon: Icons.notifications_outlined,
+                        activeIcon: Icons.notifications,
+                        title: 'Daily Reminder',
+                        subtitle: settings.enableNotifications
+                            ? 'Remind at ${settings.notificationTime.format(context)}'
+                            : 'Daily reminder disabled',
+                        trailing: Switch(
+                          value: settings.enableNotifications,
+                          onChanged: (value) {
+                            settings.toggleNotifications(value);
+                          },
+                        ),
+                        onTap: settings.enableNotifications
+                            ? () async {
+                                final TimeOfDay? picked = await showTimePicker(
+                                  context: context,
+                                  initialTime: settings.notificationTime,
+                                );
+                                if (picked != null) {
+                                  settings.setNotificationTime(picked);
+                                }
+                              }
+                            : null,
+                      );
+                    },
+                  ),
+                  Consumer<SettingsProvider>(
+                    builder: (context, settings, child) {
+                      return _buildSettingTile(
+                        context,
+                        icon: Icons.event_available_outlined,
+                        activeIcon: Icons.event_available,
+                        title: 'Bill Reminders',
+                        subtitle: settings.billRemindersEnabled
+                            ? 'Notified the day before bills and debts are due'
+                            : 'Bill reminders disabled',
+                        trailing: Switch(
+                          value: settings.billRemindersEnabled,
+                          onChanged: (value) {
+                            settings.setBillRemindersEnabled(value);
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppDimensions.spacing24),
               Consumer<SettingsProvider>(
                 builder: (context, settings, child) {
-                  return _buildSettingTile(
+                  return _buildSection(
                     context,
-                    icon: Icons.link_outlined,
-                    activeIcon: Icons.link,
-                    title: 'Supabase Function URL',
-                    subtitle: settings.aiFunctionUrl.isEmpty
-                        ? 'Required before using AI'
-                        : settings.aiFunctionUrl,
-                    onTap: () => _showAiFunctionUrlDialog(context, settings),
+                    title: 'Home Screen',
+                    children: [
+                      _buildHomeWidgetTile(
+                        context,
+                        icon: Icons.account_balance_wallet_outlined,
+                        activeIcon: Icons.account_balance_wallet,
+                        title: 'Balance Card',
+                        subtitle: 'Show income, expenses, and monthly balance',
+                        value: settings.showHomeBalanceCard,
+                        onChanged: settings.setShowHomeBalanceCard,
+                      ),
+                      _buildHomeWidgetTile(
+                        context,
+                        icon: Icons.speed_outlined,
+                        activeIcon: Icons.speed,
+                        title: 'Monthly Budget',
+                        subtitle: 'Show budget pace, projection and insights',
+                        value: settings.showHomeQuickStats,
+                        onChanged: settings.setShowHomeQuickStats,
+                      ),
+                      _buildHomeWidgetTile(
+                        context,
+                        icon: Icons.event_repeat_outlined,
+                        activeIcon: Icons.event_repeat,
+                        title: 'Upcoming Payments',
+                        subtitle: 'Show upcoming recurring transactions',
+                        value: settings.showHomeUpcomingPayments,
+                        onChanged: settings.setShowHomeUpcomingPayments,
+                      ),
+                      _buildHomeWidgetTile(
+                        context,
+                        icon: Icons.handshake_outlined,
+                        activeIcon: Icons.handshake,
+                        title: 'Debt Summary',
+                        subtitle: 'Show active debts and overdue totals',
+                        value: settings.showHomeDebtSummary,
+                        onChanged: settings.setShowHomeDebtSummary,
+                      ),
+                      _buildHomeWidgetTile(
+                        context,
+                        icon: Icons.savings_outlined,
+                        activeIcon: Icons.savings,
+                        title: 'Goals',
+                        subtitle: 'Show savings goals and progress',
+                        value: settings.showHomeGoals,
+                        onChanged: settings.setShowHomeGoals,
+                      ),
+                      _buildHomeWidgetTile(
+                        context,
+                        icon: Icons.bar_chart_outlined,
+                        activeIcon: Icons.bar_chart,
+                        title: 'Budget Chart',
+                        subtitle: 'Show budget vs expense chart',
+                        value: settings.showHomeBudgetChart,
+                        onChanged: settings.setShowHomeBudgetChart,
+                      ),
+                      _buildHomeWidgetTile(
+                        context,
+                        icon: Icons.receipt_long_outlined,
+                        activeIcon: Icons.receipt_long,
+                        title: 'Recent Transactions',
+                        subtitle: 'Show latest transactions on Home',
+                        value: settings.showHomeRecentTransactions,
+                        onChanged: settings.setShowHomeRecentTransactions,
+                      ),
+                    ],
                   );
                 },
               ),
-              _buildSettingTile(
+              const SizedBox(height: AppDimensions.spacing24),
+              _buildSection(
                 context,
-                icon: Icons.privacy_tip_outlined,
-                activeIcon: Icons.privacy_tip,
-                title: 'AI Privacy',
-                subtitle:
-                    'AI receives your command plus category/account names, not your full transaction history.',
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.spacing24),
-          _buildSection(
-            context,
-            title: 'Security',
-            children: [
-              Consumer<SettingsProvider>(
-                builder: (context, settings, child) {
-                  return _buildSettingTile(
+                title: 'AI Assistant (BETA)',
+                children: [
+                  Consumer<SettingsProvider>(
+                    builder: (context, settings, child) {
+                      return _buildSettingTile(
+                        context,
+                        icon: Icons.auto_awesome_outlined,
+                        activeIcon: Icons.auto_awesome,
+                        title: 'Enable AI Assistant',
+                        subtitle: settings.aiAssistantEnabled
+                            ? 'AI assistant enabled'
+                            : 'AI assistant disabled',
+                        trailing: Switch(
+                          value: settings.aiAssistantEnabled,
+                          onChanged: settings.toggleAiAssistant,
+                        ),
+                      );
+                    },
+                  ),
+                  _buildSettingTile(
                     context,
-                    icon: Icons.lock_outline,
-                    activeIcon: Icons.lock,
-                    title: 'App Lock',
-                    subtitle: settings.isAppLockEnabled
-                        ? 'Require biometrics or PIN to open the app'
-                        : 'App Lock disabled',
-                    trailing: Switch(
-                      value: settings.isAppLockEnabled,
-                      onChanged: (value) =>
-                          _handleAppLockToggle(context, settings, value),
-                    ),
-                  );
-                },
+                    icon: Icons.privacy_tip_outlined,
+                    activeIcon: Icons.privacy_tip,
+                    title: 'AI Privacy',
+                    subtitle:
+                        'AI receives your command plus category/account names, not your full transaction history.',
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppDimensions.spacing24),
+              _buildSection(
+                context,
+                title: 'Security',
+                children: [
+                  Consumer<SettingsProvider>(
+                    builder: (context, settings, child) {
+                      return _buildSettingTile(
+                        context,
+                        icon: Icons.lock_outline,
+                        activeIcon: Icons.lock,
+                        title: 'App Lock',
+                        subtitle: settings.isAppLockEnabled
+                            ? 'Require biometrics or PIN to open the app'
+                            : 'App Lock disabled',
+                        trailing: Switch(
+                          value: settings.isAppLockEnabled,
+                          onChanged: (value) =>
+                              _handleAppLockToggle(context, settings, value),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppDimensions.spacing24),
+              _buildSection(
+                context,
+                title: 'Data & Backup',
+                children: [
+                  _buildSettingTile(
+                    context,
+                    icon: Icons.history_rounded,
+                    activeIcon: Icons.history_rounded,
+                    title: 'Activity History',
+                    subtitle: 'See every change you\'ve made in the app',
+                    onTap: () => Navigator.pushNamed(
+                        context, ActivityHistoryScreen.routeName),
+                  ),
+                  _buildSettingTile(
+                    context,
+                    icon: Icons.backup_outlined,
+                    activeIcon: Icons.backup,
+                    title: 'Create Backup',
+                    subtitle: 'Export all your data to a ZIP file',
+                    onTap: () async {
+                      await _createBackup(context);
+                    },
+                  ),
+                  _buildSettingTile(
+                    context,
+                    icon: Icons.folder_open,
+                    activeIcon: Icons.folder_open,
+                    title: 'Manage Backups',
+                    subtitle: 'View and restore previous backups',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/backup_management');
+                    },
+                  ),
+                  _buildSettingTile(
+                    context,
+                    icon: Icons.cloud_outlined,
+                    activeIcon: Icons.cloud,
+                    title: 'Google Drive Backup',
+                    subtitle: 'Back up and restore from your Google Drive',
+                    onTap: () {
+                      Navigator.pushNamed(context, CloudBackupScreen.routeName);
+                    },
+                  ),
+                  _buildSettingTile(
+                    context,
+                    icon: Icons.table_view_outlined,
+                    activeIcon: Icons.table_view,
+                    title: 'Export Transactions (Excel)',
+                    subtitle: 'A formatted .xlsx report with summary & totals',
+                    onTap: () async {
+                      await _exportTransactionsExcel(context);
+                    },
+                  ),
+                  _buildSettingTile(
+                    context,
+                    icon: Icons.file_upload_outlined,
+                    activeIcon: Icons.file_upload,
+                    title: 'Import Transactions (Excel/CSV)',
+                    subtitle: 'Add transactions from a CSV or Excel file',
+                    onTap: () async {
+                      await _importTransactions(context);
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppDimensions.spacing24),
+              _buildSection(
+                context,
+                title: 'About',
+                children: [
+                  _buildSettingTile(
+                    context,
+                    icon: Icons.privacy_tip_outlined,
+                    activeIcon: Icons.privacy_tip,
+                    title: 'Privacy Policy',
+                    subtitle: 'Read our privacy policy',
+                    onTap: () {
+                      Navigator.pushNamed(
+                          context, PrivacyPolicyScreen.routeName);
+                    },
+                  ),
+                  // Read from the installed package so this never drifts out of
+                  // sync with pubspec after a release.
+                  FutureBuilder<PackageInfo>(
+                    future: PackageInfo.fromPlatform(),
+                    builder: (context, snapshot) {
+                      final info = snapshot.data;
+                      final version = info == null
+                          ? '…'
+                          : '${info.version} (${info.buildNumber})';
+                      return _buildSettingTile(
+                        context,
+                        icon: Icons.info_outline,
+                        activeIcon: Icons.info,
+                        title: 'App Version',
+                        subtitle: version,
+                        onTap: null,
+                      );
+                    },
+                  ),
+                  _buildSettingTile(
+                    context,
+                    icon: Icons.star_rate_outlined,
+                    activeIcon: Icons.star_rate,
+                    title: 'Rate Us',
+                    subtitle: 'Love Coinly? Leave us a review!',
+                    onTap: () {
+                      ReviewService.instance.openStoreListing();
+                    },
+                  ),
+                  _buildSettingTile(
+                    context,
+                    icon: Icons.bug_report_outlined,
+                    activeIcon: Icons.bug_report,
+                    title: 'Report a Bug',
+                    subtitle: 'Found an issue? Let us know',
+                    onTap: () {
+                      BugReportService.instance.sendBugReport();
+                    },
+                  ),
+                ],
               ),
             ],
-          ),
-          const SizedBox(height: AppDimensions.spacing24),
-          _buildSection(
-            context,
-            title: 'Data & Backup',
-            children: [
-              _buildSettingTile(
-                context,
-                icon: Icons.history_rounded,
-                activeIcon: Icons.history_rounded,
-                title: 'Activity History',
-                subtitle: 'See every change you\'ve made in the app',
-                onTap: () => Navigator.pushNamed(
-                    context, ActivityHistoryScreen.routeName),
-              ),
-              _buildSettingTile(
-                context,
-                icon: Icons.backup_outlined,
-                activeIcon: Icons.backup,
-                title: 'Create Backup',
-                subtitle: 'Export all your data to a ZIP file',
-                onTap: () async {
-                  await _createBackup(context);
-                },
-              ),
-              _buildSettingTile(
-                context,
-                icon: Icons.folder_open,
-                activeIcon: Icons.folder_open,
-                title: 'Manage Backups',
-                subtitle: 'View and restore previous backups',
-                onTap: () {
-                  Navigator.pushNamed(context, '/backup_management');
-                },
-              ),
-              _buildSettingTile(
-                context,
-                icon: Icons.cloud_outlined,
-                activeIcon: Icons.cloud,
-                title: 'Google Drive Backup',
-                subtitle: 'Back up and restore from your Google Drive',
-                onTap: () {
-                  Navigator.pushNamed(context, CloudBackupScreen.routeName);
-                },
-              ),
-              _buildSettingTile(
-                context,
-                icon: Icons.table_view_outlined,
-                activeIcon: Icons.table_view,
-                title: 'Export Transactions (Excel)',
-                subtitle: 'A formatted .xlsx report with summary & totals',
-                onTap: () async {
-                  await _exportTransactionsExcel(context);
-                },
-              ),
-              _buildSettingTile(
-                context,
-                icon: Icons.file_upload_outlined,
-                activeIcon: Icons.file_upload,
-                title: 'Import Transactions CSV',
-                subtitle: 'Add transactions from a CSV file',
-                onTap: () async {
-                  await _importTransactionsCsv(context);
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.spacing24),
-          _buildSection(
-            context,
-            title: 'About',
-            children: [
-              _buildSettingTile(
-                context,
-                icon: Icons.privacy_tip_outlined,
-                activeIcon: Icons.privacy_tip,
-                title: 'Privacy Policy',
-                subtitle: 'Read our privacy policy',
-                onTap: () {
-                  Navigator.pushNamed(context, PrivacyPolicyScreen.routeName);
-                },
-              ),
-              _buildSettingTile(
-                context,
-                icon: Icons.info_outline,
-                activeIcon: Icons.info,
-                title: 'App Version',
-                subtitle: '1.0.0',
-                onTap: null,
-              ),
-            ],
-          ),
-        ],
           ),
         ),
       ),
@@ -492,111 +565,109 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Accent Color'),
-        content: Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: SettingsProvider.accentColorOptions.map((option) {
-            final isSelected =
-                settings.accentColor.toARGB32() == option.color.toARGB32();
-            return Semantics(
-              label: option.name,
-              selected: isSelected,
-              button: true,
-              child: InkWell(
-                onTap: () {
-                  settings.setAccentColor(option.color);
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Material You. Only offered where the platform can supply a
+            // wallpaper palette; picking a swatch below turns it back off.
+            if (Theme.of(context).platform == TargetPlatform.android)
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                value: settings.useDynamicColor,
+                onChanged: (value) {
+                  settings.setUseDynamicColor(value);
                   Navigator.of(ctx).pop();
                 },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: 88,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: option.color.withValues(alpha: 0.12),
-                    borderRadius:
-                        BorderRadius.circular(AppDimensions.radiusSmall),
-                    border: Border.all(
-                      color: isSelected
-                          ? option.color
-                          : Theme.of(context)
-                              .colorScheme
-                              .outline
-                              .withValues(alpha: 0.35),
-                      width: isSelected ? 2 : 1,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: option.color,
-                          shape: BoxShape.circle,
-                        ),
-                        child: isSelected
-                            ? const Icon(
-                                Icons.check,
-                                color: Colors.white,
-                                size: 18,
-                              )
-                            : null,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        option.name,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
+                title: const Text('Wallpaper colors'),
+                subtitle: const Text(
+                  'Match the app to your wallpaper (Android 12+)',
                 ),
               ),
-            );
-          }).toList(),
+            if (Theme.of(context).platform == TargetPlatform.android)
+              const Divider(height: 20),
+            SizedBox(
+              width: 320, // constrain width so Wrap knows when to break
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.center,
+                children: SettingsProvider.accentColorOptions.map((option) {
+                  final isSelected = settings.accentColor.toARGB32() ==
+                      option.color.toARGB32();
+                  return Semantics(
+                    label: option.name,
+                    selected: isSelected,
+                    button: true,
+                    child: InkWell(
+                      onTap: () {
+                        settings.setAccentColor(option.color);
+                        Navigator.of(ctx).pop();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: 86, // 3 items (86) + 2 spaces (12) = 258 + 24 = 282 <= 320
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: option.color.withValues(alpha: 0.12),
+                          borderRadius:
+                              BorderRadius.circular(AppDimensions.radiusSmall),
+                          border: Border.all(
+                            color: isSelected
+                                ? option.color
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .outline
+                                    .withValues(alpha: 0.35),
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: option.color,
+                                shape: BoxShape.circle,
+                              ),
+                              child: isSelected
+                                  ? const Icon(
+                                      Icons.check,
+                                      color: Colors.white,
+                                      size: 18,
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              option.name,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 11,
+                                  ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
         ),
-      ),
-    );
-  }
-
-  void _showAiFunctionUrlDialog(
-    BuildContext context,
-    SettingsProvider settings,
-  ) {
-    final controller = TextEditingController(text: settings.aiFunctionUrl);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Supabase Function URL'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.url,
-          decoration: const InputDecoration(
-            hintText: 'https://project.supabase.co/functions/v1/finance-ai',
-            labelText: 'Function URL',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              settings.setAiFunctionUrl(controller.text);
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
   }
@@ -716,10 +787,10 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _importTransactionsCsv(BuildContext context) async {
+  Future<void> _importTransactions(BuildContext context) async {
     final picked = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['csv'],
+      allowedExtensions: ['csv', 'xlsx', 'xls'],
     );
     if (picked == null || picked.files.single.path == null) return;
     final path = picked.files.single.path!;
@@ -740,7 +811,12 @@ class SettingsScreen extends StatelessWidget {
     );
 
     try {
-      final result = await ImportService().importTransactionsCsv(path);
+      ImportResult result;
+      if (path.toLowerCase().endsWith('.xlsx') || path.toLowerCase().endsWith('.xls')) {
+        result = await ImportService().importTransactionsExcel(path);
+      } else {
+        result = await ImportService().importTransactionsCsv(path);
+      }
 
       // Refresh app state so imported rows appear without a restart.
       if (context.mounted) {
@@ -811,23 +887,23 @@ class SettingsScreen extends StatelessWidget {
     if (!context.mounted) return;
     if (!available) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Set up a screen lock or biometrics on your device first'),
+        SnackBar(
+          content:
+              Text('Set up a screen lock or biometrics on your device first'),
           backgroundColor: AppColors.negative,
         ),
       );
       return;
     }
 
-    final authenticated =
-        await AppLockService().authenticate(reason: 'Confirm to enable App Lock');
+    final authenticated = await AppLockService()
+        .authenticate(reason: 'Confirm to enable App Lock');
     if (!context.mounted) return;
     if (authenticated) {
       await settings.setAppLockEnabled(true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Authentication failed. App Lock was not enabled.'),
           backgroundColor: AppColors.negative,
         ),

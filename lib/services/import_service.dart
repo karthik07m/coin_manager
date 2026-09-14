@@ -1,11 +1,14 @@
 import 'dart:io';
 
 import 'package:csv/csv.dart';
+import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../db/account_db_helper.dart';
 import '../db/category_db_helper.dart';
 import '../db/transaction_db_helper.dart';
+import '../models/account.dart';
 import '../models/transaction.dart';
 import '../utilities/constants.dart';
 import '../utilities/id_generator.dart';
@@ -32,11 +35,6 @@ class ImportService {
   ImportService._internal();
 
   Future<ImportResult> importTransactionsCsv(String filePath) async {
-    final errors = <String>[];
-    int imported = 0;
-    int skipped = 0;
-    int failed = 0;
-
     final rawFile = File(filePath);
     if (!await rawFile.exists()) {
       return const ImportResult(
@@ -63,12 +61,87 @@ class ImportService {
       );
     }
 
+    return _importRows(rows.map((row) => row.map((cell) => cell.toString()).toList()).toList());
+  }
+
+  Future<ImportResult> importTransactionsExcel(String filePath) async {
+    final rawFile = File(filePath);
+    if (!await rawFile.exists()) {
+      return const ImportResult(
+        imported: 0,
+        skippedDuplicates: 0,
+        failed: 0,
+        errors: ['File not found'],
+      );
+    }
+
+    final bytes = await rawFile.readAsBytes();
+    final excel = Excel.decodeBytes(bytes);
+
+    final sheetName = excel.tables.keys.contains('Transactions')
+        ? 'Transactions'
+        : (excel.getDefaultSheet() ?? excel.tables.keys.first);
+    final sheet = excel.tables[sheetName];
+
+    if (sheet == null || sheet.rows.isEmpty) {
+      return const ImportResult(
+        imported: 0,
+        skippedDuplicates: 0,
+        failed: 0,
+        errors: ['No data in Excel file'],
+      );
+    }
+
+    final rows = <List<String>>[];
+    for (final row in sheet.rows) {
+      rows.add(row.map((cell) => _cellValueToString(cell?.value)).toList());
+    }
+
+    return _importRows(rows);
+  }
+
+  String _cellValueToString(CellValue? value) {
+    if (value == null) return '';
+    if (value is TextCellValue) return value.value.toString();
+    if (value is IntCellValue) return value.value.toString();
+    if (value is DoubleCellValue) return value.value.toString();
+    if (value is DateCellValue) {
+      return "${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}";
+    }
+    if (value is DateTimeCellValue) {
+      return "${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')} ${value.hour}:${value.minute}";
+    }
+    if (value is BoolCellValue) return value.value ? 'true' : 'false';
+    return value.toString();
+  }
+
+  Future<ImportResult> _importRows(List<List<String>> rows) async {
+    final errors = <String>[];
+    int imported = 0;
+    int skipped = 0;
+    int failed = 0;
+
+    if (rows.isEmpty) {
+      return const ImportResult(
+        imported: 0,
+        skippedDuplicates: 0,
+        failed: 0,
+        errors: ['No data to import'],
+      );
+    }
+
     // Map columns by header NAME (case-insensitive), so reordered files work.
     final header = rows.first.map((c) => c.toString().trim().toLowerCase()).toList();
     int col(List<String> names) {
       for (final n in names) {
         final i = header.indexOf(n);
         if (i != -1) return i;
+      }
+      // Fallback: check if any header starts with the name, e.g., 'amount (usd)'
+      for (final n in names) {
+        for (int i = 0; i < header.length; i++) {
+          if (header[i].startsWith(n)) return i;
+        }
       }
       return -1;
     }
@@ -79,6 +152,8 @@ class ImportService {
     final typeCol = col(['type']);
     final categoryCol = col(['category']);
     final accountCol = col(['account']);
+    final toAccountCol = col(
+        ['to account', 'to_account', 'toaccount', 'destination', 'transfer to']);
 
     final missing = <String>[];
     if (dateCol == -1) missing.add('Date');
@@ -108,6 +183,22 @@ class ImportService {
       for (final a in accounts)
         if (a.id != null) a.name.trim().toLowerCase(): a.id!,
     };
+    // getAllAccounts orders is_default first, so this is the default account.
+    final defaultAccountId = accounts.isEmpty ? 1 : (accounts.first.id ?? 1);
+
+    // Mirrors AccountProvider.currencyOfAccount: a blank account currency
+    // means the base currency, so '' and an explicit base code are the same
+    // thing and must not read as a mismatch.
+    final baseCurrency =
+        (await SharedPreferences.getInstance()).getString('currencyCode') ?? '';
+    final accountCurrency = <int, String>{
+      for (final a in accounts)
+        if (a.id != null) a.id!: a.currency,
+    };
+    String currencyOf(int id) {
+      final code = accountCurrency[id] ?? '';
+      return code.isEmpty ? baseCurrency : code;
+    }
 
     // Existing keys for duplicate detection: isoDate|amount|title(lower).
     final existing = await TransactionDBHelper().getTransactions();
@@ -124,6 +215,11 @@ class ImportService {
             (c >= 0 && c < row.length) ? row[c].toString().trim() : '';
 
         final rawDate = cell(dateCol);
+        // A blank date marks structural filler, not a transaction — our own
+        // xlsx ends the sheet with a TOTAL row, and hand-edited files pick up
+        // trailing blank rows. Skip those quietly; a date that is present but
+        // unparseable is still bad data worth reporting.
+        if (rawDate.isEmpty) continue;
         final date = _parseDate(rawDate);
         if (date == null) {
           throw 'unrecognized date "$rawDate"';
@@ -140,7 +236,12 @@ class ImportService {
         // negative amount means an expense.
         bool isExpense;
         final typeVal = cell(typeCol).toLowerCase();
-        if (typeVal == 'expense') {
+        // A transfer is stored on its source account as an expense, with the
+        // destination carried in transfer_account_id.
+        final isTransferRow = typeVal == 'transfer';
+        if (isTransferRow) {
+          isExpense = true;
+        } else if (typeVal == 'expense') {
           isExpense = true;
         } else if (typeVal == 'income') {
           isExpense = false;
@@ -158,12 +259,42 @@ class ImportService {
         }
         existingKeys.add(key); // also dedup within the file itself
 
+        final accountId = await _resolveAccount(
+            cell(accountCol), accountByName, defaultAccountId);
+
+        if (isTransferRow) {
+          final toName = cell(toAccountCol);
+          if (toName.isEmpty) {
+            throw 'transfer row has no destination account';
+          }
+          final toAccountId =
+              await _resolveAccount(toName, accountByName, defaultAccountId);
+          if (toAccountId == accountId) {
+            throw 'transfer moves money to the same account';
+          }
+          // The rule TransactionProvider.addTransfer enforces: one amount
+          // booked against two currencies would create or destroy money.
+          final from = currencyOf(accountId);
+          final to = currencyOf(toAccountId);
+          if (from != to) {
+            throw 'transfer between $from and $to accounts is not supported';
+          }
+          toInsert.add(Transaction.createTransfer(
+            id: newId(),
+            amount: amount,
+            fromAccountId: accountId,
+            toAccountId: toAccountId,
+            date: date,
+            title: title,
+          ));
+          continue;
+        }
+
+        // Below the transfer branch on purpose: transfers carry no category,
+        // and resolving one here would create a junk category per import.
         final categoryName = cell(categoryCol);
         final categoryId =
             await _resolveCategory(categoryName, isExpense, categoryByKey);
-
-        final accountName = cell(accountCol).toLowerCase();
-        final accountId = accountByName[accountName] ?? 1;
 
         toInsert.add(Transaction.createNew(
           id: newId(),
@@ -220,6 +351,35 @@ class ImportService {
       }
     }
     return null;
+  }
+
+  /// Case-insensitive account match; creates the account once (cached) if it
+  /// doesn't exist. Falling back to the default account instead silently
+  /// merged another account's history into it and wrecked its balance.
+  Future<int> _resolveAccount(
+    String name,
+    Map<String, int> cache,
+    int defaultAccountId,
+  ) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return defaultAccountId;
+
+    final key = trimmed.toLowerCase();
+    final hit = cache[key];
+    if (hit != null) return hit;
+
+    final newAccountId = await AccountDBHelper().insertAccount(
+      Account.createNew(
+        name: trimmed,
+        icon: 'wallet',
+        color: '#607D8B',
+        // Credit cards are liabilities; the wrong type flips the sign on every
+        // balance calculation for the account.
+        type: AccountType.inferLegacy(trimmed, ''),
+      ),
+    );
+    cache[key] = newAccountId;
+    return newAccountId;
   }
 
   /// Case-insensitive category match; creates the category once (cached) if

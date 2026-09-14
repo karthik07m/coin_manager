@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy · Coinly</title>
+<style>
+  :root { --bg:#f7f8f7; --fg:#1b2420; --muted:#56615b; --accent:#1f9d57; --line:#e1e6e3; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#121614; --fg:#e7ece9; --muted:#9aa7a0; --accent:#39c878; --line:#2a322e; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:40px 20px 64px; }
+  h1 { font-size:2rem; margin:0 0 4px; }
+  h2 { font-size:1.2rem; margin:32px 0 6px; }
+  h3 { font-size:1.02rem; margin:20px 0 4px; }
+  p, li { color:var(--muted); }
+  a { color:var(--accent); }
+  nav a { margin-right:16px; }
+  footer { border-top:1px solid var(--line); margin-top:44px; padding-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <nav><a href="index.html">Coinly home</a><a href="terms.html">Terms of Service</a></nav>
+  <h1>Privacy Policy for Coinly</h1>
+  <p><strong>Effective date: September 14, 2026</strong></p>
+  <p>This Privacy Policy explains how the Coinly mobile app ("Coinly", "the app", "we", "us") handles your information, including information received from Google APIs. Coinly is developed by an independent developer who can be reached at <a href="mailto:karthik07m@gmail.com">karthik07m@gmail.com</a>.</p>
+
+  <h2>1. Summary</h2>
+  <ul>
+    <li>Your financial records are stored on your device. We do not run our own database of your transactions.</li>
+    <li>Coinly has no ads, no analytics and no crash-reporting services.</li>
+    <li>Data leaves your device only when you use an optional cloud feature: the AI assistant or Google Drive backup.</li>
+    <li>We never sell your data.</li>
+  </ul>
+
+  <h2>2. Data stored on your device</h2>
+  <p>Transactions, accounts, balances, categories, budgets, debts, goals, recurring payments, receipt images and settings are stored locally in the app's private storage. This data is not uploaded to us. Uninstalling the app deletes it unless you have made a backup.</p>
+  <p>Receipt scanning reads text from receipt photos using Google ML Kit on your device; the images are not sent to us. Voice input uses your phone's built-in speech recognition service, which is provided by your device's operating system under its own privacy terms.</p>
+
+  <h2>3. Google user data (Google Sign-In and Google Drive)</h2>
+  <p>Google Drive backup is optional. If you turn it on, you sign in with your Google account and Coinly requests:</p>
+  <ul>
+    <li><strong>Basic account information</strong> (your email address and name), used only to show which Google account is connected in the app.</li>
+    <li><strong>Google Drive access limited to files Coinly creates</strong> (the <code>drive.file</code> scope). Coinly cannot see, read or change any other files in your Drive.</li>
+  </ul>
+  <h3>How we use it</h3>
+  <p>Coinly uses this access only to upload backup files you ask for, list those backup files, download one when you choose to restore, and remove old Coinly backups. A backup is a ZIP file containing your Coinly data and receipt images, saved to your own Google Drive.</p>
+  <h3>Storage, sharing and retention</h3>
+  <p>Backups are stored in your Google Drive, not on our servers. We do not receive, store, or share your Google account information or the contents of your backups with anyone, and we do not use Google user data for advertising or to train AI models. Backups remain in your Drive until you delete them.</p>
+  <h3>Revoking access</h3>
+  <p>You can disconnect Google Drive in the app at any time, and revoke Coinly's access in your Google Account at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. You can delete Coinly backups from Google Drive directly.</p>
+  <p>Coinly's use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+
+  <h2>4. AI assistant</h2>
+  <p>Many messages are understood on your device. When a message needs cloud processing, and the AI assistant is enabled, the app sends:</p>
+  <ul>
+    <li>The text you typed or spoke (which may include amounts, for example "coffee 150")</li>
+    <li>Your currency, language setting, time zone and current local time</li>
+    <li>The names of your categories and accounts, so the reply can use them</li>
+  </ul>
+  <p>Your transaction history and account balances are not sent. The request goes to a function hosted on <a href="https://supabase.com/privacy">Supabase</a>, which forwards it to <a href="https://www.anthropic.com/legal/privacy">Anthropic</a> (Claude) to produce a draft or summary request. Nothing is saved to your records until you review and confirm it in the app.</p>
+  <p>To apply a fair monthly limit on AI requests, the app creates an anonymous account with Supabase the first time you use the cloud AI. It is not linked to your name, email or Google account. We store that anonymous ID with a count of requests per month. Supabase may also keep standard service logs, such as IP addresses, under its own policy. You can turn off the AI assistant in Settings at any time.</p>
+
+  <h2>5. Other services</h2>
+  <ul>
+    <li><strong>Google Play</strong>: checks for app updates and lets you leave a review, under Google's privacy policy.</li>
+    <li><strong>Notifications and app lock</strong>: bill reminders are scheduled on your device; biometric unlock is handled by your device and Coinly never receives your fingerprint or face data.</li>
+    <li><strong>Bug reports</strong>: if you choose "Report a bug", the app prepares an email with basic device and app version details. It is only sent if you send the email.</li>
+  </ul>
+
+  <h2>6. Security</h2>
+  <p>Data sent to cloud features is encrypted in transit using HTTPS. Data on your device is protected by your device's security and Coinly's optional app lock.</p>
+
+  <h2>7. Your choices and deletion</h2>
+  <p>You can use Coinly without any cloud features. You can delete your on-device data by clearing the app's data or uninstalling it, delete Drive backups from your Google Drive, and ask us to delete your anonymous AI usage record by emailing <a href="mailto:karthik07m@gmail.com">karthik07m@gmail.com</a>.</p>
+
+  <h2>8. Children</h2>
+  <p>Coinly is not directed to children under 13, and we do not knowingly collect personal information from them.</p>
+
+  <h2>9. Changes</h2>
+  <p>We may update this policy. Changes will be posted on this page with a new effective date.</p>
+
+  <h2>10. Contact</h2>
+  <p>Questions about this policy: <a href="mailto:karthik07m@gmail.com">karthik07m@gmail.com</a></p>
+
+  <footer><a href="index.html">Coinly home</a> · <a href="terms.html">Terms of Service</a></footer>
+</main>
+</body>
+</html>

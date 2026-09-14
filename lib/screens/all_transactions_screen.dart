@@ -589,7 +589,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen>
 
                   // Account filter
                   if (_selectedAccountId != null &&
-                      t.accountId != _selectedAccountId) {
+                      t.accountId != _selectedAccountId &&
+                      t.transferAccountId != _selectedAccountId) {
                     return false;
                   }
 
@@ -646,20 +647,42 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen>
                 double totalExpense = 0;
                 final txProvider = context.read<TransactionProvider>();
                 for (final transaction in filteredTransactions) {
-                  if (transaction.isTransfer) continue;
                   final amt = txProvider.baseAmount(transaction);
-                  if (transaction.isExpense) {
-                    totalExpense += amt;
+                  if (transaction.isTransfer) {
+                    if (_selectedAccountId != null) {
+                      if (transaction.accountId == _selectedAccountId) {
+                        totalExpense += amt;
+                      } else if (transaction.transferAccountId == _selectedAccountId) {
+                        totalIncome += amt;
+                      }
+                    }
                   } else {
-                    totalIncome += amt;
+                    if (transaction.isExpense) {
+                      totalExpense += amt;
+                    } else {
+                      totalIncome += amt;
+                    }
+                  }
+                }
+
+                double? accountBalance;
+                double? openingBalance;
+                if (_selectedAccountId != null) {
+                  final acc = accountProvider.getAccountById(_selectedAccountId!);
+                  if (acc != null) {
+                    accountBalance = acc.currentBalance;
+                    // Shown so the balance can be reconciled: the totals below
+                    // only cover transactions, and without the opening figure
+                    // the balance looks like it came from nowhere.
+                    openingBalance = acc.initialBalance;
                   }
                 }
 
                 return Column(
                   children: [
                     // Summary bar
-                    _buildSummaryBar(
-                        filteredTransactions.length, totalIncome, totalExpense),
+                    _buildSummaryBar(filteredTransactions.length, totalIncome,
+                        totalExpense, accountBalance, openingBalance),
 
                     // Transaction list
                     Expanded(
@@ -919,9 +942,35 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen>
     );
   }
 
-  Widget _buildSummaryBar(int count, double income, double expense) {
+  Widget _buildSummaryBar(
+    int count,
+    double income,
+    double expense, [
+    double? accountBalance,
+    double? openingBalance,
+  ]) {
     final currencySymbol = context.watch<SettingsProvider>().currencySymbol;
     final currencyCode = context.watch<SettingsProvider>().currencyCode;
+
+    Widget chip(String text, Color color, {bool bold = true}) {
+      return Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 13,
+            color: color,
+            fontWeight: bold ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
@@ -940,35 +989,35 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen>
                   fontWeight: FontWeight.w500),
             ),
           ),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.positive.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              '+${UtilityFunction.addCommaWithSign(income, currencySymbol: currencySymbol, currencyCode: currencyCode)}',
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.positive,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
           const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.negative.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              '-${UtilityFunction.addCommaWithSign(expense, currencySymbol: currencySymbol)}',
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.negative,
-                fontWeight: FontWeight.bold,
+          // Scrolls rather than overflowing — with an account selected there
+          // are four figures to show and they must all stay reachable.
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Row(
+                children: [
+                  if (openingBalance != null)
+                    chip(
+                      'Opening: ${UtilityFunction.addCommaWithSign(openingBalance, currencySymbol: currencySymbol)}',
+                      context.textSecondary,
+                      bold: false,
+                    ),
+                  chip(
+                    '+${UtilityFunction.addCommaWithSign(income, currencySymbol: currencySymbol, currencyCode: currencyCode)}',
+                    AppColors.positive,
+                  ),
+                  chip(
+                    '-${UtilityFunction.addCommaWithSign(expense, currencySymbol: currencySymbol)}',
+                    AppColors.negative,
+                  ),
+                  if (accountBalance != null)
+                    chip(
+                      'Bal: ${UtilityFunction.addCommaWithSign(accountBalance, currencySymbol: currencySymbol)}',
+                      context.appAccent,
+                    ),
+                ],
               ),
             ),
           ),

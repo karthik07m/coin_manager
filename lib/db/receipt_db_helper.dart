@@ -106,12 +106,12 @@ class ReceiptDBHelper {
     }
   }
 
-  Future<int> deleteReceipt(String id) async {
+  Future<int> deleteReceipt(String id, {bool preserveImage = false}) async {
     var dbClient = await database;
     try {
       // Also delete the image file
       Receipt? receipt = await getReceiptById(id);
-      if (receipt != null) {
+      if (receipt != null && !preserveImage) {
         File imageFile = File(receipt.imagePath);
         if (await imageFile.exists()) {
           await imageFile.delete();

@@ -9,6 +9,8 @@ import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
 import '../providers/settings_provider.dart';
 import '../providers/account_provider.dart';
+import '../providers/debt_provider.dart';
+import 'tappable.dart';
 
 class TransactionItem extends StatefulWidget {
   final Transaction transaction;
@@ -36,95 +38,56 @@ class TransactionItem extends StatefulWidget {
 }
 
 class _TransactionItemState extends State<TransactionItem> {
-  bool _isPressed = false;
-
-  void _handleTapDown(TapDownDetails _) {
-    setState(() {
-      _isPressed = true;
-    });
-  }
-
-  void _handleTapUp(TapUpDetails _) {
-    setState(() {
-      _isPressed = false;
-    });
-  }
-
-  void _handleTapCancel() {
-    setState(() {
-      _isPressed = false;
-    });
-  }
-
-  void _openTransaction() {
-    HapticFeedback.lightImpact();
-    Navigator.pushNamed(
-      context,
-      TransactionForm.routeName,
-      arguments: widget.transaction.id,
-    );
-  }
-
   Widget _buildTappableCard(BuildContext context) {
     final accent = context.appAccent;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: _handleTapDown,
-      onTapUp: _handleTapUp,
-      onTapCancel: _handleTapCancel,
-      onTap: () {
-        if (widget.selectionMode) {
-          widget.onSelectToggle?.call();
-        } else {
-          _openTransaction();
-        }
-      },
+    return Tappable(
+      color: widget.selected
+          ? Color.alphaBlend(accent.withValues(alpha: 0.10), context.appSurface)
+          : context.appSurface,
+      borderRadius: AppDimensions.radiusMedium,
+      pressedScale: 0.98,
+      // In selection mode a tap toggles the row instead of opening it.
+      onTap: widget.selectionMode
+          ? widget.onSelectToggle
+          : () => HapticFeedback.lightImpact(),
+      openPage: widget.selectionMode
+          ? null
+          : TransactionForm(transaction: widget.transaction),
       onLongPress: widget.onLongPress,
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: widget.selected
-              ? accent.withValues(alpha: 0.10)
-              : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-          boxShadow: AppShadows.card,
-          border: Border.all(
-            color: widget.selected
-                ? accent
-                : Theme.of(context)
-                    .colorScheme
-                    .outline
-                    .withValues(alpha: 0.5),
-            width: widget.selected ? 1.5 : 0.5,
-          ),
+          // Outline only when selected; otherwise the fill separates the row.
+          border: widget.selected
+              ? Border.all(color: accent, width: 1.5)
+              : context.cardBorder,
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-          child: Stack(
-            children: [
-              _buildListTile(context),
-              if (widget.selectionMode)
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: Container(
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: widget.selected
-                          ? accent
-                          : Colors.black.withValues(alpha: 0.35),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 1.5),
-                    ),
-                    child: widget.selected
-                        ? const Icon(Icons.check,
-                            size: 14, color: Colors.white)
-                        : null,
+        // No ClipRRect: nothing inside overflows the rounded box, and a clip
+        // per row was pure cost on long scrolling lists.
+        child: Stack(
+          children: [
+            _buildListTile(context),
+            if (widget.selectionMode)
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: widget.selected
+                        ? accent
+                        : Colors.black.withValues(alpha: 0.35),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
                   ),
+                  child: widget.selected
+                      ? const Icon(Icons.check, size: 14, color: Colors.white)
+                      : null,
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
@@ -132,41 +95,35 @@ class _TransactionItemState extends State<TransactionItem> {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedScale(
-      scale: _isPressed ? 0.985 : 1,
-      duration: AppDurations.fastest,
-      curve: Curves.easeOutCubic,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: AppDimensions.spacing16),
-        child: !widget.enableDel
-            ? _buildTappableCard(context)
-            : Dismissible(
-                key: Key(widget.transaction.id),
-                direction: DismissDirection.endToStart,
-                confirmDismiss: (direction) => _showConfirmDialog(context),
-                onDismissed: (_) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: context.appSurface,
-                      content: Text(
-                        "Transaction '${widget.transaction.title}' removed",
-                        style: AppTextStyles.bodyMedium,
-                      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppDimensions.spacing8),
+      child: !widget.enableDel
+          ? _buildTappableCard(context)
+          : Dismissible(
+              key: Key(widget.transaction.id),
+              direction: DismissDirection.endToStart,
+              confirmDismiss: (direction) => _showConfirmDialog(context),
+              onDismissed: (_) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: context.appSurface,
+                    content: Text(
+                      "Transaction '${widget.transaction.title}' removed",
+                      style: AppTextStyles.bodyMedium,
                     ),
-                  );
-                },
-                movementDuration: const Duration(milliseconds: 200),
-                resizeDuration: const Duration(milliseconds: 150),
-                background: Container(
-                  color: AppColors.negative,
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 20),
-                  child:
-                      const Icon(Icons.delete, color: Colors.white, size: 28),
-                ),
-                child: _buildTappableCard(context),
+                  ),
+                );
+              },
+              movementDuration: const Duration(milliseconds: 200),
+              resizeDuration: const Duration(milliseconds: 150),
+              background: Container(
+                color: AppColors.negative,
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 20),
+                child: const Icon(Icons.delete, color: Colors.white, size: 28),
               ),
-      ),
+              child: _buildTappableCard(context),
+            ),
     );
   }
 
@@ -176,20 +133,27 @@ class _TransactionItemState extends State<TransactionItem> {
     }
     final isExpense = widget.category?.isExpense == true;
     final amountColor = isExpense ? AppColors.negative : AppColors.positive;
-    final iconBgColor = (isExpense ? AppColors.negative : AppColors.positive)
-        .withValues(alpha: 0.1);
+    // Neutral backing: the amount's colour already says income vs expense,
+    // so tinting every icon red or green too was saying it twice.
+    final iconBgColor = context.textPrimary.withValues(alpha: 0.06);
 
     // Show the amount in its account's own currency (multi-currency); totals
     // elsewhere convert to the base currency.
     final acct = context
         .read<AccountProvider>()
         .getAccountById(widget.transaction.accountId);
-    final acctCode = (acct != null && acct.currency.isNotEmpty)
-        ? acct.currency
-        : null;
+    final acctCode =
+        (acct != null && acct.currency.isNotEmpty) ? acct.currency : null;
+    // Loans and repayments look like any other expense/income; say who the
+    // money went to or came from so the row isn't mistaken for spending.
+    final debtLink =
+        context.watch<DebtProvider>().linkFor(widget.transaction.id);
 
     return Padding(
-      padding: const EdgeInsets.all(AppDimensions.spacing16),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimensions.spacing16,
+        vertical: AppDimensions.spacing12,
+      ),
       child: Row(
         children: [
           Container(
@@ -244,6 +208,24 @@ class _TransactionItemState extends State<TransactionItem> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                ],
+                if (debtLink != null) ...[
+                  const SizedBox(height: 4),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.handshake_outlined,
+                        size: 12, color: context.appAccent),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        debtLink.label,
+                        style: AppTextStyles.caption.copyWith(
+                            color: context.appAccent,
+                            fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ]),
                 ],
               ],
             ),
@@ -309,7 +291,10 @@ class _TransactionItemState extends State<TransactionItem> {
     final to = nameFor(widget.transaction.transferAccountId);
 
     return Padding(
-      padding: const EdgeInsets.all(AppDimensions.spacing16),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimensions.spacing16,
+        vertical: AppDimensions.spacing12,
+      ),
       child: Row(
         children: [
           Container(

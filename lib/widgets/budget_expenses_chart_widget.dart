@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 
+import '../models/budget_scope.dart';
+import '../models/transaction.dart';
+import '../providers/category_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/monthly_budget_provider.dart';
 import '../providers/settings_provider.dart';
@@ -12,6 +15,7 @@ import '../utilities/functions.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/budget_period.dart';
 import '../utilities/budget_projection.dart';
+import '../utilities/budget_scope_summary.dart';
 import '../utilities/responsive.dart';
 
 class BudgetExpensesChartWidget extends StatefulWidget {
@@ -95,10 +99,23 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
         final totalBudget = budgetProvider.getTotalBudget(currentMonth);
         final currencySymbol = settingsProvider.currencySymbol;
 
+        final categoryProvider = Provider.of<CategoryProvider>(context);
+        final scope = budgetProvider.getScope(currentMonth);
+        final budgetedIds = BudgetScopeSummary.budgetedCategoryIds(
+          categories: categoryProvider.categories,
+          budgetFor: (name) => budgetProvider.getBudget(name, currentMonth),
+        );
+        final isCategoryScoped =
+            scope == BudgetScope.budgetedCategories && budgetedIds.isNotEmpty;
+
         final data = _calculateData(
           transactionProvider,
           widget.selectedMonth,
           totalBudget,
+          (t) =>
+              t.isExpense &&
+              !t.isTransfer &&
+              (!isCategoryScoped || budgetedIds.contains(t.categoryId)),
         );
 
         return Column(
@@ -135,10 +152,9 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
       return Row(
         children: [
           Text(
-            'BUDGET VS SPENDING',
-            style: AppTextStyles.caption.copyWith(
+            'Budget vs spending',
+            style: AppTextStyles.sectionTitle.copyWith(
               color: context.textSecondary,
-              letterSpacing: 1.2,
             ),
           ),
           const SizedBox(width: 8),
@@ -191,11 +207,10 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              DateFormat('MMM d').format(date).toUpperCase(),
+              DateFormat('MMM d').format(date),
               style: AppTextStyles.caption.copyWith(
                 color: context.textSecondary,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
               ),
             ),
             const SizedBox(height: 2),
@@ -325,11 +340,10 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            label.toUpperCase(),
+            label,
             style: AppTextStyles.caption.copyWith(
               color: context.textSecondary,
               fontSize: 9,
-              letterSpacing: 0.8,
             ),
           ),
           const SizedBox(height: 2),
@@ -462,6 +476,9 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
     TransactionProvider transactionProvider,
     DateTime selectedMonth,
     double totalBudget,
+    // Same rule the budget cards use, so this chart can't tell a different
+    // story about the same month.
+    bool Function(Transaction) countsTowardBudget,
   ) {
     final daysInMonth =
         DateTime(selectedMonth.year, selectedMonth.month + 1, 0).day;
@@ -491,7 +508,7 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
 
       final dayExpenses = transactionProvider.transactions
           .where((t) =>
-              t.isExpense &&
+              countsTowardBudget(t) &&
               t.date.isAfter(dayStart.subtract(const Duration(seconds: 1))) &&
               t.date.isBefore(dayEnd.add(const Duration(seconds: 1))))
           .fold(0.0, (sum, t) => sum + transactionProvider.baseAmount(t));
@@ -515,7 +532,7 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
         selectedMonth.year, selectedMonth.month, currentDay, 23, 59, 59);
     final monthExpenses = transactionProvider.transactions
         .where((t) =>
-            t.isExpense &&
+            countsTowardBudget(t) &&
             !t.date.isBefore(monthStart) &&
             !t.date.isAfter(observedEnd))
         .toList();

@@ -34,6 +34,9 @@ class GoogleDriveBackupService {
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: <String>[drive.DriveApi.driveFileScope],
+    clientId: !kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS)
+        ? '861917279081-b3dakauru5u21ecu9amu28tq65ah210h.apps.googleusercontent.com'
+        : null,
   );
 
   final BackupService _backupService = BackupService();

@@ -151,11 +151,9 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'NET WORTH',
-            style: AppTextStyles.caption.copyWith(
+            'Net worth',
+            style: AppTextStyles.sectionTitle.copyWith(
               color: context.textSecondary,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
             ),
           ),
           const SizedBox(height: 6),
@@ -284,11 +282,9 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                   size: 15, color: context.textSecondary),
               const SizedBox(width: 6),
               Text(
-                'CREDIT CARD USAGE',
-                style: AppTextStyles.caption.copyWith(
+                'Credit card usage',
+                style: AppTextStyles.sectionTitle.copyWith(
                   color: context.textSecondary,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.2,
                 ),
               ),
               const Spacer(),
@@ -437,7 +433,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
-                                  'DEFAULT',
+                                  'Default',
                                   style: AppTextStyles.caption.copyWith(
                                     color: context.appAccent,
                                     fontWeight: FontWeight.bold,

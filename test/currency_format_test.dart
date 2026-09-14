@@ -93,5 +93,36 @@ void main() {
         '\$2.5M',
       );
     });
+  
+  group('amount ceiling', () {
+    test('formatMoney clamps absurd magnitudes instead of scientific notation', () {
+      UtilityFunction.activeCurrencyCode = 'USD';
+      expect(
+        UtilityFunction.formatMoney(1e21, symbol: '\$', showDecimals: true),
+        isNot(contains('e+')),
+      );
+      expect(
+        UtilityFunction.formatMoney(1e43, symbol: '\$', showDecimals: true),
+        '\$999,999,999,999.99',
+      );
+    });
+
+    test('Indian grouping also clamps instead of producing a malformed string', () {
+      UtilityFunction.activeCurrencyCode = 'INR';
+      final out =
+          UtilityFunction.formatMoney(1e21, symbol: '₹', showDecimals: true);
+      expect(out, isNot(contains('e+')));
+      expect(out, isNot(contains(',+')));
+    });
+
+    test('non-finite values never reach the formatter as NaN/Infinity text', () {
+      UtilityFunction.activeCurrencyCode = 'USD';
+      expect(UtilityFunction.formatMoney(double.nan, symbol: '\$'),
+          isNot(contains('NaN')));
+      expect(UtilityFunction.formatMoney(double.infinity, symbol: '\$'),
+          isNot(contains('Infinity')));
+    });
   });
+
+});
 }

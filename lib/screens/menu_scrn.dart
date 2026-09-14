@@ -17,6 +17,7 @@ import '../models/transaction.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/budget_period.dart';
+import '../services/app_update_service.dart';
 import '../services/bill_reminder_scheduler.dart';
 
 class MenuScrn extends StatefulWidget {
@@ -58,11 +59,16 @@ class BottomNavBarState extends State<MenuScrn>
       const TransactionList(),
       const MonthlyBudgetScreen(),
       ChartsScreen(activationSignal: _chartsActivationSignal),
-      const AiAssistantScreen(reserveBottomNavigationSpace: true),
+      AiAssistantScreen(
+        reserveBottomNavigationSpace: true,
+        onOpenCharts: () => _onItemTapped(3),
+      ),
       const SettingsScreen(),
     ];
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAndCheckRecurring();
+      // Best-effort and silent when the app wasn't installed from Play.
+      AppUpdateService().checkForUpdate();
     });
   }
 
@@ -87,13 +93,21 @@ class BottomNavBarState extends State<MenuScrn>
     // Load persisted data first
     await monthlyBudgetProvider.loadMonthlyData(currentMonth);
 
-    // Check recurring budget
+    // Roll the budget into the new month: carry last month's figures (total
+    // and category split) forward so every month starts tracked, and only
+    // fall back to the recurring amount when there's no earlier month yet.
     if (settings.recurBudget) {
-      final currentBudget = monthlyBudgetProvider.getTotalBudget(currentMonth);
+      final rolledFrom =
+          await monthlyBudgetProvider.rollOverBudget(currentMonth);
 
-      if (currentBudget == 0.0 && settings.defaultIncome > 0) {
-        monthlyBudgetProvider.setTotalBudget(
-            currentMonth, settings.defaultIncome);
+      if (rolledFrom == null) {
+        final currentBudget =
+            monthlyBudgetProvider.getTotalBudget(currentMonth);
+
+        if (currentBudget == 0.0 && settings.defaultIncome > 0) {
+          await monthlyBudgetProvider.setTotalBudget(
+              currentMonth, settings.defaultIncome);
+        }
       }
     }
 
@@ -211,6 +225,23 @@ class BottomNavBarState extends State<MenuScrn>
               },
             ),
           ),
+          // A downloaded update waits here rather than in a dialog: the
+          // install is ready whenever the user is, and nothing blocks the
+          // screen they were using.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              child: ValueListenableBuilder<bool>(
+                valueListenable: AppUpdateService().readyToInstall,
+                builder: (context, ready, _) {
+                  if (!ready) return const SizedBox.shrink();
+                  return _buildUpdateReadyBanner(context);
+                },
+              ),
+            ),
+          ),
         ],
       ),
       floatingActionButton: _selectedIndex == 4
@@ -219,34 +250,66 @@ class BottomNavBarState extends State<MenuScrn>
               onPressed: () => Navigator.of(context).pushNamed(
                 TransactionForm.routeName,
               ),
+              tooltip: 'Add transaction',
               backgroundColor: context.appAccent,
-              elevation: AppDimensions.elevationLarge,
-              shape: const CircleBorder(),
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [
-                      context.appAccent,
-                      context.appAccent.withAlpha(200),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Center(
-                  child: Icon(
-                    Icons.add,
-                    size: 28,
-                    color: Theme.of(context).colorScheme.onPrimary,
-                  ),
-                ),
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
               ),
+              child: const Icon(Icons.add_rounded, size: 28),
             ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: CustomNavBar(
         selectedIndex: _selectedIndex,
         onItemSelected: _onItemTapped,
+      ),
+    );
+  }
+
+  Widget _buildUpdateReadyBanner(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+        border: Border.all(color: context.appAccent.withValues(alpha: 0.4)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.system_update, color: context.appAccent, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Update downloaded. Restart to install.',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: context.textPrimary,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => AppUpdateService().dismiss(),
+            child: const Text('Later'),
+          ),
+          const SizedBox(width: 4),
+          ElevatedButton(
+            onPressed: () => AppUpdateService().completeUpdate(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.appAccent,
+              foregroundColor: Colors.white,
+              visualDensity: VisualDensity.compact,
+            ),
+            child: const Text('Restart'),
+          ),
+        ],
       ),
     );
   }

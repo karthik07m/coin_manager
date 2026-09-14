@@ -111,6 +111,8 @@ class BackupService {
       await _restoreGoals(backupData.goals);
       await _restoreGoalContributions(backupData.goalContributions);
       await _restoreAccounts(backupData.accounts);
+      await _restoreRows('recurring_skips', backupData.recurringSkips);
+      await _restoreRows('activity_log', backupData.activityLog);
       await _restoreSettings(backupData.settings);
 
       // 6. Restore receipt images
@@ -164,11 +166,18 @@ class BackupService {
     // Get all accounts
     final accounts = await transactionsDb.query('accounts');
 
+    // Both live in transactions.db and were previously left out of the
+    // backup entirely: without the skips, every recurring instance the user
+    // deleted comes back as a duplicate after a restore.
+    final recurringSkips = await transactionsDb.query('recurring_skips');
+    final activityLog = await transactionsDb.query('activity_log');
+
     // Get all settings from SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     final settings = <String, dynamic>{};
     final keys = prefs.getKeys();
     for (String key in keys) {
+      if (_isDeviceLocalPref(key)) continue;
       settings[key] = prefs.get(key);
     }
 
@@ -185,6 +194,8 @@ class BackupService {
       goals: goals,
       goalContributions: goalContributions,
       accounts: accounts,
+      recurringSkips: recurringSkips,
+      activityLog: activityLog,
       settings: settings,
     );
   }
@@ -284,6 +295,11 @@ class BackupService {
 
     // Clear accounts
     await transactionDb.delete('accounts');
+
+    // Stale tombstones would suppress instances the restored series should
+    // generate, and a stale log would interleave with the restored history.
+    await transactionDb.delete('recurring_skips');
+    await transactionDb.delete('activity_log');
   }
 
   Future<void> _restoreCategories(List<Map<String, dynamic>> categories) async {
@@ -389,9 +405,33 @@ class BackupService {
     await batch.commit(noResult: true);
   }
 
+  /// Preferences that describe this install, not the user's finances.
+  /// Carrying them across a restore is wrong in both directions: the OS
+  /// notification ids belong to another install, and the FX cache and
+  /// review-prompt counters are per-device state, not data worth keeping.
+  static bool _isDeviceLocalPref(String key) =>
+      key == 'scheduledBillReminderIds' ||
+      key == 'isFirstLaunch' ||
+      key.startsWith('review_') ||
+      key.startsWith('fx_rates_');
+
+  /// Straight row copy into a transactions.db table.
+  Future<void> _restoreRows(
+      String table, List<Map<String, dynamic>> rows) async {
+    if (rows.isEmpty) return;
+    final db = await TransactionDBHelper().database;
+    final batch = db.batch();
+    for (final row in rows) {
+      batch.insert(table, row, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
   Future<void> _restoreSettings(Map<String, dynamic> settings) async {
     final prefs = await SharedPreferences.getInstance();
     for (final key in settings.keys) {
+      // Old backups still carry these; drop them on the way in too.
+      if (_isDeviceLocalPref(key)) continue;
       final value = settings[key];
       if (value is bool) {
         await prefs.setBool(key, value);

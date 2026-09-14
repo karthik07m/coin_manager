@@ -110,11 +110,9 @@ class _NetWorthTrendChartState extends State<NetWorthTrendChart> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('NET WORTH TREND',
-                    style: AppTextStyles.caption.copyWith(
+                Text('Net worth trend',
+                    style: AppTextStyles.sectionTitle.copyWith(
                       color: context.textSecondary,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.1,
                     )),
                 const SizedBox(height: 6),
                 Text(

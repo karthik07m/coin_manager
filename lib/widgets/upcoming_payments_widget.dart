@@ -9,6 +9,7 @@ import '../utilities/constants.dart';
 import '../utilities/functions.dart';
 import '../utilities/theme_helper.dart';
 import '../screens/upcoming_payments_screen.dart';
+import 'tappable.dart';
 
 /// Upcoming bills, professional-app style: a vertical list sorted by due
 /// date (icon · name · due date | amount), an honest 30-day total, and a
@@ -26,12 +27,15 @@ class UpcomingPaymentsWidget extends StatelessWidget {
           settingsProvider, child) {
         final currencySymbol = settingsProvider.currencySymbol;
 
-        // Scope to the next 30 days so the total means what it says.
+        // Scope to the next 30 days so the total means what it says. This card
+        // is specifically money going out — the upcoming list also carries
+        // recurring income, which would make a single netted total meaningless.
+        // Income is shown on the full "This Month" screen instead.
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
         final windowEnd = today.add(const Duration(days: _windowDays));
         final upcoming = transactionProvider.allUpcomingTransactions
-            .where((t) => !t.date.isAfter(windowEnd))
+            .where((t) => t.isExpense && !t.date.isAfter(windowEnd))
             .toList()
           ..sort((a, b) => a.date.compareTo(b.date));
 
@@ -44,14 +48,13 @@ class UpcomingPaymentsWidget extends StatelessWidget {
         final visible = upcoming.take(_maxRows).toList();
         final hiddenCount = upcoming.length - visible.length;
 
-        return GestureDetector(
-          onTap: () {
-            Navigator.of(context).pushNamed(UpcomingPaymentsScreen.routeName);
-          },
+        return Tappable(
+          color: context.appSurfaceLight,
+          borderRadius: AppDimensions.radiusLarge,
+          openPage: const UpcomingPaymentsScreen(),
           child: Container(
             padding: const EdgeInsets.all(AppDimensions.spacing16),
             decoration: BoxDecoration(
-              color: context.appSurfaceLight,
               borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
               border: Border.all(
                 color: context.appAccent.withValues(alpha: 0.2),
@@ -67,10 +70,9 @@ class UpcomingPaymentsWidget extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'UPCOMING PAYMENTS',
-                      style: AppTextStyles.caption.copyWith(
+                      'Upcoming payments',
+                      style: AppTextStyles.sectionTitle.copyWith(
                         color: context.textSecondary,
-                        letterSpacing: 1.2,
                       ),
                     ),
                     Column(

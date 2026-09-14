@@ -23,7 +23,8 @@ enum ActivityEntity {
   account('account', 'Account', Icons.account_balance_wallet_rounded),
   category('category', 'Category', Icons.category_rounded),
   budget('budget', 'Budget', Icons.pie_chart_rounded),
-  goal('goal', 'Goal', Icons.flag_rounded);
+  goal('goal', 'Goal', Icons.flag_rounded),
+  debt('debt', 'Debt', Icons.account_balance_rounded);
 
   final String key;
   final String label;

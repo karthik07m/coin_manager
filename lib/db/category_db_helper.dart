@@ -39,18 +39,41 @@ class DBHelper {
         ''');
         await _insertDefaultCategories(db);
       },
-      version: 2,
+      version: 5,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           // Add Subscriptions category if upgrading from version 1
           await db.insert('categories', {
             'name': 'Subscriptions',
-            'icon': 'assets/categories/bill.png',
+            'icon': 'assets/categories/subscription_d.png',
             'isExpense': 1,
             'budget': null,
             'created_on': null,
             'modified_on': null,
           });
+        }
+        if (oldVersion < 4) {
+          // Upgrade Subscriptions icon to subscription_d.png
+          await db.update(
+            'categories',
+            {'icon': 'assets/categories/subscription_d.png'},
+            where: 'name = ? AND (icon = ? OR icon = ? OR icon = ?)',
+            whereArgs: [
+              'Subscriptions',
+              'assets/categories/bill.png',
+              'assets/categories/bills.png',
+              'assets/categories/subscription.png',
+            ],
+          );
+        }
+        if (oldVersion < 5) {
+          // Upgrade Transit icon to electric_train.png
+          await db.update(
+            'categories',
+            {'icon': 'assets/categories/electric_train.png'},
+            where: 'name = ? AND icon = ?',
+            whereArgs: ['Transit', 'assets/categories/transport.png'],
+          );
         }
       },
     );
@@ -76,7 +99,7 @@ class DBHelper {
       },
       {
         'name': 'Transit',
-        'icon': 'assets/categories/transport.png',
+        'icon': 'assets/categories/electric_train.png',
         'isExpense': 1,
       },
       {
@@ -122,7 +145,7 @@ class DBHelper {
       },
       {
         'name': 'Subscriptions',
-        'icon': 'assets/categories/bill.png',
+        'icon': 'assets/categories/subscription_d.png',
         'isExpense': 1,
       },
     ];

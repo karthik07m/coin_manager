@@ -11,6 +11,10 @@ class BackupData {
   final List<Map<String, dynamic>> goals;
   final List<Map<String, dynamic>> goalContributions;
   final List<Map<String, dynamic>> accounts;
+  /// Tombstones for recurring instances the user deleted. Without them a
+  /// restore lets every deleted instance regenerate as a duplicate.
+  final List<Map<String, dynamic>> recurringSkips;
+  final List<Map<String, dynamic>> activityLog;
   final Map<String, dynamic> settings;
 
   BackupData({
@@ -26,6 +30,8 @@ class BackupData {
     this.goals = const [],
     this.goalContributions = const [],
     required this.accounts,
+    this.recurringSkips = const [],
+    this.activityLog = const [],
     required this.settings,
   });
 
@@ -43,6 +49,8 @@ class BackupData {
       'goals': goals,
       'goal_contributions': goalContributions,
       'accounts': accounts,
+      'recurring_skips': recurringSkips,
+      'activity_log': activityLog,
       'settings': settings,
     };
   }
@@ -66,11 +74,16 @@ class BackupData {
       goalContributions:
           List<Map<String, dynamic>>.from(json['goal_contributions'] ?? []),
       accounts: List<Map<String, dynamic>>.from(json['accounts'] ?? []),
+      // Absent from backups written before 1.1.0 — default to empty rather
+      // than refusing to restore them.
+      recurringSkips:
+          List<Map<String, dynamic>>.from(json['recurring_skips'] ?? []),
+      activityLog: List<Map<String, dynamic>>.from(json['activity_log'] ?? []),
       settings: Map<String, dynamic>.from(json['settings'] ?? {}),
     );
   }
 
-  static const String currentVersion = '1.0.0';
+  static const String currentVersion = '1.1.0';
 }
 
 class BackupInfo {

@@ -8,6 +8,7 @@ import '../utilities/constants.dart';
 import '../utilities/responsive.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/budget_period.dart';
+import 'manage_budget.dart';
 import 'package:intl/intl.dart';
 
 class MonthlyBudgetScreen extends StatefulWidget {
@@ -53,6 +54,24 @@ class _MonthlyBudgetScreenState extends State<MonthlyBudgetScreen> {
   void _selectMonth(DateTime month) {
     setState(() {
       _selectedMonth = DateTime(month.year, month.month);
+      _loadFuture = _fetchData(context, _selectedMonth);
+    });
+  }
+
+  /// Opens the editor for whichever month is on screen, then reloads so the
+  /// numbers here match what was just saved.
+  Future<void> _openBudgetEditor({bool autoAllocate = false}) async {
+    await Navigator.pushNamed(
+      context,
+      '/manageBudget',
+      arguments: ManageBudgetArgs(
+        initialMonth: _selectedMonth,
+        autoAllocate: autoAllocate,
+      ),
+    );
+
+    if (!mounted) return;
+    setState(() {
       _loadFuture = _fetchData(context, _selectedMonth);
     });
   }
@@ -118,14 +137,16 @@ class _MonthlyBudgetScreenState extends State<MonthlyBudgetScreen> {
                       ],
                     ),
                     const SizedBox(height: AppDimensions.spacing16),
-                    SizedBox(
-                      height: 240,
+                    // Sizes to its 12 months instead of being clipped to a
+                    // fixed height — the old 240px box hid Jul–Dec entirely.
+                    Flexible(
                       child: GridView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
+                        shrinkWrap: true,
+                        physics: const ClampingScrollPhysics(),
                         gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 160,
-                          childAspectRatio: 1.8,
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          childAspectRatio: 1.6,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
                         ),
@@ -192,47 +213,6 @@ class _MonthlyBudgetScreenState extends State<MonthlyBudgetScreen> {
         backgroundColor: context.appBackground,
         title: const Text('Monthly Budget'),
         elevation: 0,
-        actions: [
-          // Compact month selector
-          InkWell(
-            onTap: () => _showMonthPicker(context),
-            borderRadius: BorderRadius.circular(AppDimensions.radiusSmall),
-            child: Container(
-              margin: const EdgeInsets.only(right: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: context.appSurfaceLight,
-                borderRadius: BorderRadius.circular(AppDimensions.radiusSmall),
-                border: Border.all(color: AppColors.divider),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.calendar_month,
-                    color: context.appAccent,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    DateFormat('MMM yyyy').format(_selectedMonth),
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: context.appAccent,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.arrow_drop_down,
-                    color: context.appAccent,
-                    size: 18,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
       body: FutureBuilder(
         future: _loadFuture,
@@ -253,9 +233,42 @@ class _MonthlyBudgetScreenState extends State<MonthlyBudgetScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // One explicit editing entry point for the selected month.
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => _showMonthPicker(context),
+                          icon: const Icon(Icons.calendar_month_outlined,
+                              size: 18),
+                          label: Text(
+                              DateFormat('MMM yyyy').format(_selectedMonth)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: context.textPrimary,
+                            minimumSize: const Size(48, 48),
+                          ),
+                        ),
+                        Tooltip(
+                          message:
+                              'Change the total budget and category limits',
+                          child: FilledButton.icon(
+                            onPressed: _openBudgetEditor,
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            label: const Text('Edit budget'),
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(48, 48),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppDimensions.spacing20),
                     // Quick Stats
                     QuickStatsWidget(
                       selectedMonth: _selectedMonth,
+                      onTap: () => _openBudgetEditor(),
                     ),
 
                     const SizedBox(height: AppDimensions.spacing24),

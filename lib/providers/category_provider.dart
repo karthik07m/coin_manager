@@ -1,6 +1,7 @@
 import '../db/category_db_helper.dart';
 import 'package:flutter/material.dart';
 import '../models/category.dart';
+import '../utilities/constants.dart';
 import '../models/activity_log.dart';
 import '../services/activity_logger.dart';
 
@@ -11,6 +12,18 @@ class CategoryProvider with ChangeNotifier {
 
   List<Category> get categories => List.unmodifiable(_categories);
   Map<int, Category> get categoryMap => Map.unmodifiable(_categoryMap);
+
+  /// Loans and repayments are not real spending or income, so they default to
+  /// Miscellaneous rather than the first category (Food / Salary).
+  int miscCategoryId(bool isExpense) {
+    for (final category in _categoryMap.values) {
+      if (category.isExpense == isExpense &&
+          category.name.toLowerCase() == 'miscellaneous') {
+        return category.id!;
+      }
+    }
+    return isExpense ? defaultExpenseCat : defaultIncomeCat;
+  }
 
   /// Fetch categories by `isExpense` type and update local cache
   /// Fetch all categories regardless of `isExpense`

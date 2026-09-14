@@ -14,6 +14,20 @@ class DebtDBHelper {
 
   DebtDBHelper._internal();
 
+  @visibleForTesting
+  Future<Database> openInMemoryDatabaseForTests() async {
+    await _db?.close();
+    _db = await openDatabase(inMemoryDatabasePath,
+        version: 4, onCreate: _onCreate, singleInstance: false);
+    return _db!;
+  }
+
+  @visibleForTesting
+  static Future<void> resetForTests() async {
+    await _db?.close();
+    _db = null;
+  }
+
   // Debts table
   final String debtsTable = 'debts';
   final String columnId = 'id';
@@ -266,6 +280,91 @@ class DebtDBHelper {
 
   // ===== PAYMENT OPERATIONS =====
 
+  /// Every transaction booked from the Debt Tracker, with the debt it belongs
+  /// to. Loan bookings sit on the debt row, repayments on the payment row.
+  Future<List<Map<String, dynamic>>> getTransactionLinks() async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT d.transaction_id AS transaction_id, d.id AS debt_id,
+             d.debtor_name AS debtor_name, d.is_liability AS is_liability,
+             0 AS is_payment
+      FROM $debtsTable d WHERE d.transaction_id IS NOT NULL
+      UNION ALL
+      SELECT p.transaction_id, d.id, d.debtor_name, d.is_liability, 1
+      FROM $paymentsTable p JOIN $debtsTable d ON d.id = p.$paymentColumnDebtId
+      WHERE p.transaction_id IS NOT NULL
+    ''');
+  }
+
+  /// Called when a transaction is deleted anywhere in the app. A loan booking
+  /// leaves its debt in place but unbooked; a repayment is reversed so the
+  /// debt balance matches the money that actually moved. No-op if unlinked.
+  Future<void> detachTransaction(String transactionId) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.update(
+          debtsTable, {columnTransactionId: null, columnAccountId: null},
+          where: '$columnTransactionId = ?', whereArgs: [transactionId]);
+      final payments = await txn.query(paymentsTable,
+          where: '$paymentColumnTransactionId = ?', whereArgs: [transactionId]);
+      for (final row in payments) {
+        final payment = DebtPayment.fromMap(row);
+        await txn.delete(paymentsTable,
+            where: '$paymentColumnId = ?', whereArgs: [payment.id]);
+        final rows = await txn.query(debtsTable,
+            where: '$columnId = ?', whereArgs: [payment.debtId]);
+        if (rows.isEmpty) continue;
+        final debt = Debt.fromMap(rows.single);
+        debt.amountPaid =
+            (debt.amountPaid - payment.amount).clamp(0, double.infinity);
+        debt.updateStatus();
+        debt.modifiedOn = DateTime.now();
+        await txn.update(debtsTable, debt.toMap(),
+            where: '$columnId = ?', whereArgs: [debt.id]);
+      }
+    });
+  }
+
+  /// A transaction can represent one loan or one repayment, never both.
+  Future<Set<String>> getLinkedTransactionIds() async {
+    final db = await database;
+    final rows = await db.rawQuery('''
+      SELECT transaction_id FROM debts WHERE transaction_id IS NOT NULL
+      UNION
+      SELECT transaction_id FROM debt_payments WHERE transaction_id IS NOT NULL
+    ''');
+    return rows.map((row) => row['transaction_id'] as String).toSet();
+  }
+
+  /// Validate against the stored balance and commit the payment and balance
+  /// together. A rejected/duplicate payment must leave neither half behind.
+  Future<bool> recordPayment(DebtPayment payment) async {
+    if (!payment.amount.isFinite || payment.amount <= 0) return false;
+    final db = await database;
+    return db.transaction((txn) async {
+      final rows = await txn.query(debtsTable,
+          where: '$columnId = ?', whereArgs: [payment.debtId]);
+      if (rows.isEmpty) return false;
+      final debt = Debt.fromMap(rows.single);
+      if (payment.amount > debt.getRemainingAmount() + 0.005) return false;
+      if (payment.transactionId != null) {
+        final links = await txn.rawQuery('''
+          SELECT id FROM debts WHERE transaction_id = ?
+          UNION ALL
+          SELECT id FROM debt_payments WHERE transaction_id = ?
+        ''', [payment.transactionId, payment.transactionId]);
+        if (links.isNotEmpty) return false;
+      }
+      await txn.insert(paymentsTable, payment.toMap());
+      debt.amountPaid += payment.amount;
+      debt.updateStatus();
+      debt.modifiedOn = DateTime.now();
+      await txn.update(debtsTable, debt.toMap(),
+          where: '$columnId = ?', whereArgs: [debt.id]);
+      return true;
+    });
+  }
+
   Future<int> insertPayment(DebtPayment payment) async {
     var dbClient = await database;
     try {
@@ -301,6 +400,23 @@ class DebtDBHelper {
       debugPrint('DebtDB error: $e');
       return -1;
     }
+  }
+
+  Future<DebtPayment?> getPaymentById(String id) async {
+    var dbClient = await database;
+    try {
+      List<Map<String, dynamic>> maps = await dbClient.query(
+        paymentsTable,
+        where: '$paymentColumnId = ?',
+        whereArgs: [id],
+      );
+      if (maps.isNotEmpty) {
+        return DebtPayment.fromMap(maps.first);
+      }
+    } catch (e) {
+      debugPrint('DebtDB error: $e');
+    }
+    return null;
   }
 
   // ===== STATISTICS =====

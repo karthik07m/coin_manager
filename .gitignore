@@ -46,8 +46,13 @@ app.*.map.json
 /android/app/release
 
 # iCloud sync duplicates (this project previously lived in an iCloud-synced
-# folder; these "name 2.ext" copies corrupt builds and must never be tracked)
-* 2
-* 2.*
-**/* 2
-**/* 2.*
+# folder; these "name 2.ext" copies corrupt builds and must never be tracked).
+# The counter keeps climbing past 2, so match any " <number>" suffix.
+* [0-9]
+* [0-9].*
+* [0-9][0-9]
+* [0-9][0-9].*
+**/* [0-9]
+**/* [0-9].*
+**/* [0-9][0-9]
+**/* [0-9][0-9].*

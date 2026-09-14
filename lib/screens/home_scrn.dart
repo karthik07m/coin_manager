@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/india_setup_card.dart';
 import 'package:provider/provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/category_provider.dart';
@@ -21,6 +22,7 @@ import 'package:flutter/services.dart';
 import '../models/account.dart';
 import 'account_management_screen.dart';
 import 'all_transactions_screen.dart';
+import '../widgets/tappable.dart';
 
 class HomePage extends StatefulWidget {
   final Function(int)? onTabSelected;
@@ -115,14 +117,14 @@ class _HomePageState extends State<HomePage> {
               // stretch to uncomfortable widths; a no-op on phones.
               child: context.constrainedContent(
                 transactionProvider.isTransactionsLoaded
-                  ? _buildContent(
-                      context,
-                      transactionProvider,
-                      settingsProvider,
-                      totalIncome,
-                      totalExpenses,
-                    )
-                  : _buildShimmer(context, settingsProvider),
+                    ? _buildContent(
+                        context,
+                        transactionProvider,
+                        settingsProvider,
+                        totalIncome,
+                        totalExpenses,
+                      )
+                    : _buildShimmer(context, settingsProvider),
               ),
             ),
           );
@@ -258,15 +260,48 @@ class _HomePageState extends State<HomePage> {
     double totalExpenses,
   ) {
     if (!settingsProvider.hasVisibleHomeWidgets) {
-      return _buildAllWidgetsHiddenState(context);
+      return Column(children: [
+        const IndiaSetupCard(),
+        _buildAllWidgetsHiddenState(context),
+      ]);
     }
-    final accentColor = Theme.of(context).colorScheme.primary;
-
     return Column(
       children: [
         const SizedBox(height: AppDimensions.spacing16),
 
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Your overview',
+                        style: AppTextStyles.h2.copyWith(
+                            color: context.textPrimary, letterSpacing: -0.6)),
+                    const SizedBox(height: 4),
+                    Text('A little clarity for your money.',
+                        style: AppTextStyles.bodyMedium
+                            .copyWith(color: context.textSecondary)),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: context.appAccentSurface,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(Icons.account_balance_wallet_outlined,
+                    color: context.appAccent, size: 24),
+              ),
+            ],
+          ),
+        ),
+
         // Balance Card
+        const IndiaSetupCard(),
         if (settingsProvider.showHomeBalanceCard) ...[
           RepaintBoundary(
             child: BalanceCard(
@@ -291,18 +326,10 @@ class _HomePageState extends State<HomePage> {
 
         // Budget Quick Stats
         if (settingsProvider.showHomeQuickStats) ...[
-          Container(
-            margin: const EdgeInsets.symmetric(
+          // The widget draws its own card so its ripple fills it edge to edge.
+          Padding(
+            padding: const EdgeInsets.symmetric(
               horizontal: AppDimensions.spacing16,
-            ),
-            padding: const EdgeInsets.all(AppDimensions.spacing16),
-            decoration: BoxDecoration(
-              color: context.appSurfaceLight,
-              borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-              border: Border.all(
-                color: accentColor.withValues(alpha: 0.2),
-                width: 1,
-              ),
             ),
             child: QuickStatsWidget(
               onTabSelected: widget.onTabSelected,
@@ -351,12 +378,9 @@ class _HomePageState extends State<HomePage> {
             ),
             padding: const EdgeInsets.all(AppDimensions.spacing16),
             decoration: BoxDecoration(
-              color: context.appSurfaceLight,
+              color: context.appSurface,
               borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-              border: Border.all(
-                color: accentColor.withValues(alpha: 0.2),
-                width: 1,
-              ),
+              border: context.cardBorder,
             ),
             child: RepaintBoundary(
               child: BudgetExpensesChartWidget(
@@ -375,12 +399,9 @@ class _HomePageState extends State<HomePage> {
             ),
             padding: const EdgeInsets.all(AppDimensions.spacing16),
             decoration: BoxDecoration(
-              color: context.appSurfaceLight,
+              color: context.appSurface,
               borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-              border: Border.all(
-                color: accentColor.withValues(alpha: 0.2),
-                width: 1,
-              ),
+              border: context.cardBorder,
             ),
             child: RecentTransactionsWidget(
               onTabSelected: widget.onTabSelected,
@@ -393,19 +414,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildAllWidgetsHiddenState(BuildContext context) {
-    final accentColor = Theme.of(context).colorScheme.primary;
     return Padding(
       padding: const EdgeInsets.all(AppDimensions.spacing16),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(AppDimensions.spacing24),
         decoration: BoxDecoration(
-          color: context.appSurfaceLight,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-          border: Border.all(
-            color: accentColor.withValues(alpha: 0.2),
-            width: 1,
-          ),
+          border: context.cardBorder,
         ),
         child: Column(
           children: [
@@ -456,10 +473,9 @@ class _HomePageState extends State<HomePage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'ACCOUNTS',
-                    style: AppTextStyles.caption.copyWith(
+                    'Accounts',
+                    style: AppTextStyles.sectionTitle.copyWith(
                       color: context.textSecondary,
-                      letterSpacing: 1.2,
                     ),
                   ),
                   TextButton(
@@ -493,97 +509,94 @@ class _HomePageState extends State<HomePage> {
                   final acc = accounts[index];
                   final color = Color(Account.colorFromHex(acc.color));
                   final isLiability = acc.type.isLiability;
-                  
+
                   // Get currency symbol (either account-specific or system default)
                   final currencySymbol = acc.currency.isNotEmpty
                       ? currencySymbolForCode(acc.currency)
-                      : Provider.of<SettingsProvider>(context, listen: false).currencySymbol;
+                      : Provider.of<SettingsProvider>(context, listen: false)
+                          .currencySymbol;
 
                   return Container(
                     margin: const EdgeInsets.only(right: 12),
-                    width: 154,
-                    child: Material(
-                      color: color.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(16),
-                      child: InkWell(
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => AllTransactionsScreen(
-                                initialAccountId: acc.id,
-                                initialStartDate: DateTime(2000, 1, 1),
-                                initialEndDate: DateTime.now(),
+                    // 168, not 154: Inter sets wider than Roboto, and the
+                    // default "Bank Account" name began to ellipsize.
+                    width: 168,
+                    child: Tappable(
+                      // Opaque tint (no compositing layer): the account's
+                      // colour now lives in the fill, not in an outline.
+                      color: Color.alphaBlend(
+                        color.withValues(alpha: context.isDark ? 0.05 : 0.07),
+                        context.appSurface,
+                      ),
+                      borderRadius: 16,
+                      pressedScale: 0.95,
+                      onTap: () => HapticFeedback.selectionClick(),
+                      openPage: AllTransactionsScreen(
+                        initialAccountId: acc.id,
+                        initialStartDate: DateTime(2000, 1, 1),
+                        initialEndDate: DateTime.now(),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.all(AppDimensions.spacing12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: context.cardBorder,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 14,
+                                  backgroundColor:
+                                      color.withValues(alpha: 0.12),
+                                  child: Icon(
+                                    _getAccountIcon(acc.icon),
+                                    size: 14,
+                                    color: color,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    acc.name,
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: context.textPrimary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            Text(
+                              UtilityFunction.formatMoney(
+                                acc.currentBalance,
+                                symbol: currencySymbol,
+                                showDecimals: true,
+                              ),
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                color: isLiability
+                                    ? AppColors.negative
+                                    : context.textPrimary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              isLiability ? 'Amount Owed' : 'Balance',
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.textSecondary,
+                                fontSize: 9,
                               ),
                             ),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          padding: const EdgeInsets.all(AppDimensions.spacing12),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: color.withValues(alpha: 0.15),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 14,
-                                    backgroundColor: color.withValues(alpha: 0.12),
-                                    child: Icon(
-                                      _getAccountIcon(acc.icon),
-                                      size: 14,
-                                      color: color,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      acc.name,
-                                      style: AppTextStyles.bodyMedium.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: context.textPrimary,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const Spacer(),
-                              Text(
-                                UtilityFunction.formatMoney(
-                                  acc.currentBalance,
-                                  symbol: currencySymbol,
-                                  showDecimals: true,
-                                ),
-                                style: AppTextStyles.bodyLarge.copyWith(
-                                  color: isLiability
-                                      ? AppColors.negative
-                                      : context.textPrimary,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                isLiability ? 'Amount Owed' : 'Balance',
-                                style: AppTextStyles.caption.copyWith(
-                                  color: context.textSecondary,
-                                  fontSize: 9,
-                                ),
-                              ),
-                            ],
-                          ),
+                          ],
                         ),
                       ),
                     ),

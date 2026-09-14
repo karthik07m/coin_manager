@@ -314,7 +314,7 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
           ),
           IconButton(
             tooltip: 'Delete',
-            icon: const Icon(Icons.delete_outline, color: AppColors.negative),
+            icon: Icon(Icons.delete_outline, color: AppColors.negative),
             onPressed: _busy ? null : () => _delete(b),
           ),
         ],
@@ -333,7 +333,7 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline, color: AppColors.negative, size: 20),
+          Icon(Icons.error_outline, color: AppColors.negative, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Text(_error!,

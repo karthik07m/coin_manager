@@ -47,5 +47,20 @@
 	<true/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Coinly uses Face ID to unlock the app and keep your financial data private.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Coinly uses the camera so you can photograph receipts and attach them to your transactions.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Coinly needs access to your photos so you can attach an existing receipt image to a transaction.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.861917279081-b3dakauru5u21ecu9amu28tq65ah210h</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

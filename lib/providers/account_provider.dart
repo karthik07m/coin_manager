@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/account.dart';
+import '../utilities/functions.dart';
 import '../models/activity_log.dart';
 import '../services/activity_logger.dart';
 import '../services/exchange_rate_service.dart';
@@ -69,6 +70,15 @@ class AccountProvider extends ChangeNotifier {
   /// The account's current balance expressed in the base currency.
   double balanceInBase(Account a) => _toBase(a.currentBalance, a.currency);
 
+  /// The currency an account holds. Accounts created before per-account
+  /// currencies existed have an empty value and are treated as base currency,
+  /// so two such accounts still compare equal.
+  String currencyOfAccount(int accountId) {
+    final acc = getAccountById(accountId);
+    final code = acc?.currency ?? '';
+    return code.isEmpty ? _baseCurrency : code;
+  }
+
   /// Convert an [amount] belonging to account [accountId] into the base
   /// currency. Returns [amount] unchanged for base-currency accounts, unknown
   /// accounts, or when rates aren't loaded — so single-currency stays exact.
@@ -122,12 +132,15 @@ class AccountProvider extends ChangeNotifier {
           orElse: () => _accounts.first,
         );
       }
-      _isLoaded = true; // Set loaded first
-      notifyListeners();
-
-      // Calculate current balances from transactions (async, non-blocking)
+      // Calculate current balances from transactions BEFORE notifying
+      // listeners. Account.fromMap sets currentBalance = initialBalance,
+      // which can be a back-calculated negative value after balance edits.
+      // Notifying before recalculation caused the UI to briefly flash the
+      // wrong (initialBalance) value — e.g. a negative number that would
+      // then correct itself once the real balance was computed.
       await _calculateAllBalances();
-      notifyListeners(); // Update UI after balance calculation
+      _isLoaded = true;
+      notifyListeners();
       // An account's currency may have changed — refresh transaction totals
       // so multi-currency reporting stays in sync.
       onRatesChanged?.call();
@@ -185,11 +198,22 @@ class AccountProvider extends ChangeNotifier {
   }
 
   // Update an account
-  Future<bool> updateAccount(Account account) async {
+  /// [previousBalance] is only for the history entry: the caller mutates the
+  /// account in place, so the old figure is gone by the time we get here.
+  Future<bool> updateAccount(Account account, {double? previousBalance}) async {
     try {
       final result = await _dbHelper.updateAccount(account);
       if (result > 0) {
-        ActivityLogger().updated(ActivityEntity.account, account.name);
+        final newBalance = account.currentBalance;
+        final changed = previousBalance != null &&
+            (previousBalance - newBalance).abs() > 0.005;
+        ActivityLogger().updated(
+          ActivityEntity.account,
+          changed
+              ? '${account.name}: ${UtilityFunction.formatMoney(previousBalance, showDecimals: true)} → ${UtilityFunction.formatMoney(newBalance, showDecimals: true)}'
+              : account.name,
+          amount: changed ? newBalance : null,
+        );
         await loadAccounts(); // Reload to reflect changes
         return true;
       }
@@ -201,17 +225,20 @@ class AccountProvider extends ChangeNotifier {
   }
 
   // Delete an account
-  Future<bool> deleteAccount(int id) async {
-    try {
-      // Check if account has transactions
-      final hasTransactions = await _dbHelper.hasTransactions(id);
-      if (hasTransactions) {
-        debugPrint('Cannot delete account with transactions');
-        return false;
-      }
+  /// How many transactions would be affected by deleting this account —
+  /// including transfers that merely *land* here, which would otherwise be
+  /// left pointing at an account that no longer exists.
+  Future<int> transactionCountFor(int id) =>
+      _dbHelper.countTransactionsForAccount(id);
 
+  /// Deletes an account. When it still has transactions the caller must say
+  /// what happens to them: pass [reassignToAccountId] to move them to another
+  /// account, or leave it null to delete them alongside the account.
+  Future<bool> deleteAccount(int id, {int? reassignToAccountId}) async {
+    try {
       final deletedName = getAccountById(id)?.name ?? 'Account';
-      final result = await _dbHelper.deleteAccount(id);
+      final result =
+          await _dbHelper.deleteAccount(id, reassignToAccountId: reassignToAccountId);
       if (result > 0) {
         ActivityLogger().deleted(ActivityEntity.account, deletedName);
         await loadAccounts(); // Reload after deletion
@@ -281,8 +308,8 @@ class AccountProvider extends ChangeNotifier {
   /// credit stay live. No-op until accounts have been loaded at least once.
   Future<void> refreshBalances() async {
     if (!_isLoaded) return;
-    await _calculateAllBalances();
-    notifyListeners();
+    // Force a full reload of accounts to ensure UI rebuilds with fresh object references
+    await loadAccounts();
   }
 
   // Recalculate balance for a specific account

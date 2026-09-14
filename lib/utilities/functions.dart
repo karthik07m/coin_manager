@@ -32,7 +32,7 @@ class UtilityFunction {
       case 3:
         return 'assets/categories/shopping.png';
       case 4:
-        return 'assets/categories/transport.png';
+        return 'assets/categories/electric_train.png';
       case 5:
         return 'assets/categories/entertainment.png';
       case 6:
@@ -56,12 +56,13 @@ class UtilityFunction {
             {'name': 'Food', 'icon': 'assets/categories/food.png'},
             {'name': 'Groceries', 'icon': 'assets/categories/groceries.png'},
             {'name': 'Shopping', 'icon': 'assets/categories/shopping.png'},
-            {'name': 'Transit', 'icon': 'assets/categories/transport.png'},
+            {'name': 'Transit', 'icon': 'assets/categories/electric_train.png'},
             {
               'name': 'Entertainment',
               'icon': 'assets/categories/entertainment.png'
             },
             {'name': 'Utilities', 'icon': 'assets/categories/bill.png'},
+            {'name': 'Subscriptions', 'icon': 'assets/categories/subscription_d.png'},
             {'name': 'Travel', 'icon': 'assets/categories/travel.png'},
             {'name': 'Miscellaneous', 'icon': 'assets/categories/other.png'},
           ]
@@ -196,6 +197,13 @@ class UtilityFunction {
     required String? code,
     required bool showDecimals,
   }) {
+    // Defense in depth: the keypads already block amounts past kMaxAmount,
+    // but any other path (CSV import, a future feature) that hands a huge or
+    // non-finite value here would otherwise render as raw scientific
+    // notation ("$1e+21") instead of a real number.
+    if (!value.isFinite) value = 0;
+    value = value.clamp(-kMaxAmount, kMaxAmount);
+
     final currency = _resolveCurrency(symbol, code);
     // A currency without minor units never shows decimals, even when the
     // caller asks for them.
@@ -257,6 +265,9 @@ class UtilityFunction {
     String? symbol,
     String? currencyCode,
   }) {
+    if (!value.isFinite) value = 0;
+    value = value.clamp(-kMaxAmount, kMaxAmount);
+
     final sym = symbol ?? _activeSymbol;
     final currency = _resolveCurrency(sym, currencyCode);
     if (currency.indianGrouping) {

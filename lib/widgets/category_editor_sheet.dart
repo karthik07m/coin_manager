@@ -192,12 +192,11 @@ class _CategoryEditorPageState extends State<_CategoryEditorPage> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 22, 20, 4),
               child: Text(
-                'ICON',
+                'Icon',
                 style: AppTextStyles.caption.copyWith(
                   color: context.textSecondary,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: 1.2,
                 ),
               ),
             ),

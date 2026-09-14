@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../models/budget_scope.dart';
 import '../utilities/budget_period.dart';
 
 class MonthlyBudgetDBHelper {
@@ -21,14 +23,75 @@ class MonthlyBudgetDBHelper {
     return _database!;
   }
 
+  /// Opens an in-memory database using the real schema, so budget storage —
+  /// including the v1 to v2 scope migration — can be tested without a device.
+  /// Tests must set `databaseFactory = databaseFactoryFfi` first.
+  ///
+  /// Pass [path] to use a file instead, which is required for migration tests:
+  /// an in-memory database is discarded when its connection closes, so it
+  /// cannot be reopened at a higher version.
+  @visibleForTesting
+  Future<Database> openInMemoryDatabaseForTests({
+    int version = 2,
+    String? path,
+  }) async {
+    await _database?.close();
+    _database = await openDatabase(
+      path ?? inMemoryDatabasePath,
+      version: version,
+      onCreate: version == 1 ? _onCreateV1 : _onCreate,
+      onUpgrade: _onUpgrade,
+    );
+    return _database!;
+  }
+
+  /// The v1 schema, kept so migration tests start from what shipped rather
+  /// than from a hand-written approximation.
+  Future<void> _onCreateV1(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE budget_values(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category_name TEXT,
+        month_key TEXT,
+        amount REAL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE budget_totals(
+        month_key TEXT PRIMARY KEY,
+        total_amount REAL
+      )
+    ''');
+  }
+
+  /// Reopens an existing in-memory database at a higher version to exercise
+  /// [_onUpgrade]. sqflite runs migrations on open, so the handle is swapped.
+  @visibleForTesting
+  Future<Database> reopenAtVersionForTests(String path, int version) async {
+    _database = await openDatabase(
+      path,
+      version: version,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
+    return _database!;
+  }
+
+  @visibleForTesting
+  static Future<void> resetForTests() async {
+    await _database?.close();
+    _database = null;
+  }
+
   Future<Database> _initDatabase() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'monthly_budget.db');
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -47,10 +110,27 @@ class MonthlyBudgetDBHelper {
     await db.execute('''
       CREATE TABLE budget_totals(
         month_key TEXT PRIMARY KEY,
-        total_amount REAL
+        total_amount REAL,
+        scope TEXT
       )
     ''');
   }
+
+  /// v2 adds `scope`: whether a month's budget is measured against all
+  /// spending or only the categories it budgets. Existing rows keep NULL,
+  /// which reads back as [BudgetScope.allExpenses] — the old behaviour.
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      final columns = await db.rawQuery('PRAGMA table_info(budget_totals)');
+      final hasScope = columns.any((col) => col['name'] == 'scope');
+      if (!hasScope) {
+        await db.execute('ALTER TABLE budget_totals ADD COLUMN scope TEXT');
+      }
+    }
+  }
+
+  /// Canonical month key shape: `YYYY-MM`.
+  static final RegExp _monthKeyPattern = RegExp(r'^\d{4}-\d{2}$');
 
   String? _legacyMonthKey(String month) {
     final parts = month.split('-');
@@ -123,11 +203,46 @@ class MonthlyBudgetDBHelper {
   // Insert or Update Total Monthly Budget
   Future<void> setTotalBudget(String month, double amount) async {
     final db = await database;
-    await db.insert(
+    // UPDATE first, then INSERT: a replace-insert would drop the row's scope,
+    // silently reverting a category-scoped budget to counting everything.
+    final updated = await db.update(
       'budget_totals',
-      {'month_key': month, 'total_amount': amount},
-      conflictAlgorithm: ConflictAlgorithm.replace,
+      {'total_amount': amount},
+      where: 'month_key = ?',
+      whereArgs: [month],
     );
+
+    if (updated == 0) {
+      await db.insert(
+        'budget_totals',
+        {'month_key': month, 'total_amount': amount},
+      );
+    }
+  }
+
+  /// How a month's budget is measured. Months saved before scopes existed
+  /// read back as [BudgetScope.allExpenses].
+  Future<BudgetScope> getBudgetScope(String month) async {
+    final db = await database;
+    var maps = await db.query(
+      'budget_totals',
+      columns: ['scope'],
+      where: 'month_key = ?',
+      whereArgs: [month],
+    );
+
+    final legacyKey = _legacyMonthKey(month);
+    if (maps.isEmpty && legacyKey != null) {
+      maps = await db.query(
+        'budget_totals',
+        columns: ['scope'],
+        where: 'month_key = ?',
+        whereArgs: [legacyKey],
+      );
+    }
+
+    if (maps.isEmpty) return BudgetScope.allExpenses;
+    return BudgetScope.fromStorage(maps.first['scope']);
   }
 
   // Get Total Monthly Budget
@@ -180,6 +295,131 @@ class MonthlyBudgetDBHelper {
     return budgets;
   }
 
+  /// Writes a whole month in one transaction so a budget is never left half
+  /// saved: either the total and every category land together, or none do.
+  Future<void> saveMonthBudget({
+    required String month,
+    required double totalAmount,
+    required Map<String, double> categoryBudgets,
+    required BudgetScope scope,
+  }) async {
+    final db = await database;
+
+    await db.transaction((txn) async {
+      await txn.insert(
+        'budget_totals',
+        {
+          'month_key': month,
+          'total_amount': totalAmount,
+          'scope': scope.storageValue,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      for (final entry in categoryBudgets.entries) {
+        final updated = await txn.update(
+          'budget_values',
+          {'amount': entry.value},
+          where: 'category_name = ? AND month_key = ?',
+          whereArgs: [entry.key, month],
+        );
+
+        if (updated == 0) {
+          await txn.insert(
+            'budget_values',
+            {
+              'category_name': entry.key,
+              'month_key': month,
+              'amount': entry.value,
+            },
+          );
+        }
+      }
+    });
+  }
+
+  /// Every month with a budget on record, newest first. Legacy
+  /// month-number-only keys are skipped — they can't be placed on a timeline.
+  Future<List<String>> getBudgetedMonthKeys() async {
+    final db = await database;
+    final keys = <String>{};
+
+    void collect(List<Map<String, dynamic>> rows) {
+      for (final row in rows) {
+        final key = row['month_key'] as String?;
+        if (key != null && _monthKeyPattern.hasMatch(key)) {
+          keys.add(key);
+        }
+      }
+    }
+
+    collect(await db.query(
+      'budget_totals',
+      columns: ['month_key'],
+      where: 'total_amount > 0',
+    ));
+    collect(await db.query(
+      'budget_values',
+      columns: ['month_key'],
+      where: 'amount > 0',
+      distinct: true,
+    ));
+
+    final sorted = keys.toList()..sort((a, b) => b.compareTo(a));
+    return sorted;
+  }
+
+  /// Most recent month before [month] that has a budget, or null on a first
+  /// run. Month keys are zero padded, so plain string ordering is date order.
+  Future<String?> latestBudgetedMonthBefore(String month) async {
+    for (final key in await getBudgetedMonthKeys()) {
+      if (key.compareTo(month) < 0) return key;
+    }
+    return null;
+  }
+
+  /// Wipes a month back to "no budget set". Legacy rows for the same calendar
+  /// month go too, otherwise the read fallback would resurrect them.
+  Future<void> clearMonth(String month) async {
+    final db = await database;
+    final legacyKey = _legacyMonthKey(month);
+    final keys = <String>[month, if (legacyKey != null) legacyKey];
+    final placeholders = List.filled(keys.length, '?').join(', ');
+
+    await db.transaction((txn) async {
+      await txn.delete(
+        'budget_values',
+        where: 'month_key IN ($placeholders)',
+        whereArgs: keys,
+      );
+      await txn.delete(
+        'budget_totals',
+        where: 'month_key IN ($placeholders)',
+        whereArgs: keys,
+      );
+    });
+  }
+
+  /// Replaces [toMonth]'s budget with [fromMonth]'s.
+  Future<void> copyBudget({
+    required String fromMonth,
+    required String toMonth,
+  }) async {
+    if (fromMonth == toMonth) return;
+
+    final totalBudget = await getTotalBudget(fromMonth);
+    final categoryBudgets = await getAllBudgetsForMonth(fromMonth);
+    final scope = await getBudgetScope(fromMonth);
+
+    await clearMonth(toMonth);
+    await saveMonthBudget(
+      month: toMonth,
+      totalAmount: totalBudget,
+      categoryBudgets: categoryBudgets,
+      scope: scope,
+    );
+  }
+
   // Copy Budget to Next Month
   Future<void> copyBudgetToNextMonth(String currentMonth) async {
     final currentParts = currentMonth.split('-');
@@ -192,20 +432,6 @@ class MonthlyBudgetDBHelper {
         : DateTime(DateTime.now().year, int.parse(currentMonth), 1);
     final nextMonth = BudgetPeriod.keyFor(BudgetPeriod.nextMonth(currentDate));
 
-    // Get current month's total budget
-    final totalBudget = await getTotalBudget(currentMonth);
-
-    // Get all category budgets for current month
-    final categoryBudgets = await getAllBudgetsForMonth(currentMonth);
-
-    // Copy total budget to next month
-    if (totalBudget > 0) {
-      await setTotalBudget(nextMonth, totalBudget);
-    }
-
-    // Copy all category budgets to next month
-    for (var entry in categoryBudgets.entries) {
-      await setBudget(entry.key, nextMonth, entry.value);
-    }
+    await copyBudget(fromMonth: currentMonth, toMonth: nextMonth);
   }
 }

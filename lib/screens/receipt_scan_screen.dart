@@ -306,12 +306,9 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'EXTRACTED INFORMATION',
-                    style: AppTextStyles.caption.copyWith(
+                    'Extracted information',
+                    style: AppTextStyles.sectionTitle.copyWith(
                       color: context.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.2,
                     ),
                   ),
                 ],

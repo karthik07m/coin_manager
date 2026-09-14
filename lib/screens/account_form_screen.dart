@@ -3,9 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/account_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/transaction_provider.dart';
 import '../models/account.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
+
+/// Sentinels for the "what happens to the transactions?" dialog, which
+/// otherwise returns the id of the account to move them to.
+const int _kDeleteCancelled = -1;
+const int _kDeleteTransactions = -2;
 
 class AccountFormScreen extends StatefulWidget {
   static const routeName = '/account-form';
@@ -123,6 +129,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
         // transaction delta (income - expense) using the OLD type's sign, then
         // set an opening balance so the new type yields the entered current
         // balance — correct even when switching asset <-> liability.
+        final previousBalance = _existingAccount!.currentBalance;
         final oldSign = _existingAccount!.isLiability ? -1.0 : 1.0;
         final txnDelta =
             (_existingAccount!.currentBalance - _existingAccount!.initialBalance) *
@@ -139,7 +146,8 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
 
         final newSign = _existingAccount!.isLiability ? -1.0 : 1.0;
         _existingAccount!.initialBalance = enteredBalance - newSign * txnDelta;
-        success = await accountProvider.updateAccount(_existingAccount!);
+        success = await accountProvider.updateAccount(_existingAccount!,
+            previousBalance: previousBalance);
       } else {
         // Create new account — entered figure is the opening balance.
         final newAccount = Account.createNew(
@@ -182,7 +190,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
         Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Failed to save account'),
             backgroundColor: AppColors.negative,
           ),
@@ -194,69 +202,180 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
   Future<void> _deleteAccount() async {
     if (_existingAccount == null) return;
 
-    final confirmed = await showDialog<bool>(
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
+    final accountId = _existingAccount!.id!;
+    final count = await accountProvider.transactionCountFor(accountId);
+    if (!mounted) return;
+
+    // An account with history can't just vanish — its transactions have to go
+    // somewhere, or they'd keep counting toward spending with no account
+    // behind them. Ask where they should land.
+    final int? moveTo = count > 0
+        ? await _askWhatHappensToTransactions(accountId, count)
+        : null;
+    if (!mounted) return;
+
+    if (count > 0 && moveTo == _kDeleteCancelled) return;
+
+    if (count == 0) {
+      final confirmed = await _confirmSimpleDelete();
+      if (confirmed != true || !mounted) return;
+    }
+
+    final success = await accountProvider.deleteAccount(
+      accountId,
+      reassignToAccountId: moveTo == _kDeleteTransactions ? null : moveTo,
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      // The in-memory transaction list still holds the rows we just moved or
+      // removed; pull a fresh copy so totals and lists agree with the DB.
+      await Provider.of<TransactionProvider>(context, listen: false)
+          .loadTransactionsFromDB();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            moveTo == null || moveTo == _kDeleteTransactions
+                ? 'Account deleted'
+                : 'Account deleted — transactions moved',
+          ),
+          backgroundColor: AppColors.positive,
+        ),
+      );
+      Navigator.pop(context);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not delete this account'),
+          backgroundColor: AppColors.negative,
+        ),
+      );
+    }
+  }
+
+  Future<bool?> _confirmSimpleDelete() {
+    return showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: context.appSurface,
         title: Row(
           children: [
-            const Icon(Icons.warning, color: AppColors.negative, size: 24),
+            Icon(Icons.warning, color: AppColors.negative, size: 24),
             const SizedBox(width: 8),
-            Text('Delete Account', style: AppTextStyles.h3),
+            Text('Delete account', style: AppTextStyles.h3),
           ],
         ),
         content: Text(
-          'Are you sure you want to delete this account? This action cannot be undone if there are no transactions associated with it.',
+          'This account has no transactions. Deleting it can\'t be undone.',
           style: AppTextStyles.bodyMedium,
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              'Cancel',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: context.textSecondary,
-              ),
-            ),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text('Cancel',
+                style: AppTextStyles.bodyMedium
+                    .copyWith(color: context.textSecondary)),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              'Delete',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.negative,
-              ),
-            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text('Delete',
+                style: AppTextStyles.bodyMedium
+                    .copyWith(color: AppColors.negative)),
           ),
         ],
       ),
     );
+  }
 
-    if (confirmed == true && mounted) {
-      final accountProvider =
-          Provider.of<AccountProvider>(context, listen: false);
-      final success =
-          await accountProvider.deleteAccount(_existingAccount!.id!);
+  /// Returns the id of the account to move transactions to,
+  /// [_kDeleteTransactions] to delete them too, or [_kDeleteCancelled].
+  Future<int> _askWhatHappensToTransactions(int accountId, int count) async {
+    final others = Provider.of<AccountProvider>(context, listen: false)
+        .accounts
+        .where((a) => a.id != accountId)
+        .toList();
 
-      if (!mounted) return;
-
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account deleted successfully'),
-            backgroundColor: AppColors.positive,
+    final result = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: context.appSurface,
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                color: AppColors.warning, size: 24),
+            const SizedBox(width: 8),
+            Expanded(
+                child: Text('Delete account', style: AppTextStyles.h3)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${_existingAccount!.name} has $count '
+              '${count == 1 ? 'transaction' : 'transactions'}. '
+              'Choose what happens to ${count == 1 ? 'it' : 'them'}.',
+              style: AppTextStyles.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            if (others.isNotEmpty) ...[
+              Text('Move to',
+                  style: AppTextStyles.caption.copyWith(
+                    color: context.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  )),
+              const SizedBox(height: 6),
+              ...others.map(
+                (a) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: Icon(Icons.swap_horiz_rounded,
+                      size: 20, color: context.appAccent),
+                  title: Text(a.name, style: AppTextStyles.bodyMedium),
+                  onTap: () => Navigator.pop(dialogContext, a.id),
+                ),
+              ),
+              const Divider(height: 20),
+            ],
+            InkWell(
+              onTap: () =>
+                  Navigator.pop(dialogContext, _kDeleteTransactions),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline_rounded,
+                        size: 20, color: AppColors.negative),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Delete ${count == 1 ? 'it' : 'them'} too',
+                        style: AppTextStyles.bodyMedium
+                            .copyWith(color: AppColors.negative),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, _kDeleteCancelled),
+            child: Text('Cancel',
+                style: AppTextStyles.bodyMedium
+                    .copyWith(color: context.textSecondary)),
           ),
-        );
-        Navigator.pop(context);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cannot delete account with existing transactions'),
-            backgroundColor: AppColors.negative,
-          ),
-        );
-      }
-    }
+        ],
+      ),
+    );
+    return result ?? _kDeleteCancelled;
   }
 
   IconData _iconForType(AccountType type) {
@@ -298,7 +417,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           if (_existingAccount != null && !_existingAccount!.isDefault)
             IconButton(
               onPressed: _deleteAccount,
-              icon: const Icon(Icons.delete, color: AppColors.negative),
+              icon: Icon(Icons.delete, color: AppColors.negative),
             ),
         ],
       ),

@@ -34,7 +34,7 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
     return Scaffold(
       backgroundColor: context.appBackground,
       appBar: AppBar(
-        title: const Text('This Month Payments'),
+        title: const Text('This Month'),
         backgroundColor: context.appSurface,
         elevation: 0,
       ),
@@ -56,14 +56,16 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No Upcoming Payments This Month',
+                    'Nothing Left This Month',
                     style: AppTextStyles.bodyLarge.copyWith(
                       color: context.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Recurring expenses due this month will appear here',
+                    'Recurring income and payments still due this month '
+                    'will appear here',
+                    textAlign: TextAlign.center,
                     style: AppTextStyles.bodySmall.copyWith(
                       color: context.textSecondary,
                     ),
@@ -103,10 +105,9 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'EXPENSES',
+                            'Expenses',
                             style: AppTextStyles.caption.copyWith(
                               color: context.textSecondary,
-                              letterSpacing: 1.2,
                               fontSize: 10,
                             ),
                           ),
@@ -137,10 +138,9 @@ class _UpcomingPaymentsScreenState extends State<UpcomingPaymentsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'INCOME',
+                            'Income',
                             style: AppTextStyles.caption.copyWith(
                               color: context.textSecondary,
-                              letterSpacing: 1.2,
                               fontSize: 10,
                             ),
                           ),

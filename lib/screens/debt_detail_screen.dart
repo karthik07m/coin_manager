@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../utilities/page_transitions.dart';
 import '../providers/account_provider.dart';
 import '../utilities/id_generator.dart';
 import '../providers/category_provider.dart';
@@ -40,7 +41,12 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
 
   Future<void> _loadPaymentHistory() async {
     final debtProvider = Provider.of<DebtProvider>(context, listen: false);
+    // The balance may have changed outside this provider (a linked
+    // transaction deleted from the list reverses its payment in the DB), so
+    // refresh the cached debts alongside the history.
+    await debtProvider.loadDebtsFromDB();
     final payments = await debtProvider.getPaymentHistory(widget.debtId);
+    if (!mounted) return;
     setState(() {
       _payments = payments;
       _isLoading = false;
@@ -48,14 +54,17 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
   }
 
   String getCategoryName(int categoryId) {
-    final categoryProvider = Provider.of<CategoryProvider>(context, listen: false);
+    final categoryProvider =
+        Provider.of<CategoryProvider>(context, listen: false);
     final category = categoryProvider.categoryMap[categoryId];
     return category?.name ?? 'Category';
   }
 
   String getCategoryIcon(int categoryId) {
-    final categoryProvider = Provider.of<CategoryProvider>(context, listen: false);
-    return categoryProvider.categoryMap[categoryId]?.icon ?? 'assets/categories/other.png';
+    final categoryProvider =
+        Provider.of<CategoryProvider>(context, listen: false);
+    return categoryProvider.categoryMap[categoryId]?.icon ??
+        'assets/categories/other.png';
   }
 
   void _showCategorySelector(
@@ -201,13 +210,16 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
     if (categoryProvider.categoryMap.isEmpty) {
       await categoryProvider.fetchAllCategories();
     }
-    for (final category in categoryProvider.categoryMap.values) {
-      if (category.isExpense == isExpense &&
-          category.name.toLowerCase() == 'miscellaneous') {
-        return category.id!;
-      }
-    }
-    return isExpense ? defaultExpenseCat : defaultIncomeCat;
+    return categoryProvider.miscCategoryId(isExpense);
+  }
+
+  /// Money comes back to (or leaves from) the account the loan was booked
+  /// against; otherwise the default account.
+  static int _settlementAccountId(Debt debt, List<Account> accounts,
+      {int? fallback}) {
+    if (accounts.any((a) => a.id == debt.accountId)) return debt.accountId!;
+    if (accounts.any((a) => a.id == fallback)) return fallback!;
+    return accounts.isNotEmpty ? accounts.first.id! : 1;
   }
 
   /// Creates the spending/income transaction for a settlement and returns
@@ -282,8 +294,9 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not link — amount exceeds the remaining balance'),
+        SnackBar(
+          content: Text(
+              'Could not link. Check the remaining balance and whether this transaction is already linked.'),
           backgroundColor: AppColors.negative,
         ),
       );
@@ -303,9 +316,17 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
     }
 
     final wantExpense = debt.isLiability; // paying my debt = an expense
+    final debtProvider = Provider.of<DebtProvider>(context, listen: false);
+    final linkedIds = await debtProvider.getLinkedTransactionIds();
     final all = await TransactionDBHelper().getTransactions();
     final candidates = all
-        .where((t) => !t.isTransfer && t.isExpense == wantExpense)
+        .where((t) =>
+            !t.isTransfer &&
+            !t.isRecurring &&
+            !linkedIds.contains(t.id) &&
+            t.isExpense == wantExpense &&
+            t.amount > 0 &&
+            t.amount <= remaining + 0.005)
         .toList()
       ..sort((a, b) => b.date.compareTo(a.date));
     final recent = candidates.take(60).toList();
@@ -446,11 +467,9 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
     if (!mounted) return;
     final accounts = List<Account>.from(accountProvider.accounts)
       ..sort((a, b) => a.name.compareTo(b.name));
-    int selectedAccountId = accounts.any((a) => a.id == 1)
-        ? 1
-        : (accounts.isNotEmpty ? accounts.first.id! : 1);
-
-    int selectedCategoryId = debt.isLiability ? defaultExpenseCat : defaultIncomeCat;
+    int selectedAccountId = _settlementAccountId(debt, accounts,
+        fallback: accountProvider.defaultAccount?.id);
+    int selectedCategoryId = categoryProvider.miscCategoryId(debt.isLiability);
 
     await showModalBottomSheet(
       context: context,
@@ -605,8 +624,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                           color: context.appBackground,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color:
-                                context.textSecondary.withValues(alpha: 0.1),
+                            color: context.textSecondary.withValues(alpha: 0.1),
                           ),
                         ),
                         child: SwitchListTile(
@@ -648,16 +666,13 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                           spacing: 8,
                           runSpacing: 8,
                           children: accounts.map((account) {
-                            final isSelected =
-                                selectedAccountId == account.id;
-                            final colorScheme =
-                                Theme.of(context).colorScheme;
+                            final isSelected = selectedAccountId == account.id;
+                            final colorScheme = Theme.of(context).colorScheme;
                             return GestureDetector(
                               onTap: () => setModalState(
                                   () => selectedAccountId = account.id!),
                               child: AnimatedContainer(
-                                duration:
-                                    const Duration(milliseconds: 180),
+                                duration: const Duration(milliseconds: 180),
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 14, vertical: 9),
                                 decoration: BoxDecoration(
@@ -687,8 +702,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                     const SizedBox(width: 6),
                                     Text(
                                       account.name,
-                                      style:
-                                          AppTextStyles.bodyMedium.copyWith(
+                                      style: AppTextStyles.bodyMedium.copyWith(
                                         fontSize: 13,
                                         color: isSelected
                                             ? colorScheme.primary
@@ -731,12 +745,14 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                           },
                           borderRadius: BorderRadius.circular(16),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 16),
                             decoration: BoxDecoration(
                               color: context.appBackground,
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color: context.textSecondary.withValues(alpha: 0.1),
+                                color: context.textSecondary
+                                    .withValues(alpha: 0.1),
                               ),
                             ),
                             child: Row(
@@ -745,7 +761,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                   getCategoryIcon(selectedCategoryId),
                                   width: 22,
                                   height: 22,
-                                  errorBuilder: (context, error, stackTrace) => Icon(
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Icon(
                                     Icons.category_outlined,
                                     size: 22,
                                     color: context.appAccent,
@@ -802,7 +819,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                 if (amountText.isEmpty) {
                                   ScaffoldMessenger.of(this.context)
                                       .showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content: Text('Please enter an amount'),
                                       backgroundColor: AppColors.negative,
                                     ),
@@ -814,7 +831,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                 if (amount == null || amount <= 0) {
                                   ScaffoldMessenger.of(this.context)
                                       .showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content:
                                           Text('Please enter a valid amount'),
                                       backgroundColor: AppColors.negative,
@@ -885,16 +902,15 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                 // spend record for a payment that didn't apply.
                                 if (!success &&
                                     settlementTransactionId != null) {
-                                  await transactionProvider
-                                      .deleteTransaction(
-                                          settlementTransactionId);
+                                  await transactionProvider.deleteTransaction(
+                                      settlementTransactionId);
                                 }
 
                                 if (!context.mounted) return;
                                 navigator.pop();
                                 if (success) {
                                   messenger.showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content:
                                           Text('Payment recorded successfully'),
                                       backgroundColor: AppColors.positive,
@@ -903,7 +919,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                   _loadPaymentHistory();
                                 } else {
                                   messenger.showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content: Text('Failed to record payment'),
                                       backgroundColor: AppColors.negative,
                                     ),
@@ -912,7 +928,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: context.appAccent,
-                                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                                foregroundColor:
+                                    Theme.of(context).colorScheme.onPrimary,
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 16),
                                 elevation: 0,
@@ -942,8 +959,10 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
 
   Future<void> _markAsPaid() async {
     // Capture providers before any await to avoid using context across gaps.
-    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
-    final categoryProvider = Provider.of<CategoryProvider>(context, listen: false);
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
+    final categoryProvider =
+        Provider.of<CategoryProvider>(context, listen: false);
     final debtProvider = Provider.of<DebtProvider>(context, listen: false);
 
     if (!accountProvider.isLoaded) {
@@ -956,14 +975,12 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
 
     final accounts = List<Account>.from(accountProvider.accounts)
       ..sort((a, b) => a.name.compareTo(b.name));
-    int selectedAccountId = accounts.any((a) => a.id == 1)
-        ? 1
-        : (accounts.isNotEmpty ? accounts.first.id! : 1);
-
     final debt = debtProvider.getDebtById(widget.debtId);
     if (debt == null) return;
 
-    int selectedCategoryId = debt.isLiability ? defaultExpenseCat : defaultIncomeCat;
+    int selectedAccountId = _settlementAccountId(debt, accounts,
+        fallback: accountProvider.defaultAccount?.id);
+    int selectedCategoryId = categoryProvider.miscCategoryId(debt.isLiability);
     bool addAsTransaction = true;
 
     final confirmed = await showDialog<bool>(
@@ -1020,7 +1037,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                       items: accounts
                           .map((a) => DropdownMenuItem<int>(
                                 value: a.id,
-                                child: Text(a.name, style: AppTextStyles.bodyMedium),
+                                child: Text(a.name,
+                                    style: AppTextStyles.bodyMedium),
                               ))
                           .toList(),
                       onChanged: (v) {
@@ -1056,7 +1074,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                   },
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
                     decoration: BoxDecoration(
                       color: context.appBackground,
                       borderRadius: BorderRadius.circular(12),
@@ -1152,7 +1171,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
 
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Debt marked as paid'),
             backgroundColor: AppColors.positive,
           ),
@@ -1160,7 +1179,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
         _loadPaymentHistory();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Failed to mark as paid'),
             backgroundColor: AppColors.negative,
           ),
@@ -1198,7 +1217,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                   color: AppColors.negative.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.delete_forever_rounded,
+                child: Icon(Icons.delete_forever_rounded,
                     color: AppColors.negative, size: 22),
               ),
               const SizedBox(width: 12),
@@ -1274,8 +1293,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                     onChanged: (v) => setDialogState(
                         () => deleteLinkedTransactions = v ?? true),
                     activeColor: AppColors.negative,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 8),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                     controlAffinity: ListTileControlAffinity.leading,
                     title: Text(
                       'Also delete linked transactions',
@@ -1349,7 +1367,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
         navigator.pop();
       } else {
         messenger.showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Failed to delete debt'),
             backgroundColor: AppColors.negative,
           ),
@@ -1358,7 +1376,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
     }
   }
 
-  Future<void> _confirmDeletePayment(DebtPayment payment, String currencySymbol) async {
+  Future<void> _confirmDeletePayment(
+      DebtPayment payment, String currencySymbol) async {
     final hasLinkedTxn = payment.transactionId != null;
     bool deleteLinkedTransaction = hasLinkedTxn;
 
@@ -1375,7 +1394,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                   color: AppColors.negative.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.remove_circle_outline_rounded,
+                child: Icon(Icons.remove_circle_outline_rounded,
                     color: AppColors.negative, size: 22),
               ),
               const SizedBox(width: 12),
@@ -1394,8 +1413,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                   children: [
                     const TextSpan(text: 'This will remove the '),
                     TextSpan(
-                      text: UtilityFunction.addCommaWithSign(
-                          payment.amount,
+                      text: UtilityFunction.addCommaWithSign(payment.amount,
                           currencySymbol: currencySymbol),
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
@@ -1420,8 +1438,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                     onChanged: (v) => setDialogState(
                         () => deleteLinkedTransaction = v ?? true),
                     activeColor: AppColors.negative,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 8),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                     controlAffinity: ListTileControlAffinity.leading,
                     title: Text(
                       'Also delete linked transaction',
@@ -1496,7 +1513,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
         _loadPaymentHistory();
       } else {
         messenger.showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Failed to delete payment'),
             backgroundColor: AppColors.negative,
           ),
@@ -1543,8 +1560,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (context) => DebtFormScreen(
+                        PageTransitions.fadeUp(
+                          DebtFormScreen(
                             debtId: debt.id,
                             isLiability: debt.isLiability,
                           ),
@@ -1739,7 +1756,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                           ),
                         _buildDetailRow(
                           'Status',
-                          debt.status.name.toUpperCase(),
+                          '${debt.status.name[0].toUpperCase()}${debt.status.name.substring(1)}',
                           Icons.info_outline,
                         ),
                         if (debt.interestRate != null)
@@ -1772,12 +1789,11 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      'MONTHLY RECURRING',
+                                      'Monthly recurring',
                                       style: AppTextStyles.caption.copyWith(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
                                         color: context.appAccent,
-                                        letterSpacing: 0.5,
                                       ),
                                     ),
                                   ],
@@ -1917,7 +1933,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                                           .withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.check_circle,
                                       color: AppColors.positive,
                                       size: 20,
@@ -2045,7 +2061,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen> {
                       onPressed: () => _showRecordPaymentDialog(debt),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: context.appAccent,
-                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                        foregroundColor:
+                            Theme.of(context).colorScheme.onPrimary,
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),

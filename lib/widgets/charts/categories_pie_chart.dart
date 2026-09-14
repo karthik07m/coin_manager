@@ -520,6 +520,25 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
                         ),
                       ],
                     ),
+                    // Drill-down: row tap toggles the filter, this arrow
+                    // opens the transactions for just this category.
+                    const SizedBox(width: 4),
+                    InkWell(
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        _openTransactions(category.id);
+                      },
+                      borderRadius: BorderRadius.circular(20),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Icon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                          color: (isSelected ? color : context.textSecondary)
+                              .withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -679,9 +698,13 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
         radius: radius,
         // Percentage sits inside the slice; label slices down to 3%.
         showTitle: percentage >= 3,
-        title: percentage < 10
-            ? '${percentage.round()}%'
-            : '${percentage.toStringAsFixed(1)}%',
+        // Name only where the slice is wide enough to hold it; smaller
+        // slices keep the % alone and are identified by the list below.
+        title: percentage >= 15
+            ? '${cat.name}\n${percentage.toStringAsFixed(1)}%'
+            : percentage < 10
+                ? '${percentage.round()}%'
+                : '${percentage.toStringAsFixed(1)}%',
         titlePositionPercentageOffset: 0.5,
         titleStyle: AppTextStyles.bodySmall.copyWith(
           color: Colors.white,

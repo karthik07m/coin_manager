@@ -11,17 +11,24 @@ import '../utilities/functions.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/budget_period.dart';
 import '../utilities/budget_projection.dart';
+import '../utilities/budget_scope_summary.dart';
+import 'tappable.dart';
 
 /// Monthly budget summary card: one hero number (remaining), one progress
 /// bar with a "today" pace marker, and a flat row of the three stats that
 /// actually matter. Modeled on mainstream personal-finance apps.
 class QuickStatsWidget extends StatelessWidget {
   final Function(int)? onTabSelected;
+
+  /// Where a tap goes when the card isn't acting as a shortcut to the budget
+  /// tab — on the budget screen itself it opens the editor.
+  final VoidCallback? onTap;
   final DateTime selectedMonth;
 
   const QuickStatsWidget({
     super.key,
     this.onTabSelected,
+    this.onTap,
     required this.selectedMonth,
   });
 
@@ -50,15 +57,28 @@ class QuickStatsWidget extends StatelessWidget {
         final currencySymbol = settingsProvider.currencySymbol;
 
         final totalBudget = budgetProvider.getTotalBudget(currentMonth);
-        final monthExpenses = transactionProvider.transactions
+        final allMonthExpenses = transactionProvider.transactions
             .where((transaction) =>
                 transaction.isExpense &&
                 !transaction.isTransfer &&
                 !transaction.date.isBefore(startDate) &&
                 !transaction.date.isAfter(endDate))
             .toList();
-        final totalExpenses = monthExpenses.fold(
-            0.0, (sum, transaction) => sum + transactionProvider.baseAmount(transaction));
+
+        // A category-scoped budget only measures the categories it covers;
+        // the rest is reported separately rather than dropped.
+        final categoryProvider = Provider.of<CategoryProvider>(context);
+        final summary = BudgetScopeSummary.compute(
+          monthExpenses: allMonthExpenses,
+          amountOf: transactionProvider.baseAmount,
+          scope: budgetProvider.getScope(currentMonth),
+          budgetedCategoryIds: BudgetScopeSummary.budgetedCategoryIds(
+            categories: categoryProvider.categories,
+            budgetFor: (name) => budgetProvider.getBudget(name, currentMonth),
+          ),
+        );
+        final monthExpenses = summary.countedExpenses;
+        final totalExpenses = summary.countedSpent;
         final budgetRemaining = totalBudget - totalExpenses;
         final budgetUsedPercent =
             totalBudget > 0 ? (totalExpenses / totalBudget * 100) : 0.0;
@@ -106,13 +126,19 @@ class QuickStatsWidget extends StatelessWidget {
         final monthName = DateFormat('MMMM').format(selectedMonth);
 
         String money(double v) =>
-            UtilityFunction.formatMoney(v, symbol: currencySymbol);
+            UtilityFunction.formatMoney(v, symbol: currencySymbol, showDecimals: true);
 
-        return GestureDetector(
+        return Tappable(
+          color: context.appSurface,
+          borderRadius: AppDimensions.radiusLarge,
+          padding: const EdgeInsets.all(AppDimensions.spacing16),
           onTap: () {
+            if (onTap != null) {
+              onTap!();
+              return;
+            }
             onTabSelected?.call(2);
           },
-          behavior: HitTestBehavior.opaque,
           child: totalBudget <= 0
               ? _buildNoBudgetState(context, monthName)
               : Column(
@@ -122,11 +148,43 @@ class QuickStatsWidget extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'MONTHLY BUDGET',
-                          style: AppTextStyles.caption.copyWith(
-                            color: context.textSecondary,
-                            letterSpacing: 1.2,
+                        Flexible(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                // Matches the "Accounts" header above it.
+                                child: Text(
+                                  'Monthly budget',
+                                  style: AppTextStyles.sectionTitle.copyWith(
+                                    color: context.textSecondary,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              // The denominator isn't "everything" here, so
+                              // label it rather than let the % look wrong.
+                              if (summary.isCategoryScoped) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: context.appAccent
+                                        .withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'Categories',
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: context.appAccent,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                         Container(
@@ -219,17 +277,31 @@ class QuickStatsWidget extends StatelessWidget {
                           ),
                       ],
                     ),
+                    // Spending the budget deliberately ignores still has to be
+                    // visible, or the card reads as "all my spending".
+                    if (summary.isCategoryScoped &&
+                        summary.unbudgetedSpent > 0) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        '+ ${money(summary.unbudgetedSpent)} unbudgeted this month',
+                        style: AppTextStyles.caption.copyWith(
+                          color: context.textSecondary,
+                          fontSize: 11,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
 
                     // Flat stat row — no rainbow tiles.
                     Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: context.appSurface.withValues(alpha: 0.55),
+                        // Tonal inset: the old fill matched the card, so only its
+                        // outline showed. A faint tint separates it without one.
+                        color: context.textPrimary.withValues(alpha: 0.04),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppColors.divider.withValues(alpha: 0.35),
-                        ),
+                        border: context.cardBorder,
                       ),
                       child: Row(
                         children: [
@@ -358,13 +430,12 @@ class QuickStatsWidget extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'TODAY',
+                        'Today',
                         textAlign: TextAlign.center,
                         style: AppTextStyles.caption.copyWith(
                           color: context.textPrimary.withValues(alpha: 0.9),
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
                         ),
                       ),
                     ],

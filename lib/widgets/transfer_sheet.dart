@@ -93,11 +93,41 @@ class _TransferPageState extends State<_TransferPage> {
 
   double get _amount => double.tryParse(_amountController.text.trim()) ?? 0.0;
 
+  /// The currency an account holds, falling back to the base currency for
+  /// accounts created before per-account currencies existed.
+  String _currencyOf(Account? account) {
+    final base = Provider.of<SettingsProvider>(context, listen: false)
+        .currencyCode;
+    if (account == null || account.currency.isEmpty) return base;
+    return account.currency;
+  }
+
+  Account? _accountById(int? id) {
+    if (id == null) return null;
+    final accounts =
+        Provider.of<AccountProvider>(context, listen: false).accounts;
+    for (final a in accounts) {
+      if (a.id == id) return a;
+    }
+    return null;
+  }
+
+  /// A transfer moves one amount between two accounts, so both legs must be
+  /// in the same currency. Booking them at different rates would silently
+  /// create or destroy money (e.g. $100 out, ₹100 in).
+  bool get _isCrossCurrency =>
+      _fromId != null &&
+      _toId != null &&
+      _fromId != _toId &&
+      _currencyOf(_accountById(_fromId)) !=
+          _currencyOf(_accountById(_toId));
+
   bool get _isValid =>
       _fromId != null &&
       _toId != null &&
       _fromId != _toId &&
-      _amount > 0;
+      _amount > 0 &&
+      !_isCrossCurrency;
 
   Future<void> _submit() async {
     if (!_isValid || _saving) return;
@@ -136,9 +166,12 @@ class _TransferPageState extends State<_TransferPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
+      final message = e is TransferCurrencyMismatch
+          ? e.toString()
+          : 'Transfer failed: $e';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Transfer failed: $e'),
+          content: Text(message),
           backgroundColor: AppColors.negative,
           behavior: SnackBarBehavior.floating,
         ),
@@ -157,7 +190,19 @@ class _TransferPageState extends State<_TransferPage> {
   @override
   Widget build(BuildContext context) {
     final accounts = context.watch<AccountProvider>().accounts;
-    final currency = context.watch<SettingsProvider>().currencySymbol;
+    final baseCode = context.watch<SettingsProvider>().currencyCode;
+
+    // The amount is entered in the source account's own currency.
+    String codeFor(int? id) {
+      for (final a in accounts) {
+        if (a.id == id) return a.currency.isEmpty ? baseCode : a.currency;
+      }
+      return baseCode;
+    }
+
+    final fromCode = codeFor(_fromId);
+    final toCode = codeFor(_toId);
+    final currency = currencySymbolForCode(fromCode);
 
     if (accounts.length < 2) {
       return Scaffold(
@@ -241,10 +286,10 @@ class _TransferPageState extends State<_TransferPage> {
 
               _accountSelector(
                 context,
-                label: 'FROM',
+                label: 'From',
                 accounts: accounts,
                 selectedId: _fromId,
-                currency: currency,
+                baseCode: baseCode,
                 onChanged: (v) => setState(() => _fromId = v),
               ),
               // Swap
@@ -267,10 +312,10 @@ class _TransferPageState extends State<_TransferPage> {
               ),
               _accountSelector(
                 context,
-                label: 'TO',
+                label: 'To',
                 accounts: accounts,
                 selectedId: _toId,
-                currency: currency,
+                baseCode: baseCode,
                 onChanged: (v) => setState(() => _toId = v),
               ),
 
@@ -280,6 +325,37 @@ class _TransferPageState extends State<_TransferPage> {
                   'Pick two different accounts.',
                   style: AppTextStyles.bodySmall
                       .copyWith(color: AppColors.negative),
+                ),
+              ] else if (_isCrossCurrency) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppColors.warning.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline_rounded,
+                          size: 20, color: AppColors.warning),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'These accounts hold different currencies '
+                          '($fromCode → $toCode). Transfers move a single '
+                          'amount, so both sides must use the same currency. '
+                          'Record this as an expense and a matching income '
+                          'instead.',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: context.textPrimary),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
 
@@ -320,13 +396,15 @@ class _TransferPageState extends State<_TransferPage> {
     required String label,
     required List<Account> accounts,
     required int? selectedId,
-    required String currency,
+    required String baseCode,
     required ValueChanged<int?> onChanged,
   }) {
     final selected = accounts.firstWhere(
       (a) => a.id == selectedId,
       orElse: () => accounts.first,
     );
+    // Show each account's balance in the currency it actually holds.
+    final code = selected.currency.isEmpty ? baseCode : selected.currency;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -340,7 +418,6 @@ class _TransferPageState extends State<_TransferPage> {
             style: AppTextStyles.caption.copyWith(
               color: context.textSecondary,
               fontWeight: FontWeight.w600,
-              letterSpacing: 1,
             ),
           ),
           const SizedBox(width: 12),
@@ -369,8 +446,12 @@ class _TransferPageState extends State<_TransferPage> {
             ),
           ),
           Text(
-            UtilityFunction.formatMoney(selected.currentBalance,
-                symbol: currency, showDecimals: true),
+            UtilityFunction.formatMoney(
+              selected.currentBalance,
+              symbol: currencySymbolForCode(code),
+              currencyCode: code,
+              showDecimals: true,
+            ),
             style: AppTextStyles.bodySmall.copyWith(
               color: context.textSecondary,
             ),

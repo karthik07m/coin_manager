@@ -6,16 +6,17 @@ import '../utilities/functions.dart';
 /// Compact, scannable per-category budget row (real finance-app style):
 /// one header line (name + %), a spent-of-budget / remaining sub-line, a slim
 /// progress bar, and a single pace caption. Status color (green / amber / red)
-/// carries the "how am I doing" signal instead of a heavy tinted card.
 class BudgetProgressCard extends StatelessWidget {
   final String categoryName;
   final String categoryIcon;
   final double budgetAmount;
   final double spentAmount;
+  final int transactionCount;
   final int daysRemaining;
   final int daysElapsed;
   final int periodDays;
   final String currencySymbol;
+  final VoidCallback? onTap;
 
   const BudgetProgressCard({
     super.key,
@@ -23,10 +24,12 @@ class BudgetProgressCard extends StatelessWidget {
     required this.categoryIcon,
     required this.budgetAmount,
     required this.spentAmount,
+    required this.transactionCount,
     required this.daysRemaining,
     required this.daysElapsed,
     required this.periodDays,
     required this.currencySymbol,
+    this.onTap,
   });
 
   String _money(double v) =>
@@ -35,17 +38,8 @@ class BudgetProgressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final percentSpent = budgetAmount > 0 ? (spentAmount / budgetAmount) : 0.0;
-    final remaining = budgetAmount - spentAmount;
-    final isOver = remaining < 0;
 
-    // Pace: how spending compares to a straight-line burn of the budget.
-    final elapsedBudget = budgetAmount > 0 && periodDays > 0
-        ? budgetAmount * (daysElapsed / periodDays)
-        : 0.0;
-    final paceDelta = spentAmount - elapsedBudget;
-    final isOverPace = paceDelta > 0.01;
-
-    // Status color drives the whole row: green ok, amber ≥80%, red over.
+    // Status color drives the whole row: green ok, amber >=80%, red over.
     final Color statusColor;
     if (percentSpent >= 1.0) {
       statusColor = AppColors.negative;
@@ -55,157 +49,170 @@ class BudgetProgressCard extends StatelessWidget {
       statusColor = AppColors.positive;
     }
 
-    final pct = (percentSpent * 100).round();
-    final needsAttention = percentSpent >= 0.8;
+    final String txText = transactionCount == 1
+        ? '1 transaction'
+        : '$transactionCount transactions';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: context.appSurfaceLight,
-        borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-        border: Border.all(
-          color: needsAttention
-              ? statusColor.withValues(alpha: 0.35)
-              : AppColors.divider.withValues(alpha: 0.15),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              // Category icon
-              Container(
-                width: 38,
-                height: 38,
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(11),
+      margin: const EdgeInsets.only(bottom: AppDimensions.spacing16),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Circular progress ring with icon
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: TweenAnimationBuilder<double>(
+                          duration: const Duration(milliseconds: 700),
+                          curve: Curves.easeOutCubic,
+                          tween: Tween<double>(
+                            begin: 0,
+                            end: percentSpent.clamp(0.0, 1.0),
+                          ),
+                          builder: (context, value, _) =>
+                              CircularProgressIndicator(
+                            value: value,
+                            strokeWidth: 3.5,
+                            backgroundColor: context.appBackground,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(statusColor),
+                          ),
+                        ),
+                      ),
+                      Image.asset(
+                        categoryIcon,
+                        width: 24,
+                        height: 24,
+                        errorBuilder: (context, error, stackTrace) =>
+                            Icon(Icons.category, size: 24, color: statusColor),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Image.asset(
-                  categoryIcon,
-                  width: 22,
-                  height: 22,
-                  errorBuilder: (context, error, stackTrace) =>
-                      Icon(Icons.category, size: 22, color: statusColor),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            categoryName,
-                            style: AppTextStyles.bodyLarge.copyWith(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '$pct%',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: statusColor,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${_money(spentAmount)} of ${_money(budgetAmount)}',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: context.textSecondary,
-                              fontSize: 13,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          isOver
-                              ? '${_money(remaining.abs())} over'
-                              : '${_money(remaining)} left',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: isOver
-                                ? AppColors.negative
-                                : context.textSecondary,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+                const SizedBox(width: AppDimensions.spacing16),
 
-          // Slim progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: TweenAnimationBuilder<double>(
-              duration: const Duration(milliseconds: 700),
-              curve: Curves.easeOutCubic,
-              tween: Tween<double>(
-                begin: 0,
-                end: percentSpent.clamp(0.0, 1.0),
-              ),
-              builder: (context, value, _) => LinearProgressIndicator(
-                value: value,
-                minHeight: 7,
-                backgroundColor: context.appBackground,
-                valueColor: AlwaysStoppedAnimation<Color>(statusColor),
-              ),
+                // Details Column
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Top row: Name and Amount
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              categoryName,
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                                color: context.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Flexible: at large text scales the amounts alone
+                          // are wider than the row.
+                          Flexible(
+                            child: RichText(
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: _money(spentAmount),
+                                    style: AppTextStyles.bodyLarge.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 17,
+                                      color: percentSpent >= 1.0
+                                          ? AppColors.negative
+                                          : context.textPrimary,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: ' / ${_money(budgetAmount)}',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: context.textSecondary
+                                          .withValues(alpha: 0.6),
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Bottom row: Linear progress bar and Transactions count
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            flex: 6,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: TweenAnimationBuilder<double>(
+                                duration: const Duration(milliseconds: 700),
+                                curve: Curves.easeOutCubic,
+                                tween: Tween<double>(
+                                  begin: 0,
+                                  end: percentSpent.clamp(0.0, 1.0),
+                                ),
+                                builder: (context, value, _) =>
+                                    LinearProgressIndicator(
+                                  value: value,
+                                  minHeight: 4.5,
+                                  backgroundColor: context.appBackground,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      statusColor),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 4,
+                            child: Text(
+                              txText,
+                              textAlign: TextAlign.right,
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
-
-          // Single pace caption
-          Row(
-            children: [
-              Icon(
-                isOverPace
-                    ? Icons.trending_up_rounded
-                    : Icons.check_circle_outline_rounded,
-                size: 13,
-                color: isOverPace ? AppColors.warning : AppColors.positive,
-              ),
-              const SizedBox(width: 5),
-              Expanded(
-                child: Text(
-                  isOverPace
-                      ? '${_money(paceDelta.abs())} ahead of pace'
-                      : 'On track · ${_money(paceDelta.abs())} under pace',
-                  style: AppTextStyles.caption.copyWith(
-                    color: context.textSecondary,
-                    fontSize: 11.5,
-                    letterSpacing: 0,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }

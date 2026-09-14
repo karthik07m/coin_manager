@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 
 String appName = "Coinly";
 
+/// Hard ceiling for any single amount (transaction, debt, goal, balance
+/// entry, ...). Comfortably above any real-world figure, but keeps `double`
+/// well inside safe integer precision and stops the number formatters from
+/// ever falling back to scientific notation (e.g. "$1e+21").
+const double kMaxAmount = 999999999999.99;
+
 int defaultExpenseCat = 1;
 int defaultIncomeCat = 9;
 
@@ -26,8 +32,19 @@ class AppColors {
   static const Color textTertiary = Color(0xFF52525B); // Darker Gray
 
   // Status Colors
-  static const Color positive = Color(0xFF2ECC71); // Green
-  static const Color negative = Color(0xFFFF5252); // Bright Red
+  // ponytail: a global flag main.dart sets whenever it builds the theme. A
+  // widget that doesn't rebuild on a theme toggle keeps the old colours until
+  // its next rebuild; move to a ThemeExtension if that ever shows.
+  static bool darkMode = false;
+
+  // Income/expense: rich enough to match the emerald accent, tuned per theme
+  // to stay readable (about 4.5:1 on light cards; dark green is the accent).
+  static const Color _positiveLight = Color(0xFF11783D);
+  static const Color _positiveDark = Color(0xFF2ECC71);
+  static const Color _negativeLight = Color(0xFFCE2222);
+  static const Color _negativeDark = Color(0xFFF53B3B);
+  static Color get positive => darkMode ? _positiveDark : _positiveLight;
+  static Color get negative => darkMode ? _negativeDark : _negativeLight;
   static const Color warning = Color(0xFFFFA726); // Orange
 
   // UI Elements
@@ -39,15 +56,15 @@ class AppColors {
 class AppShadows {
   static List<BoxShadow> get card => [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.2),
-          blurRadius: 12,
+          color: Colors.black.withValues(alpha: 0.045),
+          blurRadius: 8,
           offset: const Offset(0, 4),
         ),
       ];
 
   static List<BoxShadow> get floating => [
         BoxShadow(
-          color: AppColors.primary.withValues(alpha: 0.3),
+          color: Colors.black.withValues(alpha: 0.10),
           blurRadius: 16,
           offset: const Offset(0, 8),
         ),
@@ -96,22 +113,32 @@ class AppTextStyles {
   static const TextStyle bodySmall = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w500,
-    letterSpacing: 0.5,
+    letterSpacing: 0.1,
     height: 1.4,
+  );
+
+  /// Section titles ("Accounts", "Monthly budget"). Sentence case, no
+  /// tracking: the app's one header style, replacing tracked-out caps.
+  static const TextStyle sectionTitle = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.1,
+    height: 1.5,
   );
 
   // Special Text
   static const TextStyle amount = TextStyle(
     fontSize: 18,
     fontWeight: FontWeight.w700,
-    letterSpacing: 0.5,
-    fontFamily: 'Monospace', // Or system monospace if font not available
+    letterSpacing: -0.3,
+    fontFeatures: [FontFeature.tabularFigures()],
+    height: 1.25,
   );
 
   static const TextStyle caption = TextStyle(
     fontSize: 11,
     fontWeight: FontWeight.w600,
-    letterSpacing: 1.0,
+    letterSpacing: 0.2,
     height: 1.3,
   );
 
@@ -224,6 +251,7 @@ const List<IconCategoryGroup> categoryIconGroups = [
     'assets/categories/duedate.png',
     'assets/categories/recurring.png',
     'assets/categories/subscription.png',
+    'assets/categories/subscription_d.png',
     'assets/categories/subscription2.png',
     'assets/categories/subscription3.png',
     'assets/categories/calendar.png',
@@ -301,8 +329,13 @@ const List<IconCategoryGroup> categoryIconGroups = [
     'assets/categories/taxi(1).png',
     'assets/categories/taxi(2).png',
     'assets/categories/limousine.png',
+    'assets/categories/bus.png',
+    'assets/categories/bus(1).png',
     'assets/categories/school-bus.png',
     'assets/categories/tram.png',
+    'assets/categories/train.png',
+    'assets/categories/train(2).png',
+    'assets/categories/electric_train.png',
     'assets/categories/locomotive.png',
     'assets/categories/plane.png',
     'assets/categories/helicopter.png',

@@ -37,6 +37,28 @@ class TransactionDBHelper {
     return _db!;
   }
 
+  /// Opens an in-memory database using the real schema and migrations, so
+  /// balance and budget math can be exercised in tests without a device.
+  /// Tests must set `databaseFactory = databaseFactoryFfi` first.
+  @visibleForTesting
+  Future<Database> openInMemoryDatabaseForTests() async {
+    await _db?.close();
+    _db = await openDatabase(
+      inMemoryDatabasePath,
+      version: 12,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
+    return _db!;
+  }
+
+  /// Drops the cached handle so each test starts from a clean database.
+  @visibleForTesting
+  static Future<void> resetForTests() async {
+    await _db?.close();
+    _db = null;
+  }
+
   Future<Database> _initDB() async {
     Directory documentsDirectory = await getApplicationDocumentsDirectory();
     String path = join(documentsDirectory.path, 'transactions.db');
@@ -724,6 +746,8 @@ class TransactionDBHelper {
     }
   }
 
+  /// Recurring entries still due before the end of this month — income as
+  /// well as expenses, since both are things the user is expecting.
   Future<List<trans_model.Transaction>>
       getUpcomingRecurringTransactions() async {
     var dbClient = await database;
@@ -735,7 +759,7 @@ class TransactionDBHelper {
       final List<Map<String, dynamic>> transactions = await dbClient.query(
         tableName,
         where:
-            '$columnIsRecurring = 1 AND $columnIsExpense = 1 AND $columnDate >= ? AND $columnDate < ?',
+            '$columnIsRecurring = 1 AND $columnDate >= ? AND $columnDate < ?',
         whereArgs: [
           today.toIso8601String(),
           firstDayOfNextMonth.toIso8601String()
@@ -752,7 +776,8 @@ class TransactionDBHelper {
     }
   }
 
-  /// Get ALL upcoming recurring transactions (no limit) for full-screen view
+  /// Get ALL upcoming recurring transactions (no limit) for full-screen view.
+  /// Includes income as well as expenses.
   Future<List<trans_model.Transaction>>
       getAllUpcomingRecurringTransactions() async {
     var dbClient = await database;
@@ -764,7 +789,7 @@ class TransactionDBHelper {
       final List<Map<String, dynamic>> transactions = await dbClient.query(
         tableName,
         where:
-            '$columnIsRecurring = 1 AND $columnIsExpense = 1 AND $columnDate >= ? AND $columnDate < ?',
+            '$columnIsRecurring = 1 AND $columnDate >= ? AND $columnDate < ?',
         whereArgs: [
           today.toIso8601String(),
           firstDayOfNextMonth.toIso8601String()

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../utilities/page_transitions.dart';
 import '../providers/goal_provider.dart';
 import '../providers/settings_provider.dart';
 import '../models/goal.dart';
@@ -58,7 +59,7 @@ class _GoalListScreenState extends State<GoalListScreen> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const GoalFormScreen()),
+            PageTransitions.fadeUp(const GoalFormScreen()),
           );
         },
         backgroundColor: context.appAccent,
@@ -216,8 +217,7 @@ class _GoalListScreenState extends State<GoalListScreen> {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => GoalDetailScreen(goalId: goal.id),
+            PageTransitions.fadeUp(GoalDetailScreen(goalId: goal.id),
             ),
           );
         },
@@ -383,7 +383,7 @@ class _GoalListScreenState extends State<GoalListScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        'ACHIEVED',
+                        'Achieved',
                         style: AppTextStyles.caption.copyWith(
                           color: statusColor,
                           fontSize: 11,

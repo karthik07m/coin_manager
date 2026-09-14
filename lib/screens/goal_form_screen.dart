@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/goal_provider.dart';
+import '../providers/settings_provider.dart';
 import '../utilities/id_generator.dart';
 import '../models/goal.dart';
 import '../utilities/constants.dart';
@@ -11,8 +12,9 @@ import '../widgets/calculator_field.dart';
 class GoalFormScreen extends StatefulWidget {
   static const String routeName = '/goal-form';
   final String? goalId;
+  final String? initialTitle;
 
-  const GoalFormScreen({super.key, this.goalId});
+  const GoalFormScreen({super.key, this.goalId, this.initialTitle});
 
   @override
   State<GoalFormScreen> createState() => _GoalFormScreenState();
@@ -32,7 +34,8 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController();
+    _titleController = TextEditingController(
+        text: widget.goalId == null ? widget.initialTitle : null);
     _targetAmountController = TextEditingController();
     _currentAmountController = TextEditingController(text: '0');
     _notesController = TextEditingController();
@@ -176,7 +179,7 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
         backgroundColor: context.appSurface,
         title: Row(
           children: [
-            const Icon(Icons.warning, color: AppColors.negative, size: 24),
+            Icon(Icons.warning, color: AppColors.negative, size: 24),
             const SizedBox(width: 8),
             Text('Delete Goal', style: AppTextStyles.h3),
           ],
@@ -238,7 +241,7 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
           if (_existingGoal != null)
             IconButton(
               onPressed: _deleteGoal,
-              icon: const Icon(Icons.delete, color: AppColors.negative),
+              icon: Icon(Icons.delete, color: AppColors.negative),
             ),
         ],
       ),
@@ -286,6 +289,7 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
                 const SizedBox(height: AppDimensions.spacing8),
                 CalculatorTextFormField(
                   controller: _targetAmountController,
+                  currencySymbol: context.watch<SettingsProvider>().currencySymbol,
                 ),
 
                 const SizedBox(height: AppDimensions.spacing16),
@@ -300,6 +304,7 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
                 const SizedBox(height: AppDimensions.spacing8),
                 CalculatorTextFormField(
                   controller: _currentAmountController,
+                  currencySymbol: context.watch<SettingsProvider>().currencySymbol,
                 ),
 
                 const SizedBox(height: AppDimensions.spacing16),

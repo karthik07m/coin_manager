@@ -12,6 +12,12 @@ if (localPropertiesFile.exists()) {
     }
 }
 
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
 if (flutterVersionCode == null) {
     flutterVersionCode = '1'
@@ -23,8 +29,11 @@ if (flutterVersionName == null) {
 }
 
 android {
-    namespace "com.example.coin_manager"
-    compileSdkVersion flutter.compileSdkVersion
+    namespace "com.budget.coinly"
+    // Pinned above Flutter's default: plugins (in_app_update, dynamic_color)
+    // require API 36 to compile. Newer SDKs are backward compatible, and
+    // minSdk below still governs which devices can install.
+    compileSdk = 36
     ndkVersion "27.0.12077973"
 
     compileOptions {
@@ -42,22 +51,33 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId "com.manikarthik.coinManager"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
+        applicationId "com.budget.coinly"
         minSdkVersion 23
-        targetSdkVersion 34
+        // Google Play requires apps to target API 36 or higher.
+        targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         multiDexEnabled true
     }
 
+    signingConfigs {
+        release {
+            keyAlias = keystoreProperties['keyAlias']
+            keyPassword = keystoreProperties['keyPassword']
+            storeFile = keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword = keystoreProperties['storePassword']
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
+
+            // Shrink and obfuscate; see proguard-rules.pro for plugin keeps.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                    'proguard-rules.pro'
         }
     }
 }

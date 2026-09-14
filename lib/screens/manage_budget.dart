@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/budget_scope.dart';
 import '../providers/monthly_budget_provider.dart';
 import '../providers/category_provider.dart';
 import '../providers/transaction_provider.dart';
@@ -38,14 +39,31 @@ class ManageBudgetScreen extends StatefulWidget {
 }
 
 class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
+  /// Cent-level overshoot from splitting a budget across categories isn't
+  /// worth warning about; anything larger is a real over-allocation.
+  static const double _overAllocationTolerance = 0.01;
+
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _totalBudgetController = TextEditingController();
   final Map<String, TextEditingController> _categoryControllers = {};
   late DateTime _selectedMonth;
   bool _isSaving = false;
+  bool _isLoading = true;
   bool _didAutoAllocateOnOpen = false;
 
+  /// What this month's budget is measured against.
+  BudgetScope _scope = BudgetScope.allExpenses;
+
+  /// Set when this month had nothing saved and the form was seeded from an
+  /// earlier month. Cleared as soon as the user saves.
+  String? _seededFromLabel;
+
+  /// Whether the month being edited already has a saved budget.
+  bool _monthHasSavedBudget = false;
+
   String get _monthKey => BudgetPeriod.keyFor(_selectedMonth);
+
+  String get _monthLabel => DateFormat('MMMM yyyy').format(_selectedMonth);
 
   @override
   void initState() {
@@ -64,6 +82,12 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
     final transactionProvider =
         Provider.of<TransactionProvider>(context, listen: false);
 
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+
     if (categoryProvider.categories.isEmpty) {
       await categoryProvider.fetchAllCategories();
     }
@@ -78,22 +102,57 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
 
     if (!mounted) return;
 
+    final hasSavedBudget = await budgetProvider.hasBudgetFor(_monthKey);
+    if (!mounted) return;
+
     final totalBudget = budgetProvider.getTotalBudget(_monthKey);
-    _totalBudgetController.text =
-        totalBudget > 0 ? totalBudget.toStringAsFixed(2) : '';
-    _syncCategoryControllers();
+    _totalBudgetController.text = _formatAmount(totalBudget);
+    _scope = budgetProvider.getScope(_monthKey);
+    _syncCategoryControllers(fromStoredValues: true);
+
+    // A month you've never budgeted starts from the last month you did, so
+    // every month stays tracked without retyping it. Nothing is written until
+    // the user saves.
+    String? seededFrom;
+    if (!hasSavedBudget) {
+      final previous = await budgetProvider.previousMonthBudget(_monthKey);
+      if (!mounted) return;
+
+      if (previous != null && !previous.isEmpty) {
+        _applySnapshot(previous);
+        seededFrom = previous.label;
+      }
+    }
 
     if (widget.autoAllocateOnOpen && !_didAutoAllocateOnOpen) {
       _didAutoAllocateOnOpen = true;
       _autoAllocateBudgets(showSnack: false);
+      seededFrom = null;
     }
 
     if (mounted) {
-      setState(() {});
+      setState(() {
+        _isLoading = false;
+        _monthHasSavedBudget = hasSavedBudget;
+        _seededFromLabel = seededFrom;
+      });
     }
   }
 
-  void _syncCategoryControllers() {
+  String _formatAmount(double amount) =>
+      amount > 0 ? amount.toStringAsFixed(2) : '';
+
+  /// Loads a saved month's figures into the form without writing anything.
+  void _applySnapshot(MonthBudgetSnapshot snapshot) {
+    _totalBudgetController.text = _formatAmount(snapshot.totalBudget);
+    _scope = snapshot.scope;
+
+    for (final entry in _categoryControllers.entries) {
+      entry.value.text = _formatAmount(snapshot.categoryBudgets[entry.key] ?? 0);
+    }
+  }
+
+  void _syncCategoryControllers({bool fromStoredValues = false}) {
     final budgetProvider =
         Provider.of<MonthlyBudgetProvider>(context, listen: false);
     final categoryProvider =
@@ -112,14 +171,16 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
 
     for (final category in expenseCategories) {
       final budget = budgetProvider.getBudget(category.name, _monthKey);
-      final value = budget > 0 ? budget.toStringAsFixed(2) : '';
+      final value = _formatAmount(budget);
       final controller = _categoryControllers[category.name];
 
       if (controller == null) {
         _categoryControllers[category.name] = TextEditingController(
           text: value,
         );
-      } else if (!controller.selection.isValid) {
+      } else if (fromStoredValues) {
+        // Reloading a month replaces whatever is on screen — otherwise a
+        // field the user had focused keeps the previous month's number.
         controller.text = value;
       }
     }
@@ -219,10 +280,13 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
     }
 
     final rule = _selectedBudgetRule(settingsProvider);
-    final allocations = calculateBudgetAllocation(
-      totalBudget: baseAmount,
-      rule: rule,
-      categoryNames: categoryNames,
+    final allocations = roundAllocationToTotal(
+      calculateBudgetAllocation(
+        totalBudget: baseAmount,
+        rule: rule,
+        categoryNames: categoryNames,
+      ),
+      baseAmount,
     );
 
     _totalBudgetController.text = baseAmount.toStringAsFixed(2);
@@ -230,7 +294,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
     for (final category in expenseCategories) {
       final amount = allocations[category.name] ?? 0.0;
       final controller = _categoryControllers[category.name];
-      final value = amount > 0 ? amount.toStringAsFixed(2) : '';
+      final value = _formatAmount(amount);
 
       if (controller == null) {
         _categoryControllers[category.name] = TextEditingController(
@@ -255,74 +319,221 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
     }
   }
 
+  double get _enteredAllocated => _enteredCategoryBudgets()
+      .values
+      .fold<double>(0, (sum, value) => sum + value);
+
+  bool get _totalDiffersFromAllocated =>
+      (_enteredTotalBudget - _enteredAllocated).abs() >
+      _overAllocationTolerance;
+
+  /// Switching to category scope changes what the monthly figure means: it
+  /// stops being a spending cap and becomes the total of the envelopes. If
+  /// the two disagree, offer to reconcile them rather than silently measuring
+  /// category spending against an unrelated number.
+  Future<void> _selectScope(BudgetScope scope) async {
+    if (_scope == scope) return;
+    setState(() => _scope = scope);
+
+    if (scope != BudgetScope.budgetedCategories) return;
+
+    final allocated = _enteredAllocated;
+    final total = _enteredTotalBudget;
+    if (allocated <= 0) return;
+    if ((total - allocated).abs() <= _overAllocationTolerance) return;
+
+    await _offerToMatchTotalToCategories(total, allocated);
+  }
+
+  Future<void> _offerToMatchTotalToCategories(
+    double total,
+    double allocated,
+  ) async {
+    final currencySymbol =
+        Provider.of<SettingsProvider>(context, listen: false).currencySymbol;
+    String money(double value) => UtilityFunction.formatMoney(
+          value,
+          symbol: currencySymbol,
+          showDecimals: true,
+        );
+
+    final match = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: context.appSurface,
+        title: const Text('Match budget to your categories?'),
+        content: Text(
+          total <= 0
+              ? 'Your category budgets add up to ${money(allocated)}. With only budgeted categories counting, that total is usually the monthly budget.'
+              : 'Your category budgets add up to ${money(allocated)}, but the monthly budget is ${money(total)}.\n\n'
+                  'With only budgeted categories counting, spending would be measured against ${money(total)} — a figure those categories were never meant to fill.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(total <= 0 ? 'Not now' : 'Keep ${money(total)}'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.appAccent,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Set to ${money(allocated)}'),
+          ),
+        ],
+      ),
+    );
+
+    if (match != true || !mounted) return;
+
+    setState(() {
+      _totalBudgetController.text = allocated.toStringAsFixed(2);
+    });
+  }
+
+  double get _enteredTotalBudget =>
+      double.tryParse(_totalBudgetController.text.trim()) ?? 0.0;
+
+  Map<String, double> _enteredCategoryBudgets() {
+    final budgets = <String, double>{};
+    for (final entry in _categoryControllers.entries) {
+      budgets[entry.key] = double.tryParse(entry.value.text.trim()) ?? 0.0;
+    }
+    return budgets;
+  }
+
+  /// Over-allocating is a warning, never a wall: the user is told by how much
+  /// and decides. Blocking the save is what made an existing budget feel
+  /// impossible to edit downwards.
+  Future<bool> _confirmOverAllocation(
+    double totalBudget,
+    double totalAllocated,
+    String currencySymbol,
+  ) async {
+    String money(double value) => UtilityFunction.formatMoney(
+          value,
+          symbol: currencySymbol,
+          showDecimals: true,
+        );
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: context.appSurface,
+        title: const Text('Categories exceed your budget'),
+        content: Text(
+          'Category budgets add up to ${money(totalAllocated)}, which is '
+          '${money(totalAllocated - totalBudget)} more than your '
+          '${money(totalBudget)} budget for $_monthLabel.\n\n'
+          'Save anyway, or go back and adjust?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep editing'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.appAccent,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Save anyway'),
+          ),
+        ],
+      ),
+    );
+
+    return confirmed == true;
+  }
+
   Future<void> _saveBudgets() async {
     if (_isSaving) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    _formKey.currentState!.save();
 
-    if (_formKey.currentState!.validate()) {
-      _formKey.currentState!.save();
+    final budgetProvider =
+        Provider.of<MonthlyBudgetProvider>(context, listen: false);
+    final currencySymbol =
+        Provider.of<SettingsProvider>(context, listen: false).currencySymbol;
 
-      final budgetProvider =
-          Provider.of<MonthlyBudgetProvider>(context, listen: false);
+    final categoryBudgets = _enteredCategoryBudgets();
+    final totalAllocated =
+        categoryBudgets.values.fold<double>(0, (sum, value) => sum + value);
+    var totalBudget = _enteredTotalBudget;
 
-      final totalBudget = double.tryParse(_totalBudgetController.text) ?? 0;
+    // Budgeting by category alone is valid — the month's budget is then just
+    // what the categories add up to.
+    final derivedFromCategories = totalBudget <= 0 && totalAllocated > 0;
+    if (derivedFromCategories) {
+      totalBudget = totalAllocated;
+      _totalBudgetController.text = totalBudget.toStringAsFixed(2);
+    }
 
-      // Calculate total allocated
-      double totalAllocated = 0;
-      for (var entry in _categoryControllers.entries) {
-        final controller = entry.value;
-        final budget = double.tryParse(controller.text) ?? 0;
-        totalAllocated += budget;
-      }
+    if (totalBudget <= 0 && totalAllocated <= 0 && !_monthHasSavedBudget) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Enter a budget for $_monthLabel first'),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
 
-      if (totalAllocated > totalBudget) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                const Text('Total of category budgets exceeds monthly budget'),
-            backgroundColor: AppColors.negative,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
-      }
+    if (totalAllocated - totalBudget > _overAllocationTolerance) {
+      final proceed = await _confirmOverAllocation(
+        totalBudget,
+        totalAllocated,
+        currencySymbol,
+      );
+      if (!proceed || !mounted) return;
+    }
 
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      await budgetProvider.saveMonthBudget(
+        month: _monthKey,
+        totalBudget: totalBudget,
+        categoryBudgets: categoryBudgets,
+        scope: _scope,
+      );
+
+      if (!mounted) return;
       setState(() {
-        _isSaving = true;
+        _monthHasSavedBudget = totalBudget > 0 || totalAllocated > 0;
+        _seededFromLabel = null;
       });
 
-      try {
-        await budgetProvider.setTotalBudget(_monthKey, totalBudget);
-
-        for (var entry in _categoryControllers.entries) {
-          final categoryName = entry.key;
-          final controller = entry.value;
-          final budget = double.tryParse(controller.text) ?? 0;
-          await budgetProvider.setBudget(categoryName, _monthKey, budget);
-        }
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Budgets saved successfully'),
-            behavior: SnackBarBehavior.floating,
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            derivedFromCategories
+                ? '$_monthLabel budget saved from your category totals'
+                : '$_monthLabel budget saved',
           ),
-        );
-        Navigator.pop(context);
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving budget: $e'),
-            backgroundColor: AppColors.negative,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isSaving = false;
-          });
-        }
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving budget: $e'),
+          backgroundColor: AppColors.negative,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
       }
     }
   }
@@ -426,6 +637,99 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
     }
   }
 
+  /// Pulls the last budgeted month's figures into the form. Nothing is written
+  /// until the user saves, so they can adjust first.
+  Future<void> _copyFromPreviousMonth() async {
+    final budgetProvider =
+        Provider.of<MonthlyBudgetProvider>(context, listen: false);
+    final previous = await budgetProvider.previousMonthBudget(_monthKey);
+
+    if (!mounted) return;
+
+    if (previous == null || previous.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No earlier month has a budget to copy'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _applySnapshot(previous);
+      _seededFromLabel = previous.label;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Loaded ${previous.label}'s budget — save to apply"),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _clearMonthBudget() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: context.appSurface,
+        title: Text('Clear $_monthLabel budget?'),
+        content: Text(
+          'This removes the budget for $_monthLabel only. Your transactions '
+          'and other months are untouched.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.negative,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await Provider.of<MonthlyBudgetProvider>(context, listen: false)
+          .clearMonth(_monthKey);
+
+      if (!mounted) return;
+      setState(() {
+        _totalBudgetController.clear();
+        for (final controller in _categoryControllers.values) {
+          controller.clear();
+        }
+        _monthHasSavedBudget = false;
+        _seededFromLabel = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$_monthLabel budget cleared'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not clear budget: $e'),
+          backgroundColor: AppColors.negative,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   void _copyToNextMonth() async {
     final nextMonth = BudgetPeriod.nextMonth(_selectedMonth);
     final nextMonthName = DateFormat('MMMM yyyy').format(nextMonth);
@@ -433,18 +737,19 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: context.appSurface,
         title: const Text('Copy Budget to Next Month'),
         content: Text(
-          'This will copy all budget settings from the current month to $nextMonthName. Any existing budgets for $nextMonthName will be overwritten.\n\nDo you want to continue?',
+          'The figures shown for $_monthLabel will be copied to $nextMonthName. Any existing budget for $nextMonthName will be replaced.\n\nDo you want to continue?',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: context.appAccent,
               foregroundColor: Colors.white,
@@ -455,44 +760,74 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
       ),
     );
 
-    if (!mounted) return;
+    if (!mounted || confirmed != true) return;
 
-    if (confirmed == true) {
-      try {
-        final budgetProvider =
-            Provider.of<MonthlyBudgetProvider>(context, listen: false);
-        await budgetProvider.copyBudgetToNextMonth(_monthKey);
+    try {
+      final budgetProvider =
+          Provider.of<MonthlyBudgetProvider>(context, listen: false);
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Budget copied to $nextMonthName successfully'),
-              backgroundColor: AppColors.positive,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error copying budget: $e'),
-              backgroundColor: AppColors.negative,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
+      // Copy what's on screen, not what was last saved — otherwise an edit
+      // made just before tapping Copy silently doesn't travel.
+      final categoryBudgets = _enteredCategoryBudgets();
+      final totalAllocated =
+          categoryBudgets.values.fold<double>(0, (sum, value) => sum + value);
+      final totalBudget =
+          _enteredTotalBudget > 0 ? _enteredTotalBudget : totalAllocated;
+
+      await budgetProvider.saveMonthBudget(
+        month: _monthKey,
+        totalBudget: totalBudget,
+        categoryBudgets: categoryBudgets,
+        scope: _scope,
+      );
+      await budgetProvider.copyBudget(
+        fromMonth: _monthKey,
+        toMonth: BudgetPeriod.keyFor(nextMonth),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _monthHasSavedBudget = totalBudget > 0 || totalAllocated > 0;
+        _seededFromLabel = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Budget copied to $nextMonthName'),
+          backgroundColor: AppColors.positive,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error copying budget: $e'),
+            backgroundColor: AppColors.negative,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     }
   }
 
   void _selectMonth(DateTime month) {
+    final target = DateTime(month.year, month.month);
+    if (target.year == _selectedMonth.year &&
+        target.month == _selectedMonth.month) {
+      return;
+    }
+
     setState(() {
-      _selectedMonth = DateTime(month.year, month.month);
+      _selectedMonth = target;
       for (final controller in _categoryControllers.values) {
         controller.dispose();
       }
       _categoryControllers.clear();
+      _totalBudgetController.clear();
+      _seededFromLabel = null;
+      _monthHasSavedBudget = false;
+      _isLoading = true;
     });
     _loadBudgetData();
   }
@@ -559,14 +894,17 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                       ],
                     ),
                     const SizedBox(height: AppDimensions.spacing20),
-                    SizedBox(
-                      height: 240,
+                    // Sizes to its 12 months instead of being clipped to a
+                    // fixed height — the old 240px box hid Jul–Dec entirely,
+                    // making later months impossible to select.
+                    Flexible(
                       child: GridView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
+                        shrinkWrap: true,
+                        physics: const ClampingScrollPhysics(),
                         gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 160,
-                          childAspectRatio: 1.8,
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          childAspectRatio: 1.6,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
                         ),
@@ -632,7 +970,8 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
       backgroundColor: context.appBackground,
       appBar: AppBar(
         backgroundColor: context.appBackground,
-        title: const Text('Manage Budget'),
+        // Short, so it doesn't truncate next to the month chip and menu.
+        title: const Text('Budget'),
         elevation: 0,
         actions: [
           TextButton.icon(
@@ -640,10 +979,62 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
             icon: const Icon(Icons.calendar_month, size: 18),
             label: Text(DateFormat('MMM yyyy').format(_selectedMonth)),
           ),
-          IconButton(
-            icon: const Icon(Icons.copy_all_outlined),
-            tooltip: 'Copy to Next Month',
-            onPressed: _copyToNextMonth,
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            tooltip: 'Month options',
+            color: context.appSurface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            onSelected: (value) {
+              switch (value) {
+                case 'copyPrevious':
+                  _copyFromPreviousMonth();
+                  break;
+                case 'copyNext':
+                  _copyToNextMonth();
+                  break;
+                case 'clear':
+                  _clearMonthBudget();
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'copyPrevious',
+                child: Row(
+                  children: [
+                    Icon(Icons.history, size: 18),
+                    SizedBox(width: 10),
+                    Text('Copy from last month'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'copyNext',
+                child: Row(
+                  children: [
+                    Icon(Icons.copy_all_outlined, size: 18),
+                    SizedBox(width: 10),
+                    Text('Copy to next month'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'clear',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline,
+                        size: 18, color: AppColors.negative),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Clear this month',
+                      style: TextStyle(color: AppColors.negative),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -681,6 +1072,11 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                 ? 0.0
                 : double.tryParse(totalBudgetText) ?? storedTotalBudget;
             final remainingBudget = totalBudget - totalAllocated;
+            // Compared with a tolerance: a split of an indivisible total can
+            // land a fraction of a cent over, which must not read as "over
+            // budget by 0.00".
+            final isOverAllocated =
+                totalAllocated - totalBudget > _overAllocationTolerance;
             final progress = totalBudget > 0
                 ? (totalAllocated / totalBudget).clamp(0.0, 1.0)
                 : 0.0;
@@ -725,11 +1121,10 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                             child: Column(
                               children: [
                                 Text(
-                                  'Monthly Budget',
+                                  _monthLabel,
                                   style: AppTextStyles.bodyMedium.copyWith(
                                     color: Colors.white.withValues(alpha: 0.9),
                                     fontSize: 13,
-                                    letterSpacing: 1.2,
                                   ),
                                 ),
                                 const SizedBox(height: 12),
@@ -767,10 +1162,22 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                           keyboardType: const TextInputType
                                               .numberWithOptions(decimal: true),
                                           onChanged: (_) => setState(() {}),
+                                          // Deliberately no "required" rule:
+                                          // an empty field means "budget by
+                                          // category", and blocking here is
+                                          // what made a set budget feel
+                                          // uneditable.
                                           validator: (value) {
-                                            if (value == null ||
-                                                value.isEmpty) {
-                                              return 'Required';
+                                            final text = value?.trim() ?? '';
+                                            if (text.isEmpty) return null;
+
+                                            final amount =
+                                                double.tryParse(text);
+                                            if (amount == null) {
+                                              return 'Enter a number';
+                                            }
+                                            if (amount < 0) {
+                                              return "Can't be negative";
                                             }
                                             return null;
                                           },
@@ -788,8 +1195,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                     backgroundColor:
                                         Colors.white.withValues(alpha: 0.3),
                                     valueColor: AlwaysStoppedAnimation<Color>(
-                                      totalAllocated > totalBudget &&
-                                              totalBudget > 0
+                                      isOverAllocated
                                           ? AppColors.negative
                                           : Colors.white,
                                     ),
@@ -815,9 +1221,16 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                     ),
                                     Expanded(
                                       child: _buildWhiteSummaryItem(
-                                        'Remaining',
-                                        remainingBudget,
+                                        isOverAllocated
+                                            ? 'Over by'
+                                            : 'Unallocated',
+                                        isOverAllocated
+                                            ? remainingBudget.abs()
+                                            : (remainingBudget < 0
+                                                ? 0
+                                                : remainingBudget),
                                         currencySymbol,
+                                        isWarning: isOverAllocated,
                                       ),
                                     ),
                                   ],
@@ -826,6 +1239,14 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                             ),
                           ),
                           const SizedBox(height: AppDimensions.spacing16),
+                          _buildScopeSelector(context, categories.length),
+                          const SizedBox(height: AppDimensions.spacing16),
+                          _buildMonthStatusBanner(
+                            context,
+                            totalBudget: totalBudget,
+                            totalAllocated: totalAllocated,
+                            currencySymbol: currencySymbol,
+                          ),
                           _buildAutoAllocationPanel(
                             context,
                             allocationRule,
@@ -837,12 +1258,9 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'CATEGORY BUDGETS',
-                                style: AppTextStyles.caption.copyWith(
+                                'Category budgets',
+                                style: AppTextStyles.sectionTitle.copyWith(
                                   color: context.textSecondary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 1.5,
                                 ),
                               ),
                               Text(
@@ -1203,6 +1621,245 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
     );
   }
 
+  /// Chooses what the monthly figure is measured against. This is the
+  /// difference between "I may spend $4,800 in total" and an envelope budget
+  /// like "$1,000 for food and groceries", where rent must not eat the budget.
+  Widget _buildScopeSelector(BuildContext context, int categoryCount) {
+    final budgetedCount = _categoryControllers.entries
+        .where((entry) => (double.tryParse(entry.value.text.trim()) ?? 0) > 0)
+        .length;
+    final currencySymbol =
+        Provider.of<SettingsProvider>(context, listen: false).currencySymbol;
+
+    Widget option(BudgetScope scope) {
+      final isSelected = _scope == scope;
+      return Expanded(
+        child: InkWell(
+          onTap: () => _selectScope(scope),
+          borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimensions.spacing12,
+              vertical: AppDimensions.spacing12,
+            ),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? context.appAccent.withValues(alpha: 0.15)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+              border: Border.all(
+                color: isSelected
+                    ? context.appAccent
+                    : AppColors.divider.withValues(alpha: 0.4),
+                width: isSelected ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  isSelected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                  size: 18,
+                  color: isSelected ? context.appAccent : context.textSecondary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    scope.label,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected
+                          ? context.appAccent
+                          : context.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final isCategoryScoped = _scope == BudgetScope.budgetedCategories;
+
+    return Container(
+      padding: const EdgeInsets.all(AppDimensions.spacing16),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'What counts toward this budget',
+            style: AppTextStyles.sectionTitle.copyWith(
+              color: context.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spacing12),
+          Row(
+            children: [
+              option(BudgetScope.allExpenses),
+              const SizedBox(width: AppDimensions.spacing8),
+              option(BudgetScope.budgetedCategories),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacing8),
+          Text(
+            _scope.description,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.textSecondary,
+              height: 1.35,
+            ),
+          ),
+          // A category-scoped budget with nothing budgeted would measure
+          // against no spending at all, so say so before it's saved.
+          if (isCategoryScoped) ...[
+            const SizedBox(height: AppDimensions.spacing8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  budgetedCount > 0
+                      ? Icons.check_circle_outline
+                      : Icons.warning_amber_rounded,
+                  size: 16,
+                  color: budgetedCount > 0
+                      ? AppColors.positive
+                      : AppColors.warning,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    budgetedCount > 0
+                        ? 'Counting $budgetedCount of $categoryCount categories.'
+                        : 'Give at least one category an amount below, or this budget has nothing to measure.',
+                    style: AppTextStyles.caption.copyWith(
+                      color: budgetedCount > 0
+                          ? context.textSecondary
+                          : AppColors.warning,
+                      fontSize: 11,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            // Stays available after the switch, since editing a category
+            // amount pulls the two figures apart again.
+            if (budgetedCount > 0 && _totalDiffersFromAllocated) ...[
+              const SizedBox(height: 4),
+              InkWell(
+                onTap: () => _offerToMatchTotalToCategories(
+                  _enteredTotalBudget,
+                  _enteredAllocated,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.sync_alt, size: 15, color: context.appAccent),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Categories total ${UtilityFunction.formatMoney(_enteredAllocated, symbol: currencySymbol, showDecimals: true)} — tap to match the monthly budget',
+                          style: AppTextStyles.caption.copyWith(
+                            color: context.appAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// One line above the editor telling the user where this month's numbers
+  /// came from and whether the split still fits — shown while they type, so
+  /// nothing is a surprise at save time.
+  Widget _buildMonthStatusBanner(
+    BuildContext context, {
+    required double totalBudget,
+    required double totalAllocated,
+    required String currencySymbol,
+  }) {
+    if (_isLoading) return const SizedBox.shrink();
+
+    String money(double value) => UtilityFunction.formatMoney(
+          value,
+          symbol: currencySymbol,
+          showDecimals: true,
+        );
+
+    final overBy = totalAllocated - totalBudget;
+    final isOverAllocated =
+        totalBudget > 0 && overBy > _overAllocationTolerance;
+
+    late final IconData icon;
+    late final Color color;
+    late final String message;
+
+    if (isOverAllocated) {
+      icon = Icons.warning_amber_rounded;
+      color = AppColors.warning;
+      message =
+          'Categories are ${money(overBy)} over your $_monthLabel budget. '
+          'You can still save — the overage is just flagged.';
+    } else if (_seededFromLabel != null) {
+      icon = Icons.history;
+      color = context.appAccent;
+      message = 'No budget saved for $_monthLabel yet. Prefilled from '
+          '$_seededFromLabel — adjust and save to track this month.';
+    } else if (!_monthHasSavedBudget) {
+      icon = Icons.flag_outlined;
+      color = context.appAccent;
+      message = 'Set a budget for $_monthLabel to start tracking it.';
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppDimensions.spacing16),
+      child: Container(
+        padding: const EdgeInsets.all(AppDimensions.spacing12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: AppDimensions.spacing8),
+            Expanded(
+              child: Text(
+                message,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: context.textPrimary,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAutoAllocationPanel(
     BuildContext context,
     BudgetRule allocationRule,
@@ -1267,16 +1924,30 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
   }
 
   Widget _buildWhiteSummaryItem(
-      String label, double amount, String currencySymbol) {
+    String label,
+    double amount,
+    String currencySymbol, {
+    bool isWarning = false,
+  }) {
     return Column(
       children: [
-        Text(
-          label,
-          style: AppTextStyles.caption.copyWith(
-            color: Colors.white.withValues(alpha: 0.8),
-            fontSize: 11,
-            letterSpacing: 0.5,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (isWarning) ...[
+              const Icon(Icons.warning_amber_rounded,
+                  size: 13, color: Colors.white),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: AppTextStyles.caption.copyWith(
+                color: Colors.white.withValues(alpha: 0.8),
+                fontSize: 11,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 6),
         Text(

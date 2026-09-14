@@ -63,7 +63,6 @@ class _ActivityHistoryScreenState extends State<ActivityHistoryScreen> {
                       style: AppTextStyles.caption.copyWith(
                         color: context.textSecondary,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
                       ),
                     ),
                   ),
@@ -216,11 +215,11 @@ class _ActivityHistoryScreenState extends State<ActivityHistoryScreen> {
         currentKey = key;
         String label;
         if (d == today) {
-          label = 'TODAY';
+          label = 'Today';
         } else if (d == yesterday) {
-          label = 'YESTERDAY';
+          label = 'Yesterday';
         } else {
-          label = UtilityFunction.formatDate(log.timestamp).toUpperCase();
+          label = UtilityFunction.formatDate(log.timestamp);
         }
         groups.add(_DayGroup(label));
       }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/debt_provider.dart';
+import '../services/debt_transaction_service.dart';
 import '../providers/account_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/category_provider.dart';
@@ -43,12 +44,22 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
   bool _isRecurring = false;
   Debt? _existingDebt;
   bool _isLoading = true;
+  bool _isSaving = false;
 
   // Account linking: book the loan against an account as a transaction.
   List<Account> _accounts = [];
   int? _selectedAccountId;
   bool _bookAsTransaction = true;
   int? _selectedCategoryId;
+  // Editing only: payments already recorded against this debt. Amount Paid
+  // is then derived from them, not typed.
+  int _paymentCount = 0;
+
+  /// The debt's amount and type are mirrored by its loan transaction and
+  /// every repayment; flipping the type would make all of them wrong.
+  bool get _typeLocked =>
+      _existingDebt != null &&
+      (_existingDebt!.transactionId != null || _paymentCount > 0);
 
   @override
   void initState() {
@@ -69,7 +80,8 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
 
   Future<void> _loadDebtDetails() async {
     // Capture providers before any await to avoid using context across gaps.
-    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
     final debtProvider = Provider.of<DebtProvider>(context, listen: false);
 
     // Load accounts for the "book against account" picker.
@@ -83,7 +95,8 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
         defaultId ?? (_accounts.isNotEmpty ? _accounts.first.id : null);
 
     // Load categories
-    final categoryProvider = Provider.of<CategoryProvider>(context, listen: false);
+    final categoryProvider =
+        Provider.of<CategoryProvider>(context, listen: false);
     if (categoryProvider.categoryMap.isEmpty) {
       await categoryProvider.fetchAllCategories();
     }
@@ -93,6 +106,9 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
       _existingDebt = debtProvider.getDebtById(widget.debtId!);
 
       if (_existingDebt != null) {
+        _paymentCount =
+            (await debtProvider.getPaymentHistory(_existingDebt!.id)).length;
+        if (!mounted) return;
         setState(() {
           _titleController.text = _existingDebt!.title;
           _debtorNameController.text = _existingDebt!.debtorName;
@@ -120,8 +136,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
       }
     } else {
       setState(() {
-        final isTxExpense = !_isLiability;
-        _selectedCategoryId = isTxExpense ? defaultExpenseCat : defaultIncomeCat;
+        _selectedCategoryId = categoryProvider.miscCategoryId(!_isLiability);
       });
     }
     setState(() {
@@ -164,14 +179,17 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
   }
 
   String getCategoryName(int categoryId) {
-    final categoryProvider = Provider.of<CategoryProvider>(context, listen: false);
+    final categoryProvider =
+        Provider.of<CategoryProvider>(context, listen: false);
     final category = categoryProvider.categoryMap[categoryId];
     return category?.name ?? 'Category';
   }
 
   String getCategoryIcon(int categoryId) {
-    final categoryProvider = Provider.of<CategoryProvider>(context, listen: false);
-    return categoryProvider.categoryMap[categoryId]?.icon ?? 'assets/categories/other.png';
+    final categoryProvider =
+        Provider.of<CategoryProvider>(context, listen: false);
+    return categoryProvider.categoryMap[categoryId]?.icon ??
+        'assets/categories/other.png';
   }
 
   void _showCategorySelector(
@@ -318,10 +336,8 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
     );
   }
 
-
-
   Future<void> _saveDebt() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_isSaving || !_formKey.currentState!.validate()) return;
 
     final amount =
         double.tryParse(_amountController.text.replaceAll(',', '').trim());
@@ -363,87 +379,126 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
       }
     }
 
-    final debtProvider = Provider.of<DebtProvider>(context, listen: false);
-    final notes = _notesController.text.trim().isNotEmpty
-        ? _notesController.text.trim()
-        : null;
+    setState(() => _isSaving = true);
+    try {
+      final debtProvider = Provider.of<DebtProvider>(context, listen: false);
+      final transactionProvider =
+          Provider.of<TransactionProvider>(context, listen: false);
+      final notes = _notesController.text.trim().isNotEmpty
+          ? _notesController.text.trim()
+          : null;
 
-    Debt debt;
-    if (_existingDebt != null) {
-      // Update existing debt
-      _existingDebt!.update(
-        title: _titleController.text.trim(),
-        amount: amount,
-        amountPaid: amountPaid,
-        debtorName: _debtorNameController.text.trim(),
-        isLiability: _isLiability,
-        dueDate: _dueDate,
-        interestRate: interestRate,
-        notes: notes,
-        isRecurring: _isRecurring,
-        recurringAmount: recurringAmount,
-      );
-      debt = _existingDebt!;
-      await debtProvider.updateDebt(debt);
-    } else {
-      final title = _titleController.text.trim();
-      final debtorName = _debtorNameController.text.trim();
-
-      // Book the loan against an account as a transaction so balances reflect
-      // it: lending money is money OUT (expense), borrowing is money IN
-      // (income). Skipped if the user turned booking off or picked no account.
-      String? loanTxnId;
-      if (_bookAsTransaction && _selectedAccountId != null) {
-        final txProvider =
-            Provider.of<TransactionProvider>(context, listen: false);
-        final isExpense = !_isLiability; // lend = expense, borrow = income
-        final categoryId = _selectedCategoryId ?? (isExpense ? defaultExpenseCat : defaultIncomeCat);
-        final loanTxn = Transaction.createNew(
-          id: newId(),
-          title: _isLiability
-              ? 'Borrowed from $debtorName · $title'
-              : 'Lent to $debtorName · $title',
+      Debt debt;
+      if (_existingDebt != null) {
+        // Update existing debt
+        final updatedDebt = Debt.fromMap(_existingDebt!.toMap());
+        updatedDebt.update(
+          title: _titleController.text.trim(),
           amount: amount,
-          categoryId: categoryId,
-          accountId: _selectedAccountId!,
-          date: DateTime.now(),
-          isExpense: isExpense,
+          amountPaid: amountPaid,
+          debtorName: _debtorNameController.text.trim(),
+          isLiability: _isLiability,
+          dueDate: _dueDate,
+          interestRate: interestRate,
+          notes: notes,
+          isRecurring: _isRecurring,
+          recurringAmount: recurringAmount,
         );
-        await txProvider.addTransaction(loanTxn);
-        loanTxnId = loanTxn.id;
+        debt = updatedDebt;
+        if (_typeLocked && debt.isLiability != _existingDebt!.isLiability) {
+          throw const DebtEntryException(
+              'Type cannot change once a loan transaction or payments are linked.');
+        }
+        if (!await debtProvider.updateDebt(debt)) {
+          throw const DebtEntryException(
+              'Could not update the debt. Please try again.');
+        }
+        // The debt is the source of truth: keep its booked loan transaction
+        // in step so account balances stay right. Title is left alone — the
+        // row's debt badge already names the other party.
+        if (debt.transactionId != null) {
+          final loanTxn =
+              await transactionProvider.getTransactionById(debt.transactionId!);
+          if (loanTxn != null && loanTxn.amount != debt.amount) {
+            loanTxn.amount = debt.amount;
+            loanTxn.modifiedOn = DateTime.now();
+            await transactionProvider.updateTransaction(loanTxn);
+          }
+        }
+      } else {
+        final title = _titleController.text.trim();
+        final debtorName = _debtorNameController.text.trim();
+
+        // Book the loan against an account as a transaction so balances reflect
+        // it: lending money is money OUT (expense), borrowing is money IN
+        // (income). Skipped if the user turned booking off or picked no account.
+        Transaction? loanTransaction;
+        if (_bookAsTransaction && _selectedAccountId != null) {
+          final isExpense = !_isLiability; // lend = expense, borrow = income
+          final categoryId = _selectedCategoryId ??
+              (isExpense ? defaultExpenseCat : defaultIncomeCat);
+          final loanTxn = Transaction.createNew(
+            id: newId(),
+            title: _isLiability
+                ? 'Borrowed from $debtorName · $title'
+                : 'Lent to $debtorName · $title',
+            amount: amount,
+            categoryId: categoryId,
+            accountId: _selectedAccountId!,
+            date: DateTime.now(),
+            isExpense: isExpense,
+          );
+          loanTransaction = loanTxn;
+        }
+
+        // Create new debt
+        debt = Debt.createNew(
+          id: newId(),
+          title: title,
+          amount: amount,
+          amountPaid: amountPaid,
+          debtorName: debtorName,
+          isLiability: _isLiability,
+          dueDate: _dueDate,
+          interestRate: interestRate,
+          notes: notes,
+          isRecurring: _isRecurring,
+          recurringAmount: recurringAmount,
+          transactionId: loanTransaction?.id,
+          accountId: loanTransaction?.accountId,
+        );
+        if (loanTransaction != null) {
+          await DebtTransactionService(
+            transactions: transactionProvider,
+            debts: debtProvider,
+          ).saveLoan(loanTransaction, debt);
+        } else if (!await debtProvider.addDebt(debt)) {
+          throw const DebtEntryException(
+              'Could not create the debt. Please try again.');
+        }
       }
 
-      // Create new debt
-      debt = Debt.createNew(
-        id: newId(),
-        title: title,
-        amount: amount,
-        amountPaid: amountPaid,
-        debtorName: debtorName,
-        isLiability: _isLiability,
-        dueDate: _dueDate,
-        interestRate: interestRate,
-        notes: notes,
-        isRecurring: _isRecurring,
-        recurringAmount: recurringAmount,
-        transactionId: loanTxnId,
-        accountId: _selectedAccountId,
-      );
-      await debtProvider.addDebt(debt);
-    }
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _existingDebt != null
-              ? 'Debt updated successfully'
-              : 'Debt added successfully',
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _existingDebt != null
+                ? 'Debt updated successfully'
+                : 'Debt added successfully',
+          ),
+          backgroundColor: AppColors.positive,
         ),
-        backgroundColor: AppColors.positive,
-      ),
-    );
-    Navigator.pop(context);
+      );
+      Navigator.pop(context);
+    } catch (error) {
+      if (mounted) {
+        _showFormError(error is DebtEntryException
+            ? error.message
+            : 'Could not save the debt. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   Future<void> _deleteDebt() async {
@@ -472,7 +527,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                   color: AppColors.negative.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.delete_forever_rounded,
+                child: Icon(Icons.delete_forever_rounded,
                     color: AppColors.negative, size: 22),
               ),
               const SizedBox(width: 12),
@@ -518,8 +573,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                     onChanged: (v) => setDialogState(
                         () => deleteLinkedTransactions = v ?? true),
                     activeColor: AppColors.negative,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 8),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                     controlAffinity: ListTileControlAffinity.leading,
                     title: Text(
                       'Also delete $linkedTxnCount linked transaction${linkedTxnCount == 1 ? '' : 's'}',
@@ -621,7 +675,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
           if (_existingDebt != null)
             IconButton(
               onPressed: _deleteDebt,
-              icon: const Icon(Icons.delete, color: AppColors.negative),
+              icon: Icon(Icons.delete, color: AppColors.negative),
             ),
         ],
       ),
@@ -738,9 +792,33 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                   ),
                 ),
                 const SizedBox(height: AppDimensions.spacing8),
-                CalculatorTextFormField(
-                  controller: _amountPaidController,
-                ),
+                if (_paymentCount > 0)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppDimensions.spacing16),
+                    decoration: BoxDecoration(
+                      color: context.appSurface,
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.radiusMedium),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_amountPaidController.text,
+                            style: AppTextStyles.bodyLarge),
+                        const SizedBox(height: 4),
+                        Text(
+                          'From $_paymentCount recorded payment${_paymentCount == 1 ? '' : 's'} · edit them in the debt\'s payment history',
+                          style: AppTextStyles.caption
+                              .copyWith(color: context.textSecondary),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  CalculatorTextFormField(
+                    controller: _amountPaidController,
+                  ),
 
                 const SizedBox(height: AppDimensions.spacing16),
 
@@ -925,7 +1003,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                   width: double.infinity,
                   height: AppDimensions.buttonHeight,
                   child: ElevatedButton(
-                    onPressed: _saveDebt,
+                    onPressed: _isSaving ? null : _saveDebt,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: context.appAccent,
                       foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -1035,7 +1113,8 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                 _showCategorySelector(
                   context,
                   isExpense,
-                  _selectedCategoryId ?? (isExpense ? defaultExpenseCat : defaultIncomeCat),
+                  _selectedCategoryId ??
+                      (isExpense ? defaultExpenseCat : defaultIncomeCat),
                   (catId) {
                     setState(() {
                       _selectedCategoryId = catId;
@@ -1045,15 +1124,20 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
               },
               borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
                   color: context.appSurfaceLight,
-                  borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+                  borderRadius:
+                      BorderRadius.circular(AppDimensions.radiusMedium),
                 ),
                 child: Row(
                   children: [
                     Image.asset(
-                      getCategoryIcon(_selectedCategoryId ?? (!_isLiability ? defaultExpenseCat : defaultIncomeCat)),
+                      getCategoryIcon(_selectedCategoryId ??
+                          (!_isLiability
+                              ? defaultExpenseCat
+                              : defaultIncomeCat)),
                       width: 22,
                       height: 22,
                       errorBuilder: (context, error, stackTrace) => Icon(
@@ -1065,7 +1149,10 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        getCategoryName(_selectedCategoryId ?? (!_isLiability ? defaultExpenseCat : defaultIncomeCat)),
+                        getCategoryName(_selectedCategoryId ??
+                            (!_isLiability
+                                ? defaultExpenseCat
+                                : defaultIncomeCat)),
                         style: AppTextStyles.bodyMedium,
                       ),
                     ),
@@ -1089,10 +1176,17 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
     return Expanded(
       child: InkWell(
         onTap: () {
+          if (_isLiability == isLiabilityType) return;
+          if (_typeLocked) {
+            _showFormError(
+                'Type cannot change once a loan transaction or payments are linked.');
+            return;
+          }
           setState(() {
             _isLiability = isLiabilityType;
-            final isTxExpense = !_isLiability;
-            _selectedCategoryId = isTxExpense ? defaultExpenseCat : defaultIncomeCat;
+            _selectedCategoryId = Provider.of<CategoryProvider>(context,
+                    listen: false)
+                .miscCategoryId(!_isLiability);
           });
         },
         child: Container(
@@ -1118,8 +1212,8 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                 label,
                 style: AppTextStyles.bodyMedium.copyWith(
                   color: isSelected
-                    ? Theme.of(context).colorScheme.onPrimary
-                    : context.textSecondary,
+                      ? Theme.of(context).colorScheme.onPrimary
+                      : context.textSecondary,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
                 textAlign: TextAlign.center,

@@ -10,8 +10,12 @@ import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
 import '../utilities/budget_period.dart';
+import '../utilities/budget_scope_summary.dart';
 import '../screens/manage_budget.dart';
+import '../screens/all_transactions_screen.dart';
 import 'package:intl/intl.dart';
+import 'tappable.dart';
+import '../utilities/page_transitions.dart';
 
 class BudgetOverviewWidget extends StatelessWidget {
   final DateTime selectedMonth;
@@ -47,7 +51,11 @@ class BudgetOverviewWidget extends StatelessWidget {
           return budget > 0;
         }).toList();
 
-        if (categoriesWithBudgets.isEmpty) {
+        // An overall budget with no category split is still a budget — the
+        // empty state only belongs here when the month has nothing at all.
+        final overallBudget = budgetProvider.getTotalBudget(currentMonth);
+
+        if (categoriesWithBudgets.isEmpty && overallBudget <= 0) {
           return Container(
             padding: const EdgeInsets.all(AppDimensions.spacing32),
             decoration: BoxDecoration(
@@ -60,10 +68,7 @@ class BudgetOverviewWidget extends StatelessWidget {
                 ],
               ),
               borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-              border: Border.all(
-                color: context.appAccent.withValues(alpha: 0.2),
-                width: 1.5,
-              ),
+              border: context.cardBorder,
             ),
             child: Column(
               children: [
@@ -82,11 +87,12 @@ class BudgetOverviewWidget extends StatelessWidget {
                 ),
                 const SizedBox(height: AppDimensions.spacing20),
                 Text(
-                  'No budgets set',
+                  'No budget for ${DateFormat('MMMM').format(selectedMonth)}',
                   style: AppTextStyles.h2.copyWith(
                     color: context.textPrimary,
                     fontWeight: FontWeight.bold,
                   ),
+                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: AppDimensions.spacing8),
                 Text(
@@ -149,19 +155,26 @@ class BudgetOverviewWidget extends StatelessWidget {
         }
 
         // Overall budget = the month's total budget (fall back to the sum of
-        // category budgets if no total is set). Spent = ALL expense spending
-        // this month, excluding transfers — the same basis as the top card.
-        final overallBudget = budgetProvider.getTotalBudget(currentMonth);
+        // category budgets if no total is set). Spent is measured on the same
+        // basis as the top card — all expenses, or only budgeted categories.
         final totalBudget =
             overallBudget > 0 ? overallBudget : sumCategoryBudgets;
-        final totalSpent = transactionProvider.transactions
-            .where((t) =>
-                t.isExpense &&
-                !t.isTransfer &&
-                !t.date.isBefore(startDate) &&
-                !t.date.isAfter(endDate))
-            .fold(
-                0.0, (sum, t) => sum + transactionProvider.baseAmount(t));
+        final summary = BudgetScopeSummary.compute(
+          monthExpenses: transactionProvider.transactions
+              .where((t) =>
+                  t.isExpense &&
+                  !t.isTransfer &&
+                  !t.date.isBefore(startDate) &&
+                  !t.date.isAfter(endDate))
+              .toList(),
+          amountOf: transactionProvider.baseAmount,
+          scope: budgetProvider.getScope(currentMonth),
+          budgetedCategoryIds: BudgetScopeSummary.budgetedCategoryIds(
+            categories: expenseCategories,
+            budgetFor: (name) => budgetProvider.getBudget(name, currentMonth),
+          ),
+        );
+        final totalSpent = summary.countedSpent;
 
         final totalPercent = totalBudget > 0 ? (totalSpent / totalBudget) : 0.0;
 
@@ -191,10 +204,8 @@ class BudgetOverviewWidget extends StatelessWidget {
                   ],
                 ),
                 borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-                border: Border.all(
-                  color: statusColor.withValues(alpha: 0.3),
-                  width: 1.5,
-                ),
+                // Status is already carried by the pill and the gradient.
+                border: context.cardBorder,
               ),
               child: Column(
                 children: [
@@ -205,11 +216,12 @@ class BudgetOverviewWidget extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'TOTAL BUDGET',
+                            summary.isCategoryScoped
+                                ? 'Category budget'
+                                : 'Total budget',
                             style: AppTextStyles.caption.copyWith(
                               color: context.textSecondary,
                               fontSize: 11,
-                              letterSpacing: 1,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -283,13 +295,25 @@ class BudgetOverviewWidget extends StatelessWidget {
                       ),
                       const SizedBox(width: AppDimensions.spacing12),
                       Expanded(
-                        child: _buildStatBox(
-                          context,
-                          icon: Icons.calendar_today,
-                          label: 'Categories',
-                          value: '${categoriesWithBudgets.length}',
-                          color: context.appAccent,
-                        ),
+                        // When the budget only covers some categories, what
+                        // it ignores matters more than how many it counts.
+                        child: summary.isCategoryScoped
+                            ? _buildStatBox(
+                                context,
+                                icon: Icons.remove_circle_outline,
+                                label: 'Unbudgeted',
+                                value: UtilityFunction.formatMoney(
+                                    summary.unbudgetedSpent,
+                                    symbol: currencySymbol),
+                                color: context.textSecondary,
+                              )
+                            : _buildStatBox(
+                                context,
+                                icon: Icons.calendar_today,
+                                label: 'Categories',
+                                value: '${categoriesWithBudgets.length}',
+                                color: context.appAccent,
+                              ),
                       ),
                       const SizedBox(width: AppDimensions.spacing12),
                       Expanded(
@@ -309,50 +333,32 @@ class BudgetOverviewWidget extends StatelessWidget {
 
             const SizedBox(height: AppDimensions.spacing24),
 
-            // Section header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // Editing lives beside the month selector; this section explains
+            // the breakdown instead of duplicating the same editor action.
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
-                  'CATEGORY BREAKDOWN',
-                  style: AppTextStyles.caption.copyWith(
+                  'Category breakdown',
+                  style: AppTextStyles.sectionTitle.copyWith(
                     color: context.textSecondary,
-                    letterSpacing: 1.2,
                   ),
                 ),
-                Row(
-                  children: [
-                    Text(
-                      '$daysRemaining days left',
-                      style: AppTextStyles.caption.copyWith(
-                        color: context.appAccent,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton.icon(
-                      onPressed: () {
-                        Navigator.pushNamed(
-                          context,
-                          '/manageBudget',
-                          arguments: ManageBudgetArgs(
-                            initialMonth: selectedMonth,
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.edit, size: 16),
-                      label: const Text('Manage'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: context.appAccent,
-                        minimumSize: const Size(44, 36),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    ),
-                  ],
+                Text(
+                  '$daysRemaining days left',
+                  style: AppTextStyles.caption.copyWith(
+                    color: context.textSecondary,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: AppDimensions.spacing12),
+
+            // A total with no category split still tracks fine, but the
+            // breakdown is where overspending gets caught early.
+            if (categoriesWithBudgets.isEmpty) _buildSplitPrompt(context),
 
             // Category cards
             ...categoriesWithBudgets.map((category) {
@@ -363,26 +369,100 @@ class BudgetOverviewWidget extends StatelessWidget {
                 startDate,
                 endDate,
               );
+              final txCount = transactionProvider.getCategoryTransactionCount(
+                category.id!,
+                startDate,
+                endDate,
+              );
 
               return BudgetProgressCard(
                 categoryName: category.name,
                 categoryIcon: category.icon,
                 budgetAmount: budget,
                 spentAmount: spent,
+                transactionCount: txCount,
                 daysRemaining: daysRemaining,
                 daysElapsed: daysElapsed,
                 periodDays: periodDays,
                 currencySymbol: currencySymbol,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    PageTransitions.fadeUp(
+                      AllTransactionsScreen(
+                        initialStartDate: startDate,
+                        initialEndDate: endDate,
+                        initialCategoryId: category.id,
+                        hideFiltersInitially: true,
+                      ),
+                    ),
+                  );
+                },
               );
             }),
 
             _BudgetPeriodHistoryStrip(
               selectedMonth: selectedMonth,
               onMonthChanged: onMonthChanged,
+              budgetRevision: budgetProvider.revision,
             ),
           ],
         );
       },
+    );
+  }
+
+  /// The whole card is the tap target — a trailing button here would sit
+  /// under the floating action button.
+  Widget _buildSplitPrompt(BuildContext context) {
+    return Tappable(
+      color: context.appSurface,
+      onTap: () {
+        Navigator.pushNamed(
+          context,
+          '/manageBudget',
+          arguments: ManageBudgetArgs(
+            initialMonth: selectedMonth,
+            autoAllocate: true,
+          ),
+        );
+      },
+      borderRadius: AppDimensions.radiusMedium,
+      child: Container(
+        padding: const EdgeInsets.all(AppDimensions.spacing16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+          border: Border.all(
+            color: context.appAccent.withValues(alpha: 0.25),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.pie_chart_outline, color: context.appAccent, size: 22),
+            const SizedBox(width: AppDimensions.spacing12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Split it across categories',
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Per-category budgets catch overspending early. Tap to set them up.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: context.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -450,8 +530,13 @@ class _BudgetPeriodHistoryStrip extends StatefulWidget {
   final DateTime selectedMonth;
   final ValueChanged<DateTime>? onMonthChanged;
 
+  /// Changes whenever a budget is written, so the cached history reloads
+  /// instead of showing what was true before the edit.
+  final int budgetRevision;
+
   const _BudgetPeriodHistoryStrip({
     required this.selectedMonth,
+    required this.budgetRevision,
     this.onMonthChanged,
   });
 
@@ -461,6 +546,8 @@ class _BudgetPeriodHistoryStrip extends StatefulWidget {
 }
 
 class _BudgetPeriodHistoryStripState extends State<_BudgetPeriodHistoryStrip> {
+  static const int _monthsShown = 6;
+
   Future<List<_BudgetHistoryItem>>? _historyFuture;
 
   @override
@@ -473,7 +560,8 @@ class _BudgetPeriodHistoryStripState extends State<_BudgetPeriodHistoryStrip> {
   void didUpdateWidget(covariant _BudgetPeriodHistoryStrip oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.selectedMonth.year != widget.selectedMonth.year ||
-        oldWidget.selectedMonth.month != widget.selectedMonth.month) {
+        oldWidget.selectedMonth.month != widget.selectedMonth.month ||
+        oldWidget.budgetRevision != widget.budgetRevision) {
       _historyFuture = _loadHistory();
     }
   }
@@ -485,10 +573,10 @@ class _BudgetPeriodHistoryStripState extends State<_BudgetPeriodHistoryStrip> {
         Provider.of<TransactionProvider>(context, listen: false);
 
     final months = List.generate(
-      4,
+      _monthsShown,
       (index) => DateTime(
         widget.selectedMonth.year,
-        widget.selectedMonth.month - (3 - index),
+        widget.selectedMonth.month - (_monthsShown - 1 - index),
         1,
       ),
     );
@@ -535,26 +623,32 @@ class _BudgetPeriodHistoryStripState extends State<_BudgetPeriodHistoryStrip> {
           return const SizedBox.shrink();
         }
 
+        // Newest first, so the month you're looking at is always the card you
+        // land on; older months scroll off to the right.
+        final orderedItems = items.reversed.toList();
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'PERIOD HISTORY',
-              style: AppTextStyles.caption.copyWith(
+              'Budget by month',
+              style: AppTextStyles.sectionTitle.copyWith(
                 color: context.textSecondary,
-                letterSpacing: 1.2,
               ),
             ),
             const SizedBox(height: AppDimensions.spacing12),
             SizedBox(
-              height: 138,
+              // Grows with the user's font size — a fixed height clips the
+              // amount off these cards at large accessibility text scales.
+              height: 138 *
+                  MediaQuery.textScalerOf(context).scale(1.0).clamp(1.0, 1.6),
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: items.length,
+                itemCount: orderedItems.length,
                 separatorBuilder: (_, __) =>
                     const SizedBox(width: AppDimensions.spacing12),
                 itemBuilder: (context, index) {
-                  final item = items[index];
+                  final item = orderedItems[index];
                   final isSelected =
                       item.month.year == widget.selectedMonth.year &&
                           item.month.month == widget.selectedMonth.month;
@@ -624,14 +718,19 @@ class _BudgetPeriodHistoryStripState extends State<_BudgetPeriodHistoryStrip> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  DateFormat('MMM').format(item.month),
+                  // Six months can straddle a year boundary — say which year
+                  // when it isn't the one being viewed.
+                  item.month.year == widget.selectedMonth.year
+                      ? DateFormat('MMM').format(item.month)
+                      : DateFormat("MMM ''yy").format(item.month),
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: context.textPrimary,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),

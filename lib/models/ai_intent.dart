@@ -3,6 +3,13 @@ import '../models/transaction.dart';
 enum AiIntentType {
   addTransaction,
   summaryRequest,
+  transfer,
+  accountQuery,
+  budgetQuery,
+  help,
+  smallTalk,
+  undo,
+  calculation,
   unsupported,
 }
 
@@ -13,6 +20,11 @@ enum AiSummaryMetric {
   categorySpending,
   topCategory,
   upcomingRecurring,
+  spendingHabits,
+  monthComparison,
+  largestExpense,
+  recentTransactions,
+  searchTransactions,
 }
 
 class AiIntent {
@@ -20,6 +32,8 @@ class AiIntent {
   final double confidence;
   final AiTransactionDraft? transaction;
   final AiSummaryRequest? summaryRequest;
+  final AiTransferDraft? transfer;
+  final AiAccountQuery? accountQuery;
   final String message;
 
   const AiIntent({
@@ -28,6 +42,8 @@ class AiIntent {
     required this.message,
     this.transaction,
     this.summaryRequest,
+    this.transfer,
+    this.accountQuery,
   });
 
   factory AiIntent.fromJson(Map<String, dynamic> json) {
@@ -186,12 +202,27 @@ class AiSummaryRequest {
   final DateTime endDate;
   final int? categoryId;
 
+  /// Title substring for [AiSummaryMetric.searchTransactions].
+  final String? searchTerm;
+
   const AiSummaryRequest({
     required this.metric,
     required this.startDate,
     required this.endDate,
     this.categoryId,
+    this.searchTerm,
   });
+
+  /// Same question, different period — how "and last month?" is answered.
+  AiSummaryRequest withPeriod(DateTime start, DateTime end) {
+    return AiSummaryRequest(
+      metric: metric,
+      startDate: start,
+      endDate: end,
+      categoryId: categoryId,
+      searchTerm: searchTerm,
+    );
+  }
 
   factory AiSummaryRequest.fromJson(Map<String, dynamic> json) {
     final startDate = DateTime.tryParse(json['startDate'] as String? ?? '')?.toLocal();
@@ -223,8 +254,36 @@ class AiSummaryRequest {
         return AiSummaryMetric.topCategory;
       case 'upcoming_recurring':
         return AiSummaryMetric.upcomingRecurring;
+      case 'largest_expense':
+        return AiSummaryMetric.largestExpense;
+      case 'recent_transactions':
+        return AiSummaryMetric.recentTransactions;
       default:
         return AiSummaryMetric.totalSpending;
     }
   }
+}
+
+/// A parsed account-to-account transfer awaiting user confirmation.
+class AiTransferDraft {
+  final double amount;
+  final int fromAccountId;
+  final int toAccountId;
+  final String fromName;
+  final String toName;
+
+  const AiTransferDraft({
+    required this.amount,
+    required this.fromAccountId,
+    required this.toAccountId,
+    required this.fromName,
+    required this.toName,
+  });
+}
+
+/// A balance question: a specific account when [accountId] is set, otherwise
+/// an overview (net worth + per-account balances).
+class AiAccountQuery {
+  final int? accountId;
+  const AiAccountQuery({this.accountId});
 }

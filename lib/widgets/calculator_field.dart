@@ -138,12 +138,31 @@ class _CalculatorBottomSheetState extends State<_CalculatorBottomSheet> {
     _currentValue = widget.initialValue.isEmpty ? '0' : widget.initialValue;
   }
 
+  /// True if appending to the segment currently being typed (the part after
+  /// the last operator, or the whole value when there's no operator yet)
+  /// would push it past [kMaxAmount]. Blocks the keystroke instead of
+  /// silently producing a number the formatters can't display.
+  bool _segmentWouldExceedMax(String fullValue) {
+    final segment = fullValue.split(RegExp(r'[+\-×÷]')).last;
+    final parsed = double.tryParse(segment);
+    return parsed != null && parsed > kMaxAmount;
+  }
+
   void _onKeyTap(String key) {
+    String cleanValue = _currentValue.replaceAll(',', '');
+    if (cleanValue == '0') cleanValue = '';
+
+    // Number — reject the digit once the segment being typed would exceed
+    // the app-wide amount ceiling, instead of silently typing an amount the
+    // formatters can't display.
+    if (!['+', '-', '×', '÷', '.'].contains(key) &&
+        _segmentWouldExceedMax(cleanValue + key)) {
+      HapticFeedback.heavyImpact();
+      return;
+    }
+
     HapticFeedback.selectionClick();
     setState(() {
-      String cleanValue = _currentValue.replaceAll(',', '');
-      if (cleanValue == '0') cleanValue = '';
-
       if (['+', '-', '×', '÷'].contains(key)) {
         // Operator
         if (cleanValue.isEmpty) return;
@@ -159,7 +178,6 @@ class _CalculatorBottomSheetState extends State<_CalculatorBottomSheet> {
           _currentValue = cleanValue.isEmpty ? '0.' : cleanValue + key;
         }
       } else {
-        // Number
         _currentValue = cleanValue + key;
       }
     });
@@ -188,8 +206,12 @@ class _CalculatorBottomSheetState extends State<_CalculatorBottomSheet> {
         final exp = parser.parse(expression);
         final contextModel = ContextModel();
         final result = RealEvaluator(contextModel).evaluate(exp);
+        // A product/sum of in-range operands can still land out of range
+        // (e.g. 999,999,999,999 × 2) — clamp rather than show scientific
+        // notation.
+        final clamped = result.clamp(-kMaxAmount, kMaxAmount);
         setState(() {
-          _currentValue = result.toString();
+          _currentValue = clamped.toString();
         });
       }
     } catch (e) {

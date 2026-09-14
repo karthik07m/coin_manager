@@ -1,0 +1,16 @@
+Mode: built-in image_gen
+Source: /Users/manikarthik/Downloads/Pie Chart.webp
+
+Use case: compositing.
+Asset type: Google Play Store portrait promotional screenshot for Coinly, a spending tracker. Make one polished portrait image, 1080 x 1920 or nearest supported 9:16 size.
+Input image 1 is the ORIGINAL APP SCREENSHOT and immutable edit target. The user explicitly says the content should remain original and only explanatory promotional text should be added.
+Composition: Extend the canvas around the original screenshot. Put an elegant editorial headline area at the top, approximately 24 percent of the canvas, and place the COMPLETE original screenshot below it, centered, uniformly scaled to fit, upright and flat. Keep every part of the source screenshot visible including the bottom navigation. Source aspect ratio is 1045:2205. It should occupy about 69 percent of the canvas height and thus about 58 percent of canvas width, with balanced side margins. Use only a very fine emerald outline and subtle shadow around the screenshot, no phone hardware, no perspective, no crop. Dark near-black background (#0F1216) matches the app, with a restrained deep green ambient gradient near the lower edges. This is a real app store screenshot with clear explanatory text, not a redesign of the app.
+Text in NEW TOP SPACE only, exact:
+Small brand label: "COINLY"
+Large bold centered headline in two lines:
+"See where your"
+"money goes."
+The first headline line is white, the second line vivid emerald green matching the chart. Use a refined modern sans serif with clean spacing and readable large letters, no italic.
+Smaller centered supporting line under headline: "Understand your spending at a glance."
+Maintain generous margins and confident typography. Screenshot is the focus.
+CRITICAL INVARIANTS: preserve the source screenshot exactly as supplied, including its full original layout, chart geometry, colors, icons, all category rows and labels, all amounts, percentages and dates. Do not repaint, correct, retype or invent ANY app content. In particular keep "Charts", "Aug 2026", "Spending Breakdown", "$971.65", "Utilities 51.5%", "Shopping 20.6%", "Food 15.6%", "12.4%", "View Details", "$500.00", "$200.00", "$151.65", and the entire bottom navigation exactly as in the original. All additions are OUTSIDE the source screenshot. No new UI, extra charts, fake ratings, store badge, people, decorative coins, feature claims, watermarks, or download button.

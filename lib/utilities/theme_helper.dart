@@ -19,28 +19,32 @@ extension ThemeColors on BuildContext {
       ? AppColors.textSecondary // Gray in dark
       : const Color(0xFF6B7280); // Warmer gray in light
 
-  /// Background color - adapts to theme
-  Color get appBackground => isDark
-      ? AppColors.background // Almost black
-      : const Color(0xFFF6F7F9); // Softer, warmer gray
+  /// Page background: the accent washed toward white/black (main.dart).
+  Color get appBackground => Theme.of(this).scaffoldBackgroundColor;
 
-  /// Surface color (for cards) - adapts to theme
-  Color get appSurface => isDark
-      ? AppColors.surface // Dark steel
-      : const Color(0xFFFEFEFE); // Off-white instead of pure white
+  /// Card fill: a tonal shade of the accent, never plain white (main.dart).
+  Color get appSurface => Theme.of(this).colorScheme.surface;
 
-  /// Surface light color - adapts to theme
+  /// Secondary panels: a step off the card surface.
   Color get appSurfaceLight => isDark
-      ? AppColors.surfaceLight // Lighter dark
-      : const Color(0xFFFAFBFC); // Warmer very light gray
+      ? Color.alphaBlend(Colors.white.withValues(alpha: 0.05), appSurface)
+      : Color.lerp(appBackground, appSurface, 0.5)!;
 
-  /// Border color - adapts to theme
-  Color get appBorder => isDark
-      ? AppColors.border // Dark border
-      : const Color(0xFFE5E7EB); // Subtle light border
+  /// Opaque tonal fill: a small accent tint without a compositing layer.
+  Color get appAccentSurface => Color.alphaBlend(
+        appAccent.withValues(alpha: isDark ? 0.13 : 0.09),
+        appSurface,
+      );
+
+  /// Border color: the scheme's tinted outline, softened onto the card.
+  Color get appBorder => Color.alphaBlend(
+        Theme.of(this).colorScheme.outlineVariant.withValues(alpha: 0.5),
+        appSurface,
+      );
+
+  /// Cards separate from the page by tone, not outline, in both themes.
+  BoxBorder? get cardBorder => null;
 
   /// Divider color - adapts to theme
-  Color get appDivider => isDark
-      ? AppColors.divider // Dark divider
-      : const Color(0xFFE5E7EB); // Subtle light divider
+  Color get appDivider => appBorder;
 }

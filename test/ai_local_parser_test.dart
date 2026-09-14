@@ -1,9 +1,14 @@
+import 'package:coin_manager/models/account.dart';
 import 'package:coin_manager/models/ai_intent.dart';
 import 'package:coin_manager/models/category.dart';
 import 'package:coin_manager/services/ai_local_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  _adviceTriggers();
+  _comparisonTriggers();
+  _smarterParsing();
+
   final parser = AiLocalParser();
   final categories = [
     Category(id: 1, name: 'Food', icon: 'food.png', isExpense: true),
@@ -62,6 +67,44 @@ void main() {
       expect(intent?.summaryRequest?.metric, AiSummaryMetric.totalSpending);
     });
 
+    group('spending habits', () {
+      // Every phrase here also contains "spend"/"spending", which an earlier
+      // branch would otherwise claim and answer with a bare total.
+      for (final phrase in const [
+        'my spending habits',
+        'what are my spending habits?',
+        'show me my spending patterns',
+        'any insights on my spending?',
+        'what are my spending trends this month',
+        'analyse my spending',
+        'how am i doing this month?',
+      ]) {
+        test('"$phrase" resolves to spendingHabits', () {
+          final intent = parse(phrase);
+          expect(intent?.type, AiIntentType.summaryRequest);
+          expect(
+            intent?.summaryRequest?.metric,
+            AiSummaryMetric.spendingHabits,
+            reason: '"$phrase" was claimed by another metric',
+          );
+        });
+      }
+
+      test('a plain spending question is still a plain total', () {
+        final intent = parse('how much did I spend this month?');
+        expect(intent?.summaryRequest?.metric, AiSummaryMetric.totalSpending);
+      });
+
+      test('habits question still picks up the period', () {
+        final intent = parse('my spending habits last month');
+        final expected = DateTime.now().month == 1
+            ? 12
+            : DateTime.now().month - 1;
+        expect(intent?.summaryRequest?.metric, AiSummaryMetric.spendingHabits);
+        expect(intent?.summaryRequest?.startDate.month, expected);
+      });
+    });
+
     test('parses top category question', () {
       final intent = parse('what is my top spending category this month?');
       expect(intent?.summaryRequest?.metric, AiSummaryMetric.topCategory);
@@ -94,5 +137,236 @@ void main() {
     test('returns null for unrelated chatter', () {
       expect(parse('tell me a joke'), isNull);
     });
+  });
+}
+
+/// Asking for advice in plain language must reach the advisor, not fall
+/// through as unsupported.
+void _adviceTriggers() {
+  final parser = AiLocalParser();
+  final categories = [
+    Category(id: 1, name: 'Food', icon: 'food.png', isExpense: true),
+  ];
+
+  group('advice phrasings', () {
+    const asks = [
+      'any suggestions?',
+      'how can I save money',
+      'give me some advice',
+      'what do you recommend',
+      'any tips for me',
+      'where can I cut back',
+      'help me budget better',
+      'how do I spend less',
+    ];
+
+    for (final ask in asks) {
+      test('"$ask" asks for spending advice', () {
+        final intent =
+            parser.tryParse(message: ask, categories: categories);
+        expect(intent?.type, AiIntentType.summaryRequest,
+            reason: '"$ask" should be understood as a request for advice');
+        expect(intent?.summaryRequest?.metric, AiSummaryMetric.spendingHabits);
+      });
+    }
+  });
+}
+
+/// The second-generation parser: multipliers, everyday words, accounts,
+/// richer dates, lookups, arithmetic, and period-only follow-ups.
+void _smarterParsing() {
+  final parser = AiLocalParser();
+  final categories = [
+    Category(id: 1, name: 'Food', icon: 'food.png', isExpense: true),
+    Category(id: 2, name: 'Transit', icon: 'bus.png', isExpense: true),
+    Category(id: 3, name: 'Salary', icon: 'cash.png', isExpense: false),
+  ];
+  final accounts = [
+    Account(
+      id: 7,
+      name: 'Cash',
+      icon: 'wallet',
+      color: '#4CAF50',
+      isDefault: true,
+      createdOn: DateTime(2026),
+      modifiedOn: DateTime(2026),
+    ),
+  ];
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+
+  AiIntent? parse(String message, {AiSummaryRequest? previous}) =>
+      parser.tryParse(
+        message: message,
+        categories: categories,
+        accounts: accounts,
+        previous: previous,
+      );
+
+  group('smarter add', () {
+    test('k multiplier, everyday word, account and weekday date', () {
+      final intent = parse('spent 1.5k on groceries last friday from cash');
+      final t = intent?.transaction;
+      expect(intent?.type, AiIntentType.addTransaction);
+      expect(t?.amount, 1500);
+      expect(t?.categoryId, 1, reason: 'groceries should land in Food');
+      expect(t?.accountId, 7);
+      expect(t?.date.weekday, DateTime.friday);
+      expect(t?.date.isBefore(today), isTrue);
+      expect(t?.title, 'Groceries');
+    });
+
+    test('"coffee 200" is Food without naming the category', () {
+      expect(parse('coffee 200')?.transaction?.categoryId, 1);
+    });
+
+    test('"paid 300 for uber" is Transit', () {
+      final t = parse('paid 300 for uber')?.transaction;
+      expect(t?.categoryId, 2);
+      expect(t?.title, 'Uber');
+    });
+
+    test('currency prefix and "days ago"', () {
+      final t = parse('rs.250 lunch 3 days ago')?.transaction;
+      expect(t?.amount, 250);
+      expect(t?.date, today.subtract(const Duration(days: 3)));
+      expect(t?.title, 'Lunch');
+    });
+
+    test('"on the 5th" is a date, not an amount', () {
+      final t = parse('paid 900 rent on the 5th')?.transaction;
+      expect(t?.amount, 900);
+      expect(t?.date.day, 5);
+    });
+  });
+
+  group('lookups', () {
+    test('"find netflix" searches all history', () {
+      final r = parse('find netflix')?.summaryRequest;
+      expect(r?.metric, AiSummaryMetric.searchTransactions);
+      expect(r?.searchTerm, 'netflix');
+      expect(r?.startDate.year, 2000);
+    });
+
+    test('"when did I last pay rent?" searches for rent', () {
+      final r = parse('when did I last pay rent?')?.summaryRequest;
+      expect(r?.metric, AiSummaryMetric.searchTransactions);
+      expect(r?.searchTerm, 'rent');
+    });
+
+    test('biggest expense', () {
+      expect(parse('biggest expense this month')?.summaryRequest?.metric,
+          AiSummaryMetric.largestExpense);
+      expect(parse("what's my biggest expense?")?.summaryRequest?.metric,
+          AiSummaryMetric.largestExpense);
+    });
+
+    test('top category still wins over "biggest"', () {
+      expect(parse('biggest category this month')?.summaryRequest?.metric,
+          AiSummaryMetric.topCategory);
+    });
+
+    test('recent transactions', () {
+      expect(parse('show recent transactions')?.summaryRequest?.metric,
+          AiSummaryMetric.recentTransactions);
+      final r = parse('what did I spend on yesterday?')?.summaryRequest;
+      expect(r?.metric, AiSummaryMetric.recentTransactions);
+      expect(r?.startDate, today.subtract(const Duration(days: 1)));
+    });
+
+    test('upcoming bills are not a search', () {
+      expect(parse('show my upcoming recurring payments')?.summaryRequest?.metric,
+          AiSummaryMetric.upcomingRecurring);
+    });
+
+    test('category spending via everyday word', () {
+      final r = parse('how much did I spend on coffee this month')?.summaryRequest;
+      expect(r?.metric, AiSummaryMetric.categorySpending);
+      expect(r?.categoryId, 1);
+    });
+
+    test('named month period', () {
+      final r = parse('how much did I spend in january')?.summaryRequest;
+      expect(r?.startDate.month, 1);
+      expect(r?.endDate.day, 31);
+    });
+  });
+
+  group('simple commands', () {
+    test('undo / help / greeting', () {
+      expect(parse('undo')?.type, AiIntentType.undo);
+      expect(parse('Undo that!')?.type, AiIntentType.undo);
+      expect(parse('help')?.type, AiIntentType.help);
+      expect(parse('what can you do?')?.type, AiIntentType.help);
+      expect(parse('hi')?.type, AiIntentType.smallTalk);
+      expect(parse('thanks!')?.type, AiIntentType.smallTalk);
+    });
+
+    test('arithmetic', () {
+      expect(parse("what's 15% of 2400")?.message, '360');
+      expect(parse('2400/3')?.message, '800');
+      expect(parse('199*12')?.message, '2388');
+      expect(parse('200')?.type, isNot(AiIntentType.calculation));
+    });
+
+    test('daily allowance is a budget question', () {
+      expect(parse('how much can I spend today?')?.type,
+          AiIntentType.budgetQuery);
+    });
+  });
+
+  group('follow-ups', () {
+    final previous = AiSummaryRequest(
+      metric: AiSummaryMetric.topCategory,
+      startDate: DateTime(now.year, now.month, 1),
+      endDate: DateTime(now.year, now.month + 1, 0),
+    );
+
+    test('"and last month?" re-asks with the new period', () {
+      final r = parse('and last month?', previous: previous)?.summaryRequest;
+      expect(r?.metric, AiSummaryMetric.topCategory);
+      expect(r?.startDate, DateTime(now.year, now.month - 1, 1));
+    });
+
+    test('"what about this week" too', () {
+      final r = parse('what about this week', previous: previous)?.summaryRequest;
+      expect(r?.metric, AiSummaryMetric.topCategory);
+      expect(r?.endDate, today);
+    });
+
+    test('a period with other words is not a follow-up', () {
+      final r = parse('income last month', previous: previous)?.summaryRequest;
+      expect(r?.metric, isNot(AiSummaryMetric.topCategory));
+    });
+
+    test('nothing to follow up on', () {
+      expect(parse('and last month?'), isNull);
+    });
+  });
+}
+
+/// Comparison phrasings must stay on-device; none of them carry a question
+/// word, so they depend on their own gate.
+void _comparisonTriggers() {
+  final parser = AiLocalParser();
+  final categories = [
+    Category(id: 1, name: 'Food', icon: 'food.png', isExpense: true),
+  ];
+
+  group('comparison phrasings', () {
+    for (final ask in const [
+      'compare this month to last month',
+      'am i spending more than last month',
+      'this month vs last month',
+      'month over month spending',
+    ]) {
+      test('"$ask" is a month comparison', () {
+        final intent =
+            parser.tryParse(message: ask, categories: categories);
+        expect(intent?.summaryRequest?.metric,
+            AiSummaryMetric.monthComparison,
+            reason: '"$ask" should not fall through to the cloud');
+      });
+    }
   });
 }

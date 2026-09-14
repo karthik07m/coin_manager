@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../db/debt_db_helper.dart';
 import '../db/transaction_db_helper.dart';
 import '../models/debt.dart';
+import '../models/transaction.dart';
 import '../utilities/functions.dart';
 import 'notification_service.dart';
 
@@ -19,6 +20,23 @@ class BillReminderScheduler {
   static const _prefsEnabledKey = 'billRemindersEnabled';
   static const _idBase = 20000;
   static const _windowDays = 30;
+
+  /// The recurring entries that warrant a "due tomorrow" nudge.
+  ///
+  /// Expenses only. The upcoming-recurring query returns income as well, and
+  /// a reminder is a prompt to *pay* something — "Upcoming: Salary due
+  /// tomorrow" tells the user to settle their own paycheque.
+  @visibleForTesting
+  static List<Transaction> billsNeedingReminder(
+    List<Transaction> upcoming,
+    DateTime windowEnd,
+  ) {
+    return upcoming.where((t) {
+      if (!t.isExpense) return false;
+      final due = DateTime(t.date.year, t.date.month, t.date.day);
+      return !due.isAfter(windowEnd);
+    }).toList();
+  }
 
   Future<void> reschedule() async {
     final prefs = await SharedPreferences.getInstance();
@@ -45,13 +63,11 @@ class BillReminderScheduler {
     // Collect (dueDate, title, amount) items to remind about.
     final items = <_ReminderItem>[];
 
-    // Recurring bills (expenses) already scoped tomorrow..end-of-next-month.
     try {
-      final bills =
+      final upcoming =
           await TransactionDBHelper().getAllUpcomingRecurringTransactions();
-      for (final t in bills) {
+      for (final t in billsNeedingReminder(upcoming, windowEnd)) {
         final due = DateTime(t.date.year, t.date.month, t.date.day);
-        if (due.isAfter(windowEnd)) continue;
         items.add(_ReminderItem(due, t.title, t.amount));
       }
     } catch (e) {

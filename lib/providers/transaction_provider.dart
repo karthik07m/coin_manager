@@ -5,11 +5,29 @@ import '../db/category_db_helper.dart';
 import '../db/receipt_db_helper.dart';
 import '../services/bill_reminder_scheduler.dart';
 import '../utilities/id_generator.dart';
+import '../utilities/financial_year.dart';
 import '../models/category_amount.dart';
 import '../models/transaction.dart';
 import '../models/activity_log.dart';
 import '../services/activity_logger.dart';
+import '../services/review_service.dart';
 import '../db/transaction_db_helper.dart';
+import '../db/debt_db_helper.dart';
+
+/// Thrown when a transfer is attempted between accounts holding different
+/// currencies. Transfers carry a single amount across both legs, so mixing
+/// currencies would misstate one side of the move.
+class TransferCurrencyMismatch implements Exception {
+  final String fromCurrency;
+  final String toCurrency;
+
+  const TransferCurrencyMismatch(this.fromCurrency, this.toCurrency);
+
+  @override
+  String toString() =>
+      'Transfers must use one currency — this moves $fromCurrency to '
+      '$toCurrency. Record it as an expense and a matching income instead.';
+}
 
 class TransactionProvider extends ChangeNotifier {
   final List<Transaction> _transactions = [];
@@ -43,6 +61,10 @@ class TransactionProvider extends ChangeNotifier {
   double baseAmount(Transaction t) => baseAmountResolver == null
       ? t.amount
       : baseAmountResolver!(t.accountId, t.amount);
+
+  /// Resolves the currency an account holds (wired to AccountProvider in
+  /// main). Used to keep both legs of a transfer in the same currency.
+  String Function(int accountId)? accountCurrencyResolver;
 
   DateTime? _lastTotalsStart;
   DateTime? _lastTotalsEnd;
@@ -90,10 +112,9 @@ class TransactionProvider extends ChangeNotifier {
     _transactions.clear();
     _transactions.addAll(filteredTransactions);
 
-    _updateTotalsForMonth(
-        totalsStartDate ?? startDate ?? DateTime.now(),
+    _updateTotalsForMonth(totalsStartDate ?? startDate ?? DateTime.now(),
         totalsEndDate ?? endDate ?? DateTime.now());
-    _calculateCategoryAmounts();
+    await _calculateCategoryAmounts(); // Await to avoid double-notify race
     isTransactionsLoaded = true; // Set to true after loading
     notifyListeners();
   }
@@ -112,12 +133,13 @@ class TransactionProvider extends ChangeNotifier {
   List<Transaction> _allUpcomingTransactions = [];
   List<Transaction> get allUpcomingTransactions => _allUpcomingTransactions;
 
-  // Computed total from all upcoming transactions (for consistency)
+  /// Total still due this month. Expenses only — the upcoming list also
+  /// carries recurring income, and netting the two would produce a figure
+  /// that is neither "what I owe" nor "what I'll receive".
   double get totalUpcomingAmount {
-    return _allUpcomingTransactions.fold<double>(
-      0.0,
-      (sum, transaction) => sum + transaction.amount,
-    );
+    return _allUpcomingTransactions
+        .where((transaction) => transaction.isExpense)
+        .fold<double>(0.0, (sum, transaction) => sum + transaction.amount);
   }
 
   Future<void> loadAllUpcomingTransactions({bool notify = true}) async {
@@ -145,7 +167,9 @@ class TransactionProvider extends ChangeNotifier {
       transaction.recurrenceId ??= transaction.id;
     }
 
-    await _dbHelper.insertTransaction(transaction);
+    if (await _dbHelper.insertTransaction(transaction) == -1) {
+      throw StateError('Could not save transaction');
+    }
     _transactions.add(transaction);
 
     DateTime startDate =
@@ -160,6 +184,10 @@ class TransactionProvider extends ChangeNotifier {
     await _notifyBalancesAffected();
     ActivityLogger().created(ActivityEntity.transaction, transaction.title,
         amount: transaction.amount);
+
+    // Trigger in-app review check after successful transaction creation
+    ReviewService.instance.registerSignificantEvent();
+
     // Only recurring bills feed the reminder scheduler; skip the churn on
     // ordinary one-off transactions.
     if (transaction.isRecurring) BillReminderScheduler().reschedule();
@@ -173,6 +201,19 @@ class TransactionProvider extends ChangeNotifier {
     required DateTime date,
     String note = '',
   }) async {
+    // A transfer is stored as a single row whose amount is subtracted from the
+    // source and added to the destination. If the two accounts held different
+    // currencies that one number would be booked at two different values,
+    // silently creating or destroying money — so refuse it outright.
+    final resolve = accountCurrencyResolver;
+    if (resolve != null) {
+      final fromCurrency = resolve(fromAccountId);
+      final toCurrency = resolve(toAccountId);
+      if (fromCurrency != toCurrency) {
+        throw TransferCurrencyMismatch(fromCurrency, toCurrency);
+      }
+    }
+
     final transfer = Transaction.createTransfer(
       id: newId(),
       amount: amount,
@@ -212,7 +253,9 @@ class TransactionProvider extends ChangeNotifier {
       );
     }
 
-    await _dbHelper.updateTransaction(transaction);
+    if (await _dbHelper.updateTransaction(transaction) <= 0) {
+      throw StateError('Could not update transaction');
+    }
 
     int index = _transactions.indexWhere((t) => t.id == transaction.id);
     if (index != -1) {
@@ -276,7 +319,7 @@ class TransactionProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> deleteTransaction(String id) async {
+  Future<void> deleteTransaction(String id, {bool deleteReceipt = true}) async {
     final transactionIndex = _transactions.indexWhere((t) => t.id == id);
     final transaction = transactionIndex == -1
         ? await _dbHelper.getTransactionById(id)
@@ -308,12 +351,17 @@ class TransactionProvider extends ChangeNotifier {
       );
     }
 
+    if (await _dbHelper.deleteTransaction(id) == -1) {
+      throw StateError('Could not delete transaction');
+    }
     _transactions.removeWhere((t) => t.id == id);
-    await _dbHelper.deleteTransaction(id);
+    // A loan booking or repayment must not survive as a debt entry once the
+    // money movement is gone (multi-select delete, AI delete, swipe).
+    await DebtDBHelper().detachTransaction(id);
 
     // Clean up the attached receipt (row + image file) so deleting a
     // transaction never leaves an orphaned receipt behind.
-    if (transaction.receiptId != null) {
+    if (deleteReceipt && transaction.receiptId != null) {
       await _deleteReceipt(transaction.receiptId!);
     }
 
@@ -335,6 +383,23 @@ class TransactionProvider extends ChangeNotifier {
       amount: transaction.amount,
     );
     if (transaction.isRecurring) BillReminderScheduler().reschedule();
+  }
+
+  /// Every active recurring series — income *and* expense — one entry per
+  /// series (the original template row), regardless of date.
+  ///
+  /// The "upcoming payments" views are expense-only and date-windowed, so a
+  /// recurring income (or an item whose date already passed this month) never
+  /// showed up there and could not be stopped. This backs the Recurring
+  /// manager screen, which can stop any series.
+  Future<List<Transaction>> getRecurringSeries() async {
+    final series = await _dbHelper.getRecurringTransactions();
+    series.sort((a, b) {
+      // Income first, then by title, so the list is stable and scannable.
+      if (a.isExpense != b.isExpense) return a.isExpense ? 1 : -1;
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+    });
+    return series;
   }
 
   /// Stop a recurring payment by disabling its recurring flag and deleting all future instances
@@ -459,6 +524,20 @@ class TransactionProvider extends ChangeNotifier {
                 .isAfter(startDate.subtract(const Duration(days: 1))) &&
             transaction.date.isBefore(endDate.add(const Duration(days: 1))))
         .fold(0.0, (sum, transaction) => sum + baseAmount(transaction));
+  }
+
+  /// Get transaction count for a specific category within a date range
+  int getCategoryTransactionCount(
+      int categoryId, DateTime startDate, DateTime endDate) {
+    return _transactions
+        .where((transaction) =>
+            transaction.categoryId == categoryId &&
+            transaction.isExpense &&
+            !transaction.isTransfer &&
+            transaction.date
+                .isAfter(startDate.subtract(const Duration(days: 1))) &&
+            transaction.date.isBefore(endDate.add(const Duration(days: 1))))
+        .length;
   }
 
   Future<void> checkAndGenerateRecurringTransactions() async {
@@ -656,20 +735,20 @@ class TransactionProvider extends ChangeNotifier {
         .fold(0.0, (sum, t) => sum + baseAmount(t));
   }
 
-  /// Total expenses per calendar month (index 0 = Jan .. 11 = Dec) for
-  /// [year], converted to the base currency and excluding transfers.
-  Future<List<double>> monthlyExpenseTotals(int year) async {
-    final start = DateTime(year, 1, 1);
-    final end = DateTime(year, 12, 31, 23, 59, 59);
+  /// Twelve months starting at [startMonth] in [year], converted to the base
+  /// currency and excluding transfers. January remains the default.
+  Future<List<double>> monthlyExpenseTotals(int year,
+      {int startMonth = 1}) async {
+    final period = FinancialYear(year, startMonth: startMonth);
     final txns = await _dbHelper.getTransactionsByType(
       isExpense: true,
-      startDate: start,
-      endDate: end,
+      startDate: period.start,
+      endDate: period.end,
     );
     final totals = List<double>.filled(12, 0.0);
     for (final t in txns) {
       if (t.isTransfer) continue;
-      totals[t.date.month - 1] += baseAmount(t);
+      totals[period.indexOf(t.date)] += baseAmount(t);
     }
     return totals;
   }

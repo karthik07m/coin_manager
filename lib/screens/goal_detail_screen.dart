@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../utilities/page_transitions.dart';
 import '../providers/goal_provider.dart';
 import '../providers/settings_provider.dart';
 import '../models/goal.dart';
@@ -219,7 +220,7 @@ class _GoalDetailScreenState extends State<GoalDetailScreen> {
                                 if (amount == null || amount <= 0) {
                                   ScaffoldMessenger.of(this.context)
                                       .showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content:
                                           Text('Please enter a valid amount'),
                                       backgroundColor: AppColors.negative,
@@ -254,7 +255,7 @@ class _GoalDetailScreenState extends State<GoalDetailScreen> {
                                 navigator.pop();
                                 if (success) {
                                   messenger.showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content: Text(
                                           'Contribution added successfully'),
                                       backgroundColor: AppColors.positive,
@@ -263,7 +264,7 @@ class _GoalDetailScreenState extends State<GoalDetailScreen> {
                                   _loadContributionHistory();
                                 } else {
                                   messenger.showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content:
                                           Text('Failed to add contribution'),
                                       backgroundColor: AppColors.negative,
@@ -335,8 +336,7 @@ class _GoalDetailScreenState extends State<GoalDetailScreen> {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (context) => GoalFormScreen(goalId: goal.id),
+                    PageTransitions.fadeUp(GoalFormScreen(goalId: goal.id),
                     ),
                   );
                 },
@@ -498,7 +498,7 @@ class _GoalDetailScreenState extends State<GoalDetailScreen> {
                           ),
                         _buildDetailRow(
                           'Status',
-                          goal.isAchieved ? 'ACHIEVED' : 'IN PROGRESS',
+                          goal.isAchieved ? 'Achieved' : 'In progress',
                           Icons.info_outline,
                         ),
                         if (goal.notes != null) ...[

@@ -189,68 +189,17 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         .toList();
 
     setState(() {
-      _budgetAllocation = calculateBudgetAllocation(
-        totalBudget: budget,
-        rule: _selectedBudgetRule,
-        categoryNames: categoryNames,
+      // Rounded to cents against the budget, so the categories add up to
+      // exactly the budget instead of a few paise over it.
+      _budgetAllocation = roundAllocationToTotal(
+        calculateBudgetAllocation(
+          totalBudget: budget,
+          rule: _selectedBudgetRule,
+          categoryNames: categoryNames,
+        ),
+        budget,
       );
     });
-  }
-
-  /// Minimal setup for people in a hurry — saves the currency, marks
-  /// onboarding done, and lets them configure everything later in Settings.
-  Future<void> _skipOnboarding() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF16213e),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Skip setup?',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          'No problem! You can set your income and budget anytime from Settings.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(
-              'Keep going',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(
-              'Skip for now',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    final settingsProvider =
-        Provider.of<SettingsProvider>(context, listen: false);
-    await settingsProvider.setCurrency(
-        _selectedCurrency, _selectedCurrencySymbol);
-    await settingsProvider.completeOnboarding(
-      income: 0,
-      budget: 0,
-      budgetRule: _selectedBudgetRule.name,
-      recurIncome: false,
-      recurBudget: false,
-    );
-
-    if (!mounted) return;
-    Navigator.of(context).pushReplacementNamed('/');
   }
 
   Future<void> _completeOnboarding() async {
@@ -280,16 +229,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     await settingsProvider.setCurrency(
         _selectedCurrency, _selectedCurrencySymbol);
 
-    // Save to settings
-    await settingsProvider.completeOnboarding(
-      income: income,
-      budget: budget,
-      budgetRule: _selectedBudgetRule.name,
-      recurIncome: _recurIncome,
-      recurBudget: true, // Always apply budget monthly
-      incomeDay: _selectedIncomeDay,
-    );
-
     // Create Income transaction
     final incomeTransaction = Transaction.createNew(
       id: newId(),
@@ -301,6 +240,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       isExpense: false,
     );
     await transactionProvider.addTransaction(incomeTransaction);
+    
+    // Prevent MenuScrn from duplicating this if auto-income is enabled
+    final now = DateTime.now();
+    await settingsProvider.markAutoIncomeAdded(now.year, now.month);
 
     // Apply budget to current month
     final currentMonth = BudgetPeriod.keyFor(DateTime.now());
@@ -313,10 +256,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           entry.key, currentMonth, entry.value);
     }
 
-    if (!mounted) return;
-
     // Ask for notification permissions
     await _askForNotifications();
+
+    // Save to settings
+    await settingsProvider.completeOnboarding(
+      income: income,
+      budget: budget,
+      budgetRule: _selectedBudgetRule.name,
+      recurIncome: _recurIncome,
+      recurBudget: true, // Always apply budget monthly
+      incomeDay: _selectedIncomeDay,
+    );
+
+    if (!mounted) return;
 
     if (!mounted) return;
     Navigator.of(context).pushReplacementNamed('/');
@@ -334,14 +287,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Theme.of(context)
+                color: Theme.of(ctx)
                     .colorScheme
                     .primary
                     .withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(Icons.notifications_active,
-                  color: Theme.of(context).colorScheme.primary),
+                  color: Theme.of(ctx).colorScheme.primary),
             ),
             const SizedBox(width: 12),
             const Text(
@@ -458,19 +411,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         }),
                       ),
                     ),
-                    if (_currentPage < _pageCount - 1)
-                      TextButton(
-                        onPressed: _skipOnboarding,
-                        child: Text(
-                          'Skip',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.5),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      )
-                    else
-                      const SizedBox(width: 48),
+                    const SizedBox(width: 48),
                   ],
                 ),
               ),
@@ -661,13 +602,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  'WELCOME TO',
+                  'Welcome to',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white.withValues(alpha: 0.5),
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 3,
+                    fontSize: 14,
+                    color: Colors.white.withValues(alpha: 0.55),
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 6),
