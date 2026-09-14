@@ -3,6 +3,17 @@ import 'package:coin_manager/utilities/functions.dart';
 
 void main() {
   group('currency-aware formatting', () {
+    test('no symbol passed: uses the selected currency, never a stray \$', () {
+      // Charts called addCommaWithSign(total) with no symbol and showed
+      // "\$657.00" to an INR user.
+      UtilityFunction.activeCurrencyCode = 'INR';
+      expect(UtilityFunction.addCommaWithSign(657), '₹657.00');
+      expect(UtilityFunction.formatMoney(657, showDecimals: true), '₹657.00');
+      expect(UtilityFunction.formatCompactMoney(657), startsWith('₹'));
+      UtilityFunction.activeCurrencyCode = 'USD';
+      expect(UtilityFunction.addCommaWithSign(657), '\$657.00');
+    });
+
     test('USD: western grouping, 2 decimals, sign before symbol', () {
       UtilityFunction.activeCurrencyCode = 'USD';
       expect(

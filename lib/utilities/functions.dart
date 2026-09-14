@@ -159,6 +159,11 @@ class UtilityFunction {
   /// right currency without threading the code through every widget.
   static String activeCurrencyCode = 'USD';
 
+  /// Symbol of the selected currency: the default for callers that don't
+  /// pass one, so an INR user never sees "\$657.00".
+  static String get _activeSymbol =>
+      currencyForCode(activeCurrencyCode)?.symbol ?? '\$';
+
   /// Resolves the currency rules (decimal digits, grouping) to apply for a
   /// given symbol/code pair, falling back to the active currency.
   static AppCurrency _resolveCurrency(String? symbol, String? code) {
@@ -214,10 +219,10 @@ class UtilityFunction {
   }
 
   static String addCommaWithSign(double value,
-      {String currencySymbol = '\$', String currencyCode = 'USD'}) {
+      {String? currencySymbol, String? currencyCode}) {
     return _formatWithCurrency(
       value,
-      symbol: currencySymbol,
+      symbol: currencySymbol ?? _activeSymbol,
       code: currencyCode,
       showDecimals: true,
     );
@@ -233,12 +238,12 @@ class UtilityFunction {
     // Summaries and KPIs read better rounded; callers that need cents
     // (account balances, single transactions) opt in explicitly.
     bool showDecimals = false,
-    String symbol = '\$',
-    String currencyCode = 'USD',
+    String? symbol,
+    String? currencyCode,
   }) {
     return _formatWithCurrency(
       value,
-      symbol: symbol,
+      symbol: symbol ?? _activeSymbol,
       code: currencyCode,
       showDecimals: showDecimals,
     );
@@ -249,12 +254,13 @@ class UtilityFunction {
   /// k/M elsewhere.
   static String formatCompactMoney(
     double value, {
-    String symbol = '\$',
+    String? symbol,
     String? currencyCode,
   }) {
-    final currency = _resolveCurrency(symbol, currencyCode);
+    final sym = symbol ?? _activeSymbol;
+    final currency = _resolveCurrency(sym, currencyCode);
     if (currency.indianGrouping) {
-      return formatIndianCompact(value, currencySymbol: symbol);
+      return formatIndianCompact(value, currencySymbol: sym);
     }
 
     final isNegative = value < 0;
@@ -271,7 +277,7 @@ class UtilityFunction {
     } else {
       body = abs.toStringAsFixed(1);
     }
-    return '$sign$symbol$body';
+    return '$sign$sym$body';
   }
 
   static String formatIndianCompact(double value,
