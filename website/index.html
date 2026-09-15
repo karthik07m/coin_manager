@@ -3,53 +3,226 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Coinly: personal budget and expense tracker</title>
-<meta name="description" content="Coinly is a private, offline-first budget and expense tracker for Android. Your financial data stays on your device.">
+<title>Coinly: private budget and expense tracker</title>
+<meta name="description" content="Coinly is a private, offline-first budget and expense tracker for Android. Track spending, set budgets and keep your data on your own device.">
+<meta name="theme-color" content="#0f1115">
+<link rel="icon" href="icon.png">
 <!-- Google Search Console verification tag goes here -->
 <style>
-  :root { --bg:#f7f8f7; --fg:#1b2420; --muted:#56615b; --accent:#1f9d57; --card:#fff; --line:#e1e6e3; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#121614; --fg:#e7ece9; --muted:#9aa7a0; --accent:#39c878; --card:#1a201d; --line:#2a322e; } }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
-  main { max-width:760px; margin:0 auto; padding:48px 20px 64px; }
-  h1 { font-size:2.2rem; line-height:1.2; margin:0 0 8px; }
-  h2 { font-size:1.25rem; margin:36px 0 8px; }
-  p, li { color:var(--muted); }
-  .lead { font-size:1.15rem; color:var(--fg); }
-  ul { padding-left:20px; }
-  a { color:var(--accent); }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-top:24px; }
-  footer { border-top:1px solid var(--line); margin-top:48px; padding-top:18px; font-size:.95rem; }
-  footer a { margin-right:18px; }
+  :root {
+    --bg:#0f1115; --surface:#181b21; --surface-2:#20242c; --line:#2a2e36;
+    --fg:#ffffff; --muted:#a1a1aa; --dim:#71717a;
+    --green:#2ecc71; --green-deep:#1f9d57; --gold:#ffd700; --red:#ff6b6b;
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:inherit; }
+  .wrap { max-width:1080px; margin:0 auto; padding:0 24px; }
+
+  /* Top bar */
+  header { display:flex; align-items:center; justify-content:space-between; padding:22px 0; }
+  .brand { display:flex; align-items:center; gap:12px; text-decoration:none; }
+  .brand img { width:44px; height:44px; border-radius:12px; }
+  .brand span { font-size:1.6rem; font-weight:800; letter-spacing:-.02em; }
+  .toplinks a { color:var(--muted); text-decoration:none; margin-left:22px; font-size:.95rem; }
+  .toplinks a:hover { color:var(--green); }
+
+  /* Hero */
+  .hero { display:grid; grid-template-columns:1.15fr .85fr; gap:48px; align-items:center; padding:48px 0 72px; }
+  h1 { font-size:clamp(2.6rem, 6.5vw, 4.6rem); line-height:1.02; letter-spacing:-.035em; margin:0 0 20px; font-weight:850; }
+  h1 .typed { color:var(--green); }
+  .cursor { display:inline-block; width:.08em; height:.9em; background:var(--green); margin-left:.06em; vertical-align:-.08em; animation:blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+  .sub { color:var(--muted); font-size:1.15rem; max-width:34ch; margin:0 0 34px; }
+
+  .actions { list-style:none; margin:0; padding:0; display:grid; gap:6px; max-width:380px; }
+  .actions a { display:flex; align-items:center; gap:16px; padding:12px 14px; border-radius:14px; text-decoration:none; font-size:1.15rem; font-weight:600; transition:background .15s, transform .15s; }
+  .actions a:hover { background:var(--surface); transform:translateX(4px); }
+  .actions .ico { width:40px; height:40px; border-radius:11px; display:grid; place-items:center; flex:none; }
+  .actions .primary { background:var(--green); color:#07210f; }
+  .actions .primary:hover { background:#3ddc80; }
+  .actions .primary .ico { background:rgba(0,0,0,.12); }
+  .actions .ico.soft { background:var(--surface-2); color:var(--green); }
+  .actions svg { width:22px; height:22px; }
+
+  /* Phone mockup (sample data) */
+  .phone { justify-self:center; width:290px; border-radius:40px; padding:12px; background:#05060a; border:1px solid var(--line); box-shadow:0 30px 80px rgba(46,204,113,.18), 0 10px 30px rgba(0,0,0,.6); }
+  .screen { border-radius:30px; background:var(--bg); padding:22px 16px 18px; }
+  .screen .hello { color:var(--dim); font-size:.72rem; }
+  .screen .title { font-weight:800; font-size:1.05rem; margin:2px 0 14px; }
+  .balance { background:linear-gradient(145deg,#1d3b2a,#16241d); border-radius:20px; padding:16px; }
+  .balance .l { color:#9fd9b6; font-size:.7rem; }
+  .balance .v { font-size:1.7rem; font-weight:850; letter-spacing:-.02em; margin:2px 0 12px; }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .pill { background:rgba(0,0,0,.25); border-radius:12px; padding:8px 10px; }
+  .pill small { display:block; color:#9fb7a8; font-size:.62rem; }
+  .pill b { font-size:.85rem; }
+  .bars { display:flex; align-items:flex-end; gap:7px; height:74px; margin:16px 4px 6px; }
+  .bars i { flex:1; border-radius:6px 6px 3px 3px; background:var(--surface-2); }
+  .bars i.on { background:var(--green); }
+  .row { display:flex; justify-content:space-between; align-items:center; padding:9px 4px; border-top:1px solid var(--line); font-size:.78rem; }
+  .row .n { display:flex; align-items:center; gap:8px; }
+  .dot { width:26px; height:26px; border-radius:8px; display:grid; place-items:center; font-size:.8rem; background:var(--surface-2); }
+  .row .neg { color:var(--red); font-weight:700; }
+  .row .pos { color:var(--green); font-weight:700; }
+  .sample { text-align:center; color:var(--dim); font-size:.7rem; margin-top:10px; }
+
+  /* Sections */
+  section { padding:64px 0; border-top:1px solid var(--line); }
+  h2 { font-size:clamp(1.8rem,3.6vw,2.6rem); letter-spacing:-.025em; line-height:1.1; margin:0 0 10px; }
+  .lede { color:var(--muted); max-width:56ch; margin:0 0 36px; font-size:1.05rem; }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:20px; padding:22px; }
+  .card .ico { width:42px; height:42px; border-radius:12px; display:grid; place-items:center; background:rgba(46,204,113,.12); color:var(--green); margin-bottom:14px; }
+  .card .ico svg { width:22px; height:22px; }
+  .card h3 { margin:0 0 6px; font-size:1.08rem; }
+  .card p { margin:0; color:var(--muted); font-size:.96rem; }
+
+  .promise { display:grid; grid-template-columns:1fr 1fr; gap:40px; align-items:center; }
+  .checks { list-style:none; margin:0; padding:0; display:grid; gap:14px; }
+  .checks li { display:flex; gap:12px; color:var(--muted); }
+  .checks li b { color:var(--fg); font-weight:650; }
+  .checks svg { width:22px; height:22px; color:var(--green); flex:none; margin-top:2px; }
+
+  .cta { text-align:center; }
+  .cta .btn { display:inline-flex; align-items:center; gap:12px; margin-top:8px; padding:16px 26px; border-radius:16px; background:var(--green); color:#07210f; font-weight:750; font-size:1.1rem; text-decoration:none; }
+  .cta .btn:hover { background:#3ddc80; }
+  .cta .btn svg { width:22px; height:22px; }
+
+  footer { border-top:1px solid var(--line); padding:28px 0 40px; color:var(--dim); font-size:.92rem; display:flex; flex-wrap:wrap; gap:14px 26px; justify-content:space-between; }
+  footer nav a { color:var(--muted); text-decoration:none; margin-right:22px; }
+  footer nav a:hover { color:var(--green); }
+
+  @media (max-width:860px) {
+    .hero, .promise { grid-template-columns:1fr; }
+    .hero { padding-top:24px; }
+    .grid { grid-template-columns:1fr 1fr; }
+    .toplinks { display:none; }
+  }
+  @media (max-width:560px) { .grid { grid-template-columns:1fr; } }
+  @media (prefers-reduced-motion:reduce) { .cursor { animation:none; } html { scroll-behavior:auto; } .actions a:hover { transform:none; } }
 </style>
 </head>
 <body>
-<main>
-  <h1>Coinly</h1>
-  <p class="lead">A private, offline-first budget and expense tracker for Android.</p>
-  <p>Coinly helps you record income and expenses, set monthly budgets, track debts and savings goals, and see where your money goes. Your financial records are stored on your own device.</p>
+<div class="wrap">
+  <header>
+    <a class="brand" href="./"><img src="icon.png" alt="" width="44" height="44"><span>Coinly</span></a>
+    <nav class="toplinks" aria-label="Site">
+      <a href="#features">Features</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="terms.html">Terms</a>
+    </nav>
+  </header>
 
-  <h2>Features</h2>
-  <ul>
-    <li>Income and expense tracking across multiple accounts</li>
-    <li>Monthly and category budgets with charts and insights</li>
-    <li>Recurring payments, bill reminders, debts and savings goals</li>
-    <li>Receipt scanning, with text read on your device</li>
-    <li>An optional AI assistant that turns messages like "coffee 150" into draft transactions</li>
-    <li>Optional backup to your own Google Drive</li>
-    <li>App lock with your device's biometrics or passcode</li>
-  </ul>
+  <main>
+    <div class="hero">
+      <div>
+        <h1>Your money,<br><span class="typed" id="typed">finally sorted.</span><span class="cursor" aria-hidden="true"></span></h1>
+        <p class="sub">A private budget and expense tracker for Android. Your records stay on your phone.</p>
+        <ul class="actions">
+          <li><a class="primary" href="https://play.google.com/store/apps/details?id=com.budget.coinly">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 3.5v17a1 1 0 0 0 1.5.86l14-8.5a1 1 0 0 0 0-1.72l-14-8.5A1 1 0 0 0 5 3.5z"/></svg></span>
+            Get it on Google Play</a></li>
+          <li><a href="#features"><span class="ico soft"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg></span>Features</a></li>
+          <li><a href="privacy.html"><span class="ico soft"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg></span>Privacy Policy</a></li>
+          <li><a href="terms.html"><span class="ico soft"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg></span>Terms of Service</a></li>
+          <li><a href="mailto:karthik07m@gmail.com"><span class="ico soft"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span>Contact</a></li>
+        </ul>
+      </div>
 
-  <div class="card">
-    <strong>Your data, your device.</strong>
-    <p>Coinly does not run ads or analytics. Data only leaves your phone when you choose to use cloud features such as the AI assistant or Google Drive backup. Read the <a href="privacy.html">Privacy Policy</a> for details.</p>
-  </div>
+      <div>
+        <div class="phone" role="img" aria-label="Illustration of the Coinly home screen with sample data">
+          <div class="screen" aria-hidden="true">
+            <div class="hello">September</div>
+            <div class="title">Your overview</div>
+            <div class="balance">
+              <div class="l">Total balance</div>
+              <div class="v">₹42,380</div>
+              <div class="pair">
+                <div class="pill"><small>Income</small><b>₹65,000</b></div>
+                <div class="pill"><small>Expenses</small><b>₹22,620</b></div>
+              </div>
+            </div>
+            <div class="bars"><i style="height:38%"></i><i style="height:62%"></i><i style="height:45%"></i><i class="on" style="height:88%"></i><i style="height:54%"></i><i style="height:30%"></i><i style="height:70%"></i></div>
+            <div class="row"><span class="n"><span class="dot">🍜</span>Lunch</span><span class="neg">-₹240</span></div>
+            <div class="row"><span class="n"><span class="dot">🚇</span>Metro recharge</span><span class="neg">-₹400</span></div>
+            <div class="row"><span class="n"><span class="dot">💼</span>Salary</span><span class="pos">+₹65,000</span></div>
+          </div>
+        </div>
+        <p class="sample">Illustration with sample data</p>
+      </div>
+    </div>
+
+    <section id="features">
+      <h2>Everything you need to stay on budget</h2>
+      <p class="lede">Record a transaction in seconds, see where your money goes, and plan ahead, without handing your finances to a server.</p>
+      <div class="grid">
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/></svg></div><h3>Multiple accounts</h3><p>Cash, bank accounts and credit cards, with transfers between them and live balances.</p></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg></div><h3>Budgets and charts</h3><p>Monthly and category budgets, spending pace, and charts that show where it all went.</p></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></div><h3>AI assistant</h3><p>Type "coffee 150" or "how's my budget?" and get a draft or an answer. You review before anything is saved.</p></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></div><h3>Bills and recurring</h3><p>Recurring payments and income, with reminders before bills are due.</p></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></div><h3>Debts and goals</h3><p>Track money you owe and are owed, and save toward goals with progress you can see.</p></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M8 9h8M8 12h8M8 15h5"/></svg></div><h3>Receipt scanning</h3><p>Snap a receipt and Coinly reads it on your device to fill in the details.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="promise">
+        <div>
+          <h2>Your data stays yours</h2>
+          <p class="lede" style="margin-bottom:0">Coinly is built offline-first. Nothing leaves your phone unless you choose a cloud feature. <a href="privacy.html" style="color:var(--green)">Read the Privacy Policy</a>.</p>
+        </div>
+        <ul class="checks">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Stored on your device.</b> Your transactions live in the app, not on our servers.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>No ads, no analytics.</b> Nothing tracks what you do in the app.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Backups in your own Drive.</b> Optional, and Coinly can only see the files it creates.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>App lock.</b> Protect Coinly with your fingerprint, face or passcode.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="cta">
+      <h2>Start tracking in a minute</h2>
+      <p class="lede" style="margin:0 auto 20px">Free on Android.</p>
+      <a class="btn" href="https://play.google.com/store/apps/details?id=com.budget.coinly"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 3.5v17a1 1 0 0 0 1.5.86l14-8.5a1 1 0 0 0 0-1.72l-14-8.5A1 1 0 0 0 5 3.5z"/></svg>Get it on Google Play</a>
+    </section>
+  </main>
 
   <footer>
-    <a href="privacy.html">Privacy Policy</a>
-    <a href="terms.html">Terms of Service</a>
-    <a href="mailto:karthik07m@gmail.com">Contact</a>
+    <nav aria-label="Legal">
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="terms.html">Terms of Service</a>
+      <a href="mailto:karthik07m@gmail.com">Contact</a>
+    </nav>
+    <span>© 2026 Coinly</span>
   </footer>
-</main>
+</div>
+
+<script>
+  // Rotates the green line of the headline. Static text stays if JS is off
+  // or the viewer prefers reduced motion.
+  (function () {
+    var el = document.getElementById('typed');
+    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var phrases = ['finally sorted.', 'on budget.', 'kept private.', 'under control.'];
+    var i = 0, text = phrases[0], deleting = true;
+    function tick() {
+      var target = phrases[i];
+      if (deleting) {
+        text = text.slice(0, -1);
+        if (!text) { deleting = false; i = (i + 1) % phrases.length; }
+        el.textContent = text || ' ';
+        return setTimeout(tick, 45);
+      }
+      target = phrases[i];
+      text = target.slice(0, text.length + 1);
+      el.textContent = text;
+      if (text === target) { deleting = true; return setTimeout(tick, 2200); }
+      setTimeout(tick, 80);
+    }
+    setTimeout(tick, 2200);
+  })();
+</script>
 </body>
 </html>

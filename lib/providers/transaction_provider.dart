@@ -162,6 +162,10 @@ class TransactionProvider extends ChangeNotifier {
     return await _dbHelper.getLastCategoryIdForTitle(title, isExpense);
   }
 
+  /// Category of the most recently added transaction of this type.
+  Future<int?> getLastCategoryId(bool isExpense) =>
+      _dbHelper.getLastCategoryId(isExpense);
+
   Future<void> addTransaction(Transaction transaction) async {
     if (transaction.isRecurring) {
       transaction.recurrenceId ??= transaction.id;

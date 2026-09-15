@@ -195,16 +195,9 @@ class BudgetOverviewWidget extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(AppDimensions.spacing20),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    statusColor.withValues(alpha: 0.1),
-                    statusColor.withValues(alpha: 0.05),
-                  ],
-                ),
+                // Neutral like the other cards; the pill and bar carry status.
+                color: context.appSurface,
                 borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-                // Status is already carried by the pill and the gradient.
                 border: context.cardBorder,
               ),
               child: Column(
@@ -247,7 +240,10 @@ class BudgetOverviewWidget extends StatelessWidget {
                           ),
                         ),
                         child: Text(
-                          '${(totalPercent * 100).toStringAsFixed(0)}%',
+                          // Past 999% the exact figure is noise, not news.
+                          totalPercent >= 10
+                              ? '999%+'
+                              : '${(totalPercent * 100).toStringAsFixed(0)}%',
                           style: AppTextStyles.amount.copyWith(
                             color: statusColor,
                           ),

@@ -709,6 +709,28 @@ class TransactionDBHelper {
     return null;
   }
 
+  /// Category of the most recently added transaction of this type (transfers
+  /// excluded), so a new entry starts where the user last filed one instead
+  /// of a fixed default.
+  Future<int?> getLastCategoryId(bool isExpense) async {
+    var dbClient = await database;
+    try {
+      final result = await dbClient.query(
+        tableName,
+        columns: [columnCategoryId],
+        where: '$columnIsExpense = ? AND $columnTransferAccountId IS NULL '
+            'AND $columnCategoryId IS NOT NULL',
+        whereArgs: [isExpense ? 1 : 0],
+        orderBy: '$columnCreatedOn DESC',
+        limit: 1,
+      );
+      if (result.isNotEmpty) return result.first[columnCategoryId] as int;
+    } catch (e) {
+      debugPrint('TransactionDB error: $e');
+    }
+    return null;
+  }
+
   Future<List<trans_model.Transaction>> getRecurringTransactions() async {
     var dbClient = await database;
     try {

@@ -323,7 +323,8 @@ class _ChartsScreenState extends State<ChartsScreen> {
             color: context.appAccent,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(AppDimensions.spacing16),
+              // Extra bottom room so the last card can scroll clear of the +.
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               child: context.constrainedContent(
                 Column(
                 children: [
@@ -593,7 +594,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                           currencyCode: currencyCode,
                         )
                       : 'No expenses',
-                  color: AppColors.accentBlue,
+                  color: context.textPrimary,
                 ),
               ),
               const SizedBox(width: AppDimensions.spacing12),
@@ -806,7 +807,8 @@ class _ChartsScreenState extends State<ChartsScreen> {
     return Container(
       padding: const EdgeInsets.all(AppDimensions.spacing12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        // Neutral like other inner boxes; the value text carries the colour.
+        color: context.textPrimary.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(AppDimensions.radiusSmall),
       ),
       child: Column(

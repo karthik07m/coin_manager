@@ -244,7 +244,9 @@ class BottomNavBarState extends State<MenuScrn>
           ),
         ],
       ),
-      floatingActionButton: _selectedIndex == 4
+      // AI (4) has its own input; Settings (5) has nothing to add and the
+      // button sat on top of its switches.
+      floatingActionButton: _selectedIndex == 4 || _selectedIndex == 5
           ? null
           : FloatingActionButton(
               onPressed: () => Navigator.of(context).pushNamed(

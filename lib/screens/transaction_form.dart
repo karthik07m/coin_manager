@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:math_expressions/math_expressions.dart';
 
 import 'package:provider/provider.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:intl/intl.dart';
 import '../utilities/page_transitions.dart';
 import '../models/category.dart';
@@ -16,6 +18,8 @@ import 'debt_detail_screen.dart';
 import '../models/transaction.dart';
 import '../models/receipt.dart';
 import '../models/account.dart';
+import '../models/ai_intent.dart';
+import '../services/ai_local_parser.dart';
 import '../providers/debt_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/category_provider.dart';
@@ -69,6 +73,12 @@ class TransactionFormState extends State<TransactionForm> {
   Timer? _titleDebounce;
   bool _categoryManuallySelected = false;
 
+  // Voice entry: on-device speech run through the same offline parser the AI
+  // assistant uses. It only fills the form; nothing saves until Save.
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _speechReady = false;
+  bool _isListening = false;
+
   // Receipt data
   String? _receiptImagePath;
   String? _receiptRawText;
@@ -118,6 +128,12 @@ class TransactionFormState extends State<TransactionForm> {
         // an extra full-tree rebuild mid-transition).
         await loadTransactionDetails(transactionId);
       } else {
+        // Start where the user last filed one, not on a fixed Food default.
+        final lastCategory = await Provider.of<TransactionProvider>(context,
+                listen: false)
+            .getLastCategoryId(_isExpense);
+        if (!mounted) return;
+        if (lastCategory != null) selectedCategory = lastCategory;
         await _fetchAndMapCategories(categoryProvider);
         if (!mounted) return;
         final template = widget.template;
@@ -197,6 +213,111 @@ class TransactionFormState extends State<TransactionForm> {
           }
         }
       }
+    });
+  }
+
+  /// Switches a new entry to the category last used for the current type,
+  /// unless the user has already picked one.
+  Future<void> _applyLastCategory() async {
+    if (_transaction != null || _categoryManuallySelected) return;
+    final type = _isExpense;
+    final last = await Provider.of<TransactionProvider>(context, listen: false)
+        .getLastCategoryId(type);
+    if (!mounted || last == null || type != _isExpense) return;
+    if (_categoryManuallySelected) return;
+    if (categoryMap[last]?.isExpense == type) {
+      setState(() => selectedCategory = last);
+    }
+  }
+
+  Future<void> _toggleVoiceEntry() async {
+    if (_isListening) {
+      await _speech.stop();
+      if (mounted) setState(() => _isListening = false);
+      return;
+    }
+    if (!_speechReady) {
+      _speechReady = await _speech.initialize(
+        onStatus: (status) {
+          // The engine stops itself on silence; reflect that in the UI.
+          if ((status == 'notListening' || status == 'done') &&
+              mounted &&
+              _isListening) {
+            setState(() => _isListening = false);
+          }
+        },
+        onError: (_) {
+          if (mounted) setState(() => _isListening = false);
+        },
+      );
+      if (!mounted) return;
+      if (!_speechReady) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Voice input unavailable — check the microphone permission.')));
+        return;
+      }
+    }
+    HapticFeedback.lightImpact();
+    setState(() => _isListening = true);
+    await _speech.listen(
+      listenOptions: stt.SpeechListenOptions(
+        listenMode: stt.ListenMode.dictation,
+        partialResults: true,
+      ),
+      onResult: _onVoiceResult,
+    );
+  }
+
+  void _onVoiceResult(SpeechRecognitionResult result) {
+    // Live transcript in the note; fill the rest once the phrase is final.
+    _titleController.text = result.recognizedWords;
+    if (result.finalResult && result.recognizedWords.trim().isNotEmpty) {
+      _applyVoiceText(result.recognizedWords);
+    }
+  }
+
+  Future<void> _applyVoiceText(String words) async {
+    setState(() => _isListening = false);
+    final intent = AiLocalParser().tryParse(
+      message: words,
+      categories: categoryMap.values.toList(),
+      accounts: accountMap.values.toList(),
+    );
+    final draft = intent?.type == AiIntentType.addTransaction
+        ? intent!.transaction
+        : null;
+    if (draft == null) {
+      // The words stay in the note; only the amount is missing.
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Didn't catch an amount — type it on the keypad.")));
+      return;
+    }
+    if (draft.isExpense != _isExpense && !_blockIfLinked()) {
+      setState(() {
+        _isExpense = draft.isExpense;
+        _loanKind = null;
+        _linkedDebtId = null;
+        _loanPersonController.clear();
+      });
+      await _fetchAndMapCategories(
+          Provider.of<CategoryProvider>(context, listen: false));
+      if (!mounted) return;
+    }
+    setState(() {
+      _amountExpression = _formatAmountForDisplay(draft.amount);
+      _titleController.text = draft.title;
+      _selectedDate = draft.date;
+      final categoryId = draft.categoryId;
+      if (categoryId != null && categoryMap[categoryId]?.isExpense == _isExpense) {
+        selectedCategory = categoryId;
+        _categoryManuallySelected = true;
+      }
+      final accountId = draft.accountId;
+      if (accountId != null && accountMap.containsKey(accountId)) {
+        selectedAccount = accountId;
+      }
+      if (draft.isRecurring) _isRecurring = true;
     });
   }
 
@@ -403,6 +524,7 @@ class TransactionFormState extends State<TransactionForm> {
 
   @override
   void dispose() {
+    _speech.cancel();
     _titleDebounce?.cancel();
     _noteFocusNode.dispose();
     _titleController.dispose();
@@ -1790,6 +1912,7 @@ class TransactionFormState extends State<TransactionForm> {
             _fetchAndMapCategories(
                 Provider.of<CategoryProvider>(context, listen: false));
           });
+          _applyLastCategory();
           _maybeSuggestCategoryForTitle();
         },
         child: AnimatedContainer(
@@ -1866,28 +1989,50 @@ class TransactionFormState extends State<TransactionForm> {
   }
 
   Widget _buildNoteField() {
-    return TextField(
-      controller: _titleController,
-      focusNode: _noteFocusNode,
-      style: AppTextStyles.bodyMedium,
-      textAlign: TextAlign.center,
-      decoration: InputDecoration(
-        isDense: true,
-        hintText: 'Add a note…',
-        hintStyle: AppTextStyles.bodyMedium.copyWith(
-          color: context.textSecondary.withValues(alpha: 0.5),
+    // Voice only for new entries, so it can't overwrite a saved transaction.
+    final showMic = _transaction == null;
+    return Row(
+      children: [
+        // Balances the mic so the note stays centred under the amount.
+        if (showMic) const SizedBox(width: 48),
+        Expanded(
+          child: TextField(
+            controller: _titleController,
+            focusNode: _noteFocusNode,
+            style: AppTextStyles.bodyMedium,
+            textAlign: TextAlign.center,
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: 'Add a note…',
+              hintStyle: AppTextStyles.bodyMedium.copyWith(
+                color: context.textSecondary.withValues(alpha: 0.5),
+              ),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 6),
+            ),
+            maxLength: 100,
+            buildCounter: (context,
+                    {required currentLength, required isFocused, maxLength}) =>
+                null,
+            textCapitalization: TextCapitalization.sentences,
+            textInputAction: TextInputAction.done,
+          ),
         ),
-        border: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        focusedBorder: InputBorder.none,
-        contentPadding: const EdgeInsets.symmetric(vertical: 6),
-      ),
-      maxLength: 100,
-      buildCounter: (context,
-              {required currentLength, required isFocused, maxLength}) =>
-          null,
-      textCapitalization: TextCapitalization.sentences,
-      textInputAction: TextInputAction.done,
+        if (showMic)
+          IconButton(
+            onPressed: _toggleVoiceEntry,
+            tooltip: _isListening
+                ? 'Stop listening'
+                : 'Say it, e.g. "coffee 150"',
+            icon: Icon(
+              _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+              color: _isListening ? AppColors.negative : context.appAccent,
+              semanticLabel: _isListening ? 'Stop listening' : 'Add by voice',
+            ),
+          ),
+      ],
     );
   }
 

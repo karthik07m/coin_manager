@@ -232,9 +232,13 @@ class QuickStatsWidget extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      isCurrentMonth
-                          ? 'of ${money(totalBudget)} · $daysRemaining ${daysRemaining == 1 ? 'day' : 'days'} to go'
-                          : 'of ${money(totalBudget)} budget',
+                      // 10x over usually means a mistyped budget, not a
+                      // spending spree: nudge instead of shouting a number.
+                      budgetUsedPercent >= 1000
+                          ? 'of ${money(totalBudget)} · looks too low, tap to update'
+                          : isCurrentMonth
+                              ? 'of ${money(totalBudget)} · $daysRemaining ${daysRemaining == 1 ? 'day' : 'days'} to go'
+                              : 'of ${money(totalBudget)} budget',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: context.textSecondary,
                         fontSize: 12,
@@ -257,7 +261,9 @@ class QuickStatsWidget extends StatelessWidget {
                       children: [
                         // Colour-matched to the fill so it's clearly the bar's value.
                         Text(
-                          'Spent ${budgetUsedPercent.toStringAsFixed(0)}% of budget',
+                          budgetUsedPercent >= 1000
+                              ? 'Spent 999%+ of budget'
+                              : 'Spent ${budgetUsedPercent.toStringAsFixed(0)}% of budget',
                           style: AppTextStyles.caption.copyWith(
                             color: statusColor,
                             fontSize: 11,

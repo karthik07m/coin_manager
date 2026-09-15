@@ -976,6 +976,8 @@ class _PulsingMicState extends State<_PulsingMic>
         icon: Icon(
           widget.listening ? Icons.mic_rounded : Icons.mic_none_rounded,
           color: color,
+          // The tooltip alone didn't reach TalkBack.
+          semanticLabel: widget.listening ? 'Stop listening' : 'Speak a command',
         ),
       ),
     );
