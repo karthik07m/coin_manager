@@ -12,6 +12,8 @@
 .swiftpm/
 migrate_working_dir/
 supabase/.temp/
+analysis_output*.txt
+__pycache__/
 
 # IntelliJ related
 *.iml
