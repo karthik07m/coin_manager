@@ -28,6 +28,11 @@ class _Transactions extends TransactionProvider {
   @override
   Future<int?> getLastCategoryForTitle(String title, bool isExpense) async =>
       null;
+  // Left unstubbed, this reached the real database: the form's init awaited a
+  // future that never completed, so it never loaded accounts and saved against
+  // the hard-coded fallback account instead of the default one.
+  @override
+  Future<int?> getLastCategoryId(bool isExpense) async => null;
   @override
   Future<List<double>> monthlyExpenseTotals(int year,
       {int startMonth = 1}) async {

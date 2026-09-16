@@ -272,7 +272,7 @@ void main() {
     });
 
     testWidgets(
-        'assistant actions preserve prefill in ${dark ? 'dark' : 'light'} mode',
+        'assistant starter chips ask in ${dark ? 'dark' : 'light'} mode',
         (tester) async {
       await initialize(tester, 390);
       await tester
@@ -280,11 +280,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       await capture(tester, 'assistant-${dark ? 'dark' : 'light'}');
-      await tester.tap(find.text('Add expense'));
+
+      // The prefill cards are gone: they typed a word into the box and left
+      // the user to finish it, which is slower than just typing.
+      expect(find.text('Add expense'), findsNothing);
+      expect(find.text('Quick actions'), findsNothing);
+
+      // A chip is a whole question, so tapping it asks straight away.
+      await tester.tap(find.text("How's my budget?"));
       await tester.pumpAndSettle();
-      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          'Add expense ');
-      expect(assistant.messages, isEmpty);
+      expect(assistant.messages, isNotEmpty);
       expect(find.byTooltip('Send'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

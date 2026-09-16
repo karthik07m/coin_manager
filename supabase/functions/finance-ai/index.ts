@@ -55,7 +55,8 @@ serve(async (req) => {
     if (!userId) {
       return json(unsupported("Update Coinly to keep using cloud AI."));
     }
-    if ((await consumeCredit(userId)) < 0) {
+    const creditsRemaining = await consumeCredit(userId);
+    if (creditsRemaining < 0) {
       return json(unsupported(
         `You've used your ${MONTHLY_LIMIT} AI requests for this month. They reset on the 1st; quick entries like "coffee 150" still work.`,
       ));
@@ -89,7 +90,9 @@ serve(async (req) => {
     const parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
     const validated = validateAiResponse(parsed);
 
-    return json(guardDraft(validated));
+    // Returned so the app can warn before the allowance runs out, instead of
+    // the user discovering it at zero.
+    return json({ ...guardDraft(validated), creditsRemaining });
   } catch (error) {
     if (error instanceof Anthropic.APIError) {
       return json({ error: `Claude request failed: ${error.status}` }, 502);

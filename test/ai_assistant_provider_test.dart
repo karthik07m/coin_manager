@@ -4,6 +4,7 @@ import 'package:coin_manager/models/ai_message.dart';
 import 'package:coin_manager/models/category.dart';
 import 'package:coin_manager/models/transaction.dart';
 import 'package:coin_manager/providers/ai_assistant_provider.dart';
+import 'package:coin_manager/providers/transaction_provider.dart';
 import 'package:coin_manager/services/ai_assistant_service.dart';
 import 'package:coin_manager/services/ai_summary_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,7 +43,7 @@ void main() {
     );
 
     await provider.submitMessage(
-      message: 'Add lunch',
+      message: 'put down twelve dollars for lunch yesterday',
       aiEnabled: true,
       functionUrl: 'https://example.supabase.co/functions/v1/finance-ai',
       currencySymbol: r'$',
@@ -62,7 +63,7 @@ void main() {
     );
 
     await provider.submitMessage(
-      message: 'Add lunch',
+      message: 'tell me a joke',
       aiEnabled: false,
       functionUrl: '',
       currencySymbol: r'$',
@@ -173,6 +174,115 @@ void main() {
 
     expect(provider.messages.last.text, 'Local summary.');
   });
+
+  // Editing and deleting touch money already in the ledger, so the rule these
+  // tests pin down is: never act on the first guess, always confirm.
+  group('edit and delete by description', () {
+    Transaction row(String id, String title, double amount, DateTime date) =>
+        Transaction.createNew(
+          id: id,
+          title: title,
+          amount: amount,
+          categoryId: 1,
+          accountId: 1,
+          date: date,
+          isExpense: true,
+        );
+
+    AiAssistantProvider build(_FakeTransactions txns, List<Transaction> found) {
+      return AiAssistantProvider(
+        assistantService: _FakeAssistantService(AiIntent.unsupported()),
+        summaryService: _FakeSummaryService(),
+        findTransactions: (term, start, end) async => found,
+      );
+    }
+
+    Future<void> send(AiAssistantProvider p, String message,
+        _FakeTransactions txns) {
+      return p.submitMessage(
+        message: message,
+        aiEnabled: false,
+        functionUrl: '',
+        currencySymbol: r'$',
+        currencyCode: 'USD',
+        categories: categories,
+        accounts: accounts,
+        transactionProvider: txns,
+      );
+    }
+
+    test('one match asks before deleting, and deletes only on confirm',
+        () async {
+      final hit = row('a', 'Netflix', 649, DateTime(2026, 9, 3));
+      final txns = _FakeTransactions([hit]);
+      final provider = build(txns, [hit]);
+
+      await send(provider, 'delete netflix', txns);
+      expect(txns.deleted, isEmpty, reason: 'must not delete before asking');
+      expect(provider.hasPendingEdit, isTrue);
+      expect(provider.messages.last.text, contains('Netflix'));
+
+      await send(provider, 'confirm', txns);
+      expect(txns.deleted, ['a']);
+      expect(provider.hasPendingEdit, isFalse);
+    });
+
+    test('cancel leaves the transaction alone', () async {
+      final hit = row('a', 'Netflix', 649, DateTime(2026, 9, 3));
+      final txns = _FakeTransactions([hit]);
+      final provider = build(txns, [hit]);
+
+      await send(provider, 'delete netflix', txns);
+      await send(provider, 'cancel', txns);
+      expect(txns.deleted, isEmpty);
+      expect(provider.hasPendingEdit, isFalse);
+    });
+
+    test('several matches list them instead of picking one', () async {
+      final a = row('a', 'Netflix', 649, DateTime(2026, 9, 3));
+      final b = row('b', 'Netflix', 649, DateTime(2026, 8, 3));
+      final txns = _FakeTransactions([a, b]);
+      final provider = build(txns, [a, b]);
+
+      await send(provider, 'delete netflix', txns);
+      expect(txns.deleted, isEmpty);
+      expect(provider.hasPendingEdit, isFalse);
+      expect(provider.messages.last.text, contains('2 transactions match'));
+    });
+
+    test('no match says so rather than deleting something close', () async {
+      final txns = _FakeTransactions([]);
+      final provider = build(txns, []);
+
+      await send(provider, 'delete spotify', txns);
+      expect(txns.deleted, isEmpty);
+      expect(provider.messages.last.text, contains('could not find'));
+    });
+
+    test('"change that to 200" with nothing saved yet asks for a name',
+        () async {
+      final txns = _FakeTransactions([]);
+      final provider = build(txns, []);
+
+      await send(provider, 'change that to 200', txns);
+      expect(txns.updated, isEmpty);
+      expect(provider.messages.last.text, contains('not saved anything'));
+    });
+
+    test('an amount change applies only after confirmation', () async {
+      final hit = row('a', 'Netflix', 649, DateTime(2026, 9, 3));
+      final txns = _FakeTransactions([hit]);
+      final provider = build(txns, [hit]);
+
+      await send(provider, 'change netflix to 199', txns);
+      expect(txns.updated, isEmpty);
+      expect(provider.hasPendingEdit, isTrue);
+
+      await send(provider, 'confirm', txns);
+      expect(txns.updated, ['a']);
+      expect(hit.amount, 199);
+    });
+  });
 }
 
 class _FakeAssistantService extends AiAssistantService {
@@ -206,5 +316,27 @@ class _FakeSummaryService extends AiSummaryService {
   }) async {
     lastRequest = request;
     return 'Local summary.';
+  }
+}
+
+/// Stands in for the real provider so the edit tests never touch a database.
+class _FakeTransactions extends TransactionProvider {
+  final List<Transaction> _rows;
+  final List<String> deleted = [];
+  final List<String> updated = [];
+
+  _FakeTransactions(this._rows);
+
+  @override
+  List<Transaction> get transactions => _rows;
+
+  @override
+  Future<void> deleteTransaction(String id, {bool deleteReceipt = true}) async {
+    deleted.add(id);
+  }
+
+  @override
+  Future<void> updateTransaction(Transaction transaction) async {
+    updated.add(transaction.id);
   }
 }

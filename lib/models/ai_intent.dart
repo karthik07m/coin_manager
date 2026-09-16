@@ -10,6 +10,7 @@ enum AiIntentType {
   smallTalk,
   undo,
   calculation,
+  editTransaction,
   unsupported,
 }
 
@@ -34,6 +35,7 @@ class AiIntent {
   final AiSummaryRequest? summaryRequest;
   final AiTransferDraft? transfer;
   final AiAccountQuery? accountQuery;
+  final AiEditRequest? edit;
   final String message;
 
   const AiIntent({
@@ -44,6 +46,7 @@ class AiIntent {
     this.summaryRequest,
     this.transfer,
     this.accountQuery,
+    this.edit,
   });
 
   factory AiIntent.fromJson(Map<String, dynamic> json) {
@@ -88,6 +91,25 @@ class AiIntent {
           'I can help with adding transactions and basic spending summaries.',
     );
   }
+}
+
+/// A request to change or remove an already-saved transaction. [term] is the
+/// words the user used to point at it ("the coffee from yesterday"); null
+/// means they said "that" and meant whatever was saved last in this chat.
+class AiEditRequest {
+  final String? term;
+  final double? newAmount;
+  final bool isDelete;
+  final DateTime? start;
+  final DateTime? end;
+
+  const AiEditRequest({
+    this.term,
+    this.newAmount,
+    this.isDelete = false,
+    this.start,
+    this.end,
+  });
 }
 
 class AiTransactionDraft {

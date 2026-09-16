@@ -196,6 +196,12 @@ class AiLocalParser {
     final simple = _parseSimple(text);
     if (simple != null) return simple;
 
+    final edit = _parseEdit(text);
+    if (edit != null) return edit;
+
+    final outOfScope = _parseOutOfScope(text);
+    if (outOfScope != null) return outOfScope;
+
     final calc = _parseCalculation(text);
     if (calc != null) return calc;
 
@@ -248,10 +254,147 @@ class AiLocalParser {
     if (help.contains(bare)) {
       return const AiIntent(type: AiIntentType.help, confidence: 1, message: '');
     }
+    // Pending drafts and transfers are resolved before parsing, so a bare
+    // "yes" arriving here has nothing to agree to. Answering locally keeps it
+    // from spending a cloud credit on a word with no object.
+    const stray = ['yes', 'yeah', 'yep', 'sure', 'no', 'nope', 'nah',
+      'confirm', 'cancel', 'do it', 'go ahead'];
+    if (stray.contains(bare)) {
+      return const AiIntent(
+        type: AiIntentType.unsupported,
+        confidence: 1,
+        message: 'Nothing is waiting on a yes or no right now. Log something '
+            'like "coffee 150", or ask me how your month is going.',
+      );
+    }
     if (greetings.contains(bare)) {
       return AiIntent(
           type: AiIntentType.smallTalk, confidence: 1, message: bare);
     }
+    return null;
+  }
+
+  /// Changing or removing something already saved: "change that to 200",
+  /// "delete the coffee from yesterday", "remove netflix". The words after
+  /// the verb are kept as a search term; the provider finds the transaction
+  /// and asks before touching it, because this is real money.
+  AiIntent? _parseEdit(String text) {
+    const pronouns = ['that', 'this', 'it', 'last', 'previous', 'the last',
+      'that one', 'last one'];
+
+    AiIntent edit(AiEditRequest request) => AiIntent(
+          type: AiIntentType.editTransaction,
+          confidence: 0.9,
+          message: '',
+          edit: request,
+        );
+
+    /// Strips filler so "the coffee i added yesterday" points at "coffee".
+    String? clean(String raw, String periodToken) {
+      // Guarded: replaceAll('', ' ') inserts a space between every character,
+      // which turned "monthly income" into "m o n t h l y n c o m e".
+      var out = periodToken.isEmpty ? raw : raw.replaceAll(periodToken, ' ');
+      out = out
+          .replaceAll(
+              RegExp(r'\b(the|my|a|an|that|this|i|we|added|logged|entered|'
+                  r'saved|paid|spent|from|for|on|transaction|transactions|'
+                  r'entry|entries|expense|expenses|payment|one)\b'),
+              ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      return out.isEmpty ? null : out;
+    }
+
+    // "change my budget to 5000" is not a transaction edit; let it fall
+    // through to the budget branch, which explains where budgets are set.
+    final changed = text.contains('budget')
+        ? null
+        : RegExp(r'^(?:change|edit|update|modify|correct|make)\s+(.+?)\s+to\s+(.+)$')
+            .firstMatch(text);
+    if (changed != null) {
+      final amount = _parseAmount(changed.group(2)!);
+      final target = changed.group(1)!.trim();
+      if (amount == null) {
+        return AiIntent.unsupported(
+          "✋ I can only change the amount for now — try \"change that to 250\". "
+          'For anything else, open the transaction on the Transactions tab.',
+        );
+      }
+      final period = _matchPeriod(target);
+      return edit(AiEditRequest(
+        term: pronouns.contains(target)
+            ? null
+            : clean(target, period?.token ?? ''),
+        newAmount: amount.value,
+        start: period?.start,
+        end: period?.end,
+      ));
+    }
+
+    // A delete never carries an amount — "remove stains 200" is an expense
+    // someone is logging, not a request to erase anything.
+    final removed = RegExp(r'^(?:delete|remove)\s+(.+)$').firstMatch(text);
+    if (removed != null && _parseAmount(text) == null) {
+      final target = removed.group(1)!.trim();
+      final period = _matchPeriod(target);
+      return edit(AiEditRequest(
+        isDelete: true,
+        term: pronouns.contains(target)
+            ? null
+            : clean(target, period?.token ?? ''),
+        start: period?.start,
+        end: period?.end,
+      ));
+    }
+
+    return null;
+  }
+
+  /// Asks the assistant genuinely cannot serve. Caught explicitly so they get
+  /// an honest "not yet" instead of being bent into the nearest supported
+  /// answer: "change that to 200" used to log a brand new 200 expense titled
+  /// "Change That", and "my average monthly spend" answered with this
+  /// month's total as though that were the average.
+  AiIntent? _parseOutOfScope(String text) {
+    if (text.contains('budget') &&
+        RegExp(r'^(set|create|make|add|change|update|increase|decrease|reduce|raise|lower)\b')
+            .hasMatch(text)) {
+      return AiIntent.unsupported(
+        "✋ I can't set budgets yet — the Budget tab does that. Once one is "
+        'set, ask me "how\'s my budget?" any time.',
+      );
+    }
+
+    if (RegExp(r'\b(remind me|reminder|notify me|alert me)\b').hasMatch(text)) {
+      return AiIntent.unsupported(
+        "✋ I can't set reminders. Adding the payment as a recurring "
+        'transaction gets you a heads-up instead — try "rent 25000 every '
+        'month".',
+      );
+    }
+
+    if (RegExp(r'\b(afford|should i buy|worth buying|can i buy)\b')
+        .hasMatch(text)) {
+      return AiIntent.unsupported(
+        "✋ I can't tell you whether something is affordable — that depends on "
+        'plans I cannot see. What I can show you is the room you have left: '
+        'ask "how\'s my budget?" or "what\'s my net worth?".',
+      );
+    }
+
+    final aboutMoney = RegExp(
+            r'\b(spend|spent|spending|expense|expenses|income|earn|earned|save|saved|savings|cost|costs)\b')
+        .hasMatch(text);
+    if (aboutMoney &&
+        RegExp(r'\b(average|avg|typical|typically|usually|normally)\b')
+            .hasMatch(text)) {
+      return AiIntent.unsupported(
+        "✋ I can't work out averages yet, and I'd rather say so than hand "
+        'you one period\'s total as if it were one. Try "how much did I '
+        'spend last month?" or "compare this month vs last".',
+      );
+    }
+
     return null;
   }
 
@@ -346,7 +489,12 @@ class AiLocalParser {
   /// spend today", "safe to spend".
   AiIntent? _parseBudgetQuery(String text) {
     const allowance = ['can i spend', 'safe to spend', 'left to spend',
-      'spend per day', 'daily limit', 'daily allowance', 'daily budget'];
+      'spend per day', 'daily limit', 'daily allowance', 'daily budget',
+      // Forward-looking phrasings. Without these they fell through to the
+      // net-balance metric, which answers with money already spent — a
+      // different question wearing the same words.
+      'will i have left', 'left at the end', 'left for the rest',
+      'rest of the month'];
     const cues = ['how', 'left', 'remaining', 'over', 'status', 'am i',
       'much', 'doing', '?'];
     final asksBudget = text.contains('budget') && cues.any(text.contains);
@@ -520,7 +668,7 @@ class AiLocalParser {
     } else if (text.contains('balance') ||
         text.contains('net') ||
         text.contains('left') ||
-        text.contains('saved')) {
+        text.contains('save')) {
       metric = AiSummaryMetric.netBalance;
     } else if (_incomeWords.any(text.contains) ||
         text.contains('earn') ||
@@ -530,11 +678,36 @@ class AiLocalParser {
         text.contains('spent') ||
         text.contains('spending') ||
         text.contains('expense') ||
-        text.contains('cost')) {
-      categoryId = _matchCategory(text, categories, isExpense: true)?.id;
-      metric = categoryId != null
-          ? AiSummaryMetric.categorySpending
-          : AiSummaryMetric.totalSpending;
+        text.contains('cost') ||
+        // "how much on food this month" carries no verb at all, and used to
+        // fall through to the cloud for a question answerable on-device.
+        text.contains('how much')) {
+      final pool = categories
+          .where((c) => c.id != null && c.isExpense)
+          .toList();
+      categoryId = _matchCategoryByName(text, pool)?.id;
+      if (categoryId != null) {
+        metric = AiSummaryMetric.categorySpending;
+      } else {
+        // "how much did I spend at swiggy" used to be answered with the whole
+        // Food category — the right number for a question nobody asked. Search
+        // the ledger for the word they actually used instead.
+        final hint = _matchCategoryHint(text);
+        if (hint != null) {
+          return AiIntent(
+            type: AiIntentType.summaryRequest,
+            confidence: 0.85,
+            message: '',
+            summaryRequest: AiSummaryRequest(
+              metric: AiSummaryMetric.searchTransactions,
+              startDate: period.start,
+              endDate: period.end,
+              searchTerm: hint,
+            ),
+          );
+        }
+        metric = AiSummaryMetric.totalSpending;
+      }
     } else {
       return null;
     }
@@ -563,7 +736,19 @@ class AiLocalParser {
         date.token.isEmpty ? text : text.replaceAll(date.token, ' ');
 
     final amount = _parseAmount(withoutDate);
-    if (amount == null) return null;
+    if (amount == null) {
+      // "starbucks", or "add lunch", is someone starting to log and leaving
+      // out the number. Asking for it beats "I didn't quite catch that", and
+      // beats spending a cloud credit to be told the same thing.
+      final named = _extractTitle(withoutDate, null);
+      if (named != null &&
+          named.split(' ').length <= 2 &&
+          (_matchCategoryHint(text) != null ||
+              _matchCategory(text, categories, isExpense: true) != null)) {
+        return AiIntent.unsupported('How much was ${named.toLowerCase()}?');
+      }
+      return null;
+    }
 
     final isIncome = _incomeWords.any(text.contains);
     final hasVerb = isIncome || _expenseVerbs.any(text.contains);
@@ -600,20 +785,29 @@ class AiLocalParser {
     );
   }
 
+  /// The largest number in the message, not the first one. "2 coffees 300"
+  /// is a quantity followed by a price, and taking the first match logged it
+  /// as a 2 rupee expense — a silent 100x error the user had to spot in the
+  /// draft card. Quantities are smaller than prices often enough that the
+  /// largest candidate is right far more often than the leftmost one.
   ({double value, String token})? _parseAmount(String text) {
     final cleaned = text.replaceAll(_currencyTokens, ' ');
-    final match = _amountPattern.firstMatch(cleaned);
-    if (match == null) return null;
-    var value = double.tryParse(match.group(1)!.replaceAll(',', ''));
-    if (value == null || value <= 0) return null;
-    switch (match.group(2)) {
-      case 'k':
-        value *= 1000;
-      case 'lakh':
-      case 'lac':
-        value *= 100000;
+    ({double value, String token})? best;
+    for (final match in _amountPattern.allMatches(cleaned)) {
+      var value = double.tryParse(match.group(1)!.replaceAll(',', ''));
+      if (value == null || value <= 0) continue;
+      switch (match.group(2)) {
+        case 'k':
+          value *= 1000;
+        case 'lakh':
+        case 'lac':
+          value *= 100000;
+      }
+      if (best == null || value > best.value) {
+        best = (value: value, token: match.group(0)!);
+      }
     }
-    return (value: value, token: match.group(0)!);
+    return best;
   }
 
   Account? _matchAccount(String text, List<Account> accounts) {
@@ -639,15 +833,8 @@ class AiLocalParser {
         .toList();
 
     // The user's own category name in the message beats any guess.
-    Category? best;
-    for (final category in pool) {
-      final name = category.name.toLowerCase();
-      if (text.contains(name) &&
-          (best == null || name.length > best.name.length)) {
-        best = category;
-      }
-    }
-    if (best != null) return best;
+    final named = _matchCategoryByName(text, pool);
+    if (named != null) return named;
 
     for (final (triggers, kinds) in _categoryHints) {
       if (!triggers.any(text.contains)) continue;
@@ -655,6 +842,33 @@ class AiLocalParser {
         for (final category in pool) {
           if (category.name.toLowerCase().contains(kind)) return category;
         }
+      }
+    }
+    return null;
+  }
+
+  /// The user's own category whose name they actually typed, or null.
+  Category? _matchCategoryByName(String text, List<Category> pool) {
+    Category? best;
+    for (final category in pool) {
+      final name = category.name.toLowerCase();
+      if (category.id == null) continue;
+      if (text.contains(name) &&
+          (best == null || name.length > best.name.length)) {
+        best = category;
+      }
+    }
+    return best;
+  }
+
+  /// The merchant or everyday word in the message that only *hints* at a
+  /// category — "swiggy", "coffee", "netflix". Returned so a question about
+  /// one can be answered about that word rather than about the whole
+  /// category it happens to live in.
+  String? _matchCategoryHint(String text) {
+    for (final (triggers, _) in _categoryHints) {
+      for (final trigger in triggers) {
+        if (text.contains(trigger)) return trigger;
       }
     }
     return null;

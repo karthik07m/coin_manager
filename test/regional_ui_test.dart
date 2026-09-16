@@ -26,6 +26,10 @@ class _Transactions extends TransactionProvider {
   @override
   Future<void> addTransaction(Transaction transaction) async =>
       saved.add(transaction);
+  // Unstubbed, this reached the real database and the form's init never got
+  // past it — so the template's title and category were never applied.
+  @override
+  Future<int?> getLastCategoryId(bool isExpense) async => null;
   @override
   Future<int?> getLastCategoryForTitle(String title, bool isExpense) async =>
       null;

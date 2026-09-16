@@ -256,31 +256,44 @@ class QuickStatsWidget extends StatelessWidget {
                       statusColor: statusColor,
                     ),
                     const SizedBox(height: 8),
+                    // Flexible on both sides: "Spent 999%+ of budget" next to
+                    // "Day 30 of 31" overflows a narrow phone by a few pixels,
+                    // and a hard overflow stripe is worse than an ellipsis.
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         // Colour-matched to the fill so it's clearly the bar's value.
-                        Text(
-                          budgetUsedPercent >= 1000
-                              ? 'Spent 999%+ of budget'
-                              : 'Spent ${budgetUsedPercent.toStringAsFixed(0)}% of budget',
-                          style: AppTextStyles.caption.copyWith(
-                            color: statusColor,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                        if (isCurrentMonth)
-                          Text(
-                            'Day ${now.day} of $daysInMonth',
+                        Flexible(
+                          child: Text(
+                            budgetUsedPercent >= 1000
+                                ? 'Spent 999%+ of budget'
+                                : 'Spent ${budgetUsedPercent.toStringAsFixed(0)}% of budget',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.caption.copyWith(
-                              color: context.textSecondary
-                                  .withValues(alpha: 0.8),
+                              color: statusColor,
                               fontSize: 11,
+                              fontWeight: FontWeight.w600,
                               letterSpacing: 0,
                             ),
                           ),
+                        ),
+                        if (isCurrentMonth) ...[
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              'Day ${now.day} of $daysInMonth',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.caption.copyWith(
+                                color: context.textSecondary
+                                    .withValues(alpha: 0.8),
+                                fontSize: 11,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                     // Spending the budget deliberately ignores still has to be

@@ -138,6 +138,132 @@ void main() {
       expect(parse('tell me a joke'), isNull);
     });
   });
+
+  group('trust: the amount is the price, not the count', () {
+    test('"2 coffees 300" logs 300, not 2', () {
+      final t = parse('2 coffees 300')?.transaction;
+      expect(t?.amount, 300);
+    });
+
+    test('a single amount is still read as-is', () {
+      expect(parse('coffee 150')?.transaction?.amount, 150);
+    });
+
+    test('multipliers are compared after expanding', () {
+      expect(parse('2 laptops 1.2 lakh')?.transaction?.amount, 120000);
+    });
+
+    test('a date is still not an amount', () {
+      final t = parse('rent 25000 on the 1st')?.transaction;
+      expect(t?.amount, 25000);
+    });
+  });
+
+  group('trust: declines instead of guessing', () {
+    AiIntent? out(String m) => parse(m);
+
+    test('"change that to 200" does not become a new 200 expense', () {
+      final intent = out('change that to 200');
+      expect(intent?.type, AiIntentType.editTransaction);
+      expect(intent?.transaction, isNull);
+      // A bare pronoun means whatever was saved last, not a search.
+      expect(intent?.edit?.term, isNull);
+      expect(intent?.edit?.newAmount, 200);
+      expect(intent?.edit?.isDelete, isFalse);
+    });
+
+    test('deleting by description targets that description', () {
+      final intent = out('delete the coffee I added yesterday');
+      expect(intent?.type, AiIntentType.editTransaction);
+      expect(intent?.edit?.isDelete, isTrue);
+      expect(intent?.edit?.term, 'coffee');
+    });
+
+    test('a term with no date in it survives intact', () {
+      // The period token is empty here; stripping it must be a no-op.
+      expect(out('delete monthly income')?.edit?.term, 'monthly income');
+      expect(out('delete spotify')?.edit?.term, 'spotify');
+    });
+
+    test('a delete carrying an amount is an expense, not a deletion', () {
+      final t = out('remove stains 200')?.transaction;
+      expect(t?.amount, 200);
+    });
+
+    test('affordability is declined', () {
+      expect(out('can i afford a 40000 phone')?.type,
+          AiIntentType.unsupported);
+    });
+
+    test('a bare yes with nothing pending never reaches the cloud', () {
+      final intent = out('yes');
+      expect(intent, isNotNull);
+      expect(intent?.type, AiIntentType.unsupported);
+    });
+
+    test('a merchant with no amount asks for the amount', () {
+      final intent = out('starbucks');
+      expect(intent?.type, AiIntentType.unsupported);
+      expect(intent?.message, contains('How much'));
+    });
+
+    test('"how much on food this month" is answered, not sent to the cloud',
+        () {
+      final r = out('how much on food this month')?.summaryRequest;
+      expect(r?.metric, AiSummaryMetric.categorySpending);
+      expect(r?.categoryId, 1);
+    });
+
+    test('"undo" is still a real undo', () {
+      expect(out('undo')?.type, AiIntentType.undo);
+    });
+
+    test('"change my budget to 5000" is about budgets, not a transaction', () {
+      final intent = out('change my budget to 5000');
+      expect(intent?.type, AiIntentType.unsupported);
+      expect(intent?.message, contains('Budget tab'));
+    });
+
+    test('setting a budget is declined', () {
+      expect(out('set a budget of 5000 for food')?.type,
+          AiIntentType.unsupported);
+    });
+
+    test('"how\'s my budget" still answers', () {
+      expect(out('how\'s my budget')?.type, AiIntentType.budgetQuery);
+    });
+
+    test('reminders are declined', () {
+      expect(out('remind me to pay rent on the 1st')?.type,
+          AiIntentType.unsupported);
+    });
+
+    test('an average is declined rather than answered with one month', () {
+      expect(out('what is my average monthly spend')?.type,
+          AiIntentType.unsupported);
+    });
+
+    test('a normal expense starting with a verb is still logged', () {
+      final t = out('change the tyre 5000')?.transaction;
+      expect(t?.amount, 5000);
+    });
+  });
+
+  group('trust: answers the tense that was asked', () {
+    test('"what will I have left" is an allowance question', () {
+      expect(
+        parse('how much will I have left at the end of the month')?.type,
+        AiIntentType.budgetQuery,
+      );
+    });
+
+    test('"how much did I save this year" is a net balance, not a fallthrough',
+        () {
+      final r = parse('how much did I save this year')?.summaryRequest;
+      expect(r?.metric, AiSummaryMetric.netBalance);
+    });
+  });
+
 }
 
 /// Asking for advice in plain language must reach the advisor, not fall
@@ -279,10 +405,27 @@ void _smarterParsing() {
           AiSummaryMetric.upcomingRecurring);
     });
 
-    test('category spending via everyday word', () {
-      final r = parse('how much did I spend on coffee this month')?.summaryRequest;
+    test('the user\'s own category name is a category question', () {
+      final r = parse('how much did I spend on food this month')?.summaryRequest;
       expect(r?.metric, AiSummaryMetric.categorySpending);
       expect(r?.categoryId, 1);
+    });
+
+    // Answering "spend on coffee" with the whole Food total is the right
+    // number for a question nobody asked. A merchant or everyday word is
+    // searched for instead, so the answer is about the word they used.
+    test('a merchant word is searched, not widened to its category', () {
+      final r = parse('how much did I spend on coffee this month')?.summaryRequest;
+      expect(r?.metric, AiSummaryMetric.searchTransactions);
+      expect(r?.searchTerm, 'coffee');
+      expect(r?.categoryId, isNull);
+    });
+
+    test('a merchant name keeps the asked-for period', () {
+      final r = parse('how much did I spend at swiggy this year')?.summaryRequest;
+      expect(r?.metric, AiSummaryMetric.searchTransactions);
+      expect(r?.searchTerm, 'swiggy');
+      expect(r?.startDate.month, 1);
     });
 
     test('named month period', () {

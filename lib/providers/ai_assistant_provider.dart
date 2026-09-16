@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/foundation.dart' show ChangeNotifier;
 
 import '../db/transaction_db_helper.dart';
@@ -7,6 +5,7 @@ import '../models/account.dart';
 import '../models/ai_intent.dart';
 import '../models/ai_message.dart';
 import '../models/category.dart';
+import '../models/transaction.dart';
 import '../providers/transaction_provider.dart';
 import '../services/ai_assistant_service.dart';
 import '../services/ai_local_parser.dart';
@@ -18,28 +17,48 @@ class AiAssistantProvider extends ChangeNotifier {
   final AiAssistantService _assistantService;
   final AiSummaryService _summaryService;
   final AiLocalParser _localParser;
-  final Random _random = Random();
 
   /// Category last used for an identical title, so "coffee 200" lands in
   /// whatever the user filed coffee under before. Injected so tests run
   /// without a database.
   final Future<int?> Function(String title, bool isExpense) _lastCategoryFor;
 
+  /// Transactions whose title or category matches [term] in the given window,
+  /// newest first. Injected so tests run without a database.
+  final Future<List<Transaction>> Function(
+      String term, DateTime start, DateTime end) _findTransactions;
+
   AiAssistantProvider({
     AiAssistantService? assistantService,
     AiSummaryService? summaryService,
     AiLocalParser? localParser,
     Future<int?> Function(String title, bool isExpense)? lastCategoryFor,
+    Future<List<Transaction>> Function(String, DateTime, DateTime)?
+        findTransactions,
   })  : _assistantService = assistantService ?? AiAssistantService(),
         _summaryService = summaryService ?? AiSummaryService(),
         _localParser = localParser ?? AiLocalParser(),
         _lastCategoryFor = lastCategoryFor ??
             ((title, isExpense) =>
-                TransactionDBHelper().getLastCategoryIdForTitle(title, isExpense));
+                TransactionDBHelper().getLastCategoryIdForTitle(title, isExpense)),
+        _findTransactions = findTransactions ?? _defaultFinder;
+
+  static Future<List<Transaction>> _defaultFinder(
+      String term, DateTime start, DateTime end) async {
+    final rows = await TransactionDBHelper()
+        .getTransactionsByType(startDate: start, endDate: end);
+    final needle = term.toLowerCase();
+    final matches = rows
+        .where((t) => !t.isTransfer && t.title.toLowerCase().contains(needle))
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    return matches;
+  }
 
   final List<AiAssistantMessage> _messages = [];
   AiTransactionDraft? _pendingDraft;
   AiTransferDraft? _pendingTransfer;
+  ({Transaction target, double? newAmount, bool isDelete})? _pendingEdit;
   bool _isLoading = false;
 
   /// The last summary asked for, so "and last month?" can re-ask it.
@@ -52,6 +71,11 @@ class AiAssistantProvider extends ChangeNotifier {
   List<AiAssistantMessage> get messages => List.unmodifiable(_messages);
   AiTransactionDraft? get pendingDraft => _pendingDraft;
   AiTransferDraft? get pendingTransfer => _pendingTransfer;
+  bool get hasPendingEdit => _pendingEdit != null;
+
+  /// Cloud AI requests left this month, once the cloud has answered at least
+  /// once. Null means "not known yet", not "none left".
+  int? get creditsRemaining => _assistantService.lastCreditsRemaining;
   bool get isLoading => _isLoading;
 
   static const _confirmWords = [
@@ -126,6 +150,14 @@ class AiAssistantProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // An edit or delete is waiting on a yes/no. It touches money already in
+      // the ledger, so it is resolved before anything else is parsed.
+      if (_pendingEdit != null) {
+        final handled =
+            await _resolvePendingEdit(trimmed.toLowerCase(), transactionProvider);
+        if (handled) return;
+      }
+
       // A transfer is waiting on a yes/no — resolve that before parsing
       // anything new.
       if (_pendingTransfer != null) {
@@ -354,6 +386,14 @@ class AiAssistantProvider extends ChangeNotifier {
       case AiIntentType.undo:
         await _undoLastSave(transactionProvider);
         return;
+      case AiIntentType.editTransaction:
+        await _handleEdit(
+          intent.edit!,
+          transactionProvider,
+          currencySymbol,
+          currencyCode,
+        );
+        return;
       case AiIntentType.transfer:
         final transfer = intent.transfer;
         if (transfer == null) {
@@ -453,6 +493,146 @@ class AiAssistantProvider extends ChangeNotifier {
     }
   }
 
+  /// Finds what the user pointed at and asks before changing it. Nothing is
+  /// written here — a wrong guess about which transaction they meant would
+  /// silently rewrite real money, so every path ends in a confirmation.
+  Future<void> _handleEdit(
+    AiEditRequest request,
+    TransactionProvider? provider,
+    String currencySymbol,
+    String currencyCode,
+  ) async {
+    final verb = request.isDelete ? 'delete' : 'change';
+
+    if (provider == null) {
+      _messages.add(AiAssistantMessage.assistant(
+          '😅 I could not reach your transactions just now — please try again.'));
+      return;
+    }
+
+    Transaction? target;
+    if (request.term == null) {
+      // "change that" / "delete that" means the one I just saved.
+      final id = _lastSavedId;
+      if (id == null) {
+        _messages.add(AiAssistantMessage.assistant(
+          'I have not saved anything in this chat yet, so I do not know what '
+          '"that" is. Name it instead — for example "$verb netflix".',
+        ));
+        return;
+      }
+      target = await _findById(provider, id);
+      if (target == null) {
+        _messages.add(AiAssistantMessage.assistant(
+            'That one is not in your ledger any more — nothing to $verb.'));
+        _lastSavedId = null;
+        return;
+      }
+    } else {
+      final matches = await _findTransactions(
+        request.term!,
+        request.start ?? DateTime(2000),
+        request.end ?? DateTime.now(),
+      );
+      if (matches.isEmpty) {
+        _messages.add(AiAssistantMessage.assistant(
+          '🔍 I could not find a transaction matching "${request.term}". '
+          'Try the words as they appear in the title.',
+        ));
+        return;
+      }
+      if (matches.length > 1) {
+        // Picking one for them would be guessing with their money.
+        final lines = matches.take(5).map((t) =>
+            '•  ${UtilityFunction.formateDate(t.date)} · ${t.title} · '
+            '${_money(t.amount, currencySymbol, currencyCode)}');
+        _messages.add(AiAssistantMessage.assistant(
+          '🔍 ${matches.length} transactions match "${request.term}":\n\n'
+          '${lines.join('\n')}\n\n'
+          'Which one? Add the date — for example "$verb '
+          '${request.term} on ${UtilityFunction.formateDate(matches.first.date)}".',
+        ));
+        return;
+      }
+      target = matches.first;
+    }
+
+    _pendingEdit = (
+      target: target,
+      newAmount: request.newAmount,
+      isDelete: request.isDelete,
+    );
+
+    final money = _money(target.amount, currencySymbol, currencyCode);
+    final when = UtilityFunction.formateDate(target.date);
+    _messages.add(AiAssistantMessage.assistant(
+      request.isDelete
+          ? '🗑️ Delete **${target.title}** — $money on $when?\n\n'
+              'Reply "confirm" to remove it or "cancel" to keep it.'
+          : '✏️ Change **${target.title}** ($when) from $money to '
+              '${_money(request.newAmount!, currencySymbol, currencyCode)}?'
+              '\n\nReply "confirm" to apply it or "cancel" to leave it alone.',
+      suggestions: const ['Confirm', 'Cancel'],
+    ));
+  }
+
+  Future<Transaction?> _findById(
+      TransactionProvider provider, String id) async {
+    for (final t in provider.transactions) {
+      if (t.id == id) return t;
+    }
+    return null;
+  }
+
+  /// Applies an edit or delete once the user has said yes. Returns true when
+  /// the message was consumed.
+  Future<bool> _resolvePendingEdit(
+    String lower,
+    TransactionProvider? provider,
+  ) async {
+    final words = lower.replaceAll(RegExp(r'[^a-z\s]'), '').trim();
+    final cancelled = _cancelWords.contains(words);
+    final confirmed = !cancelled &&
+        (_confirmWords.contains(words) ||
+            const ['do it', 'delete it', 'change it', 'go ahead']
+                .contains(words));
+
+    if (cancelled) {
+      final wasDelete = _pendingEdit!.isDelete;
+      _pendingEdit = null;
+      _messages.add(AiAssistantMessage.assistant(
+          wasDelete ? 'Left it alone. 👍' : 'No change made. 👍'));
+      return true;
+    }
+    if (!confirmed) return false; // treat it as a brand-new message
+
+    final pending = _pendingEdit!;
+    _pendingEdit = null;
+    if (provider == null) {
+      _messages.add(AiAssistantMessage.assistant(
+          '😅 I could not reach your transactions just now — please try again.'));
+      return true;
+    }
+
+    if (pending.isDelete) {
+      await provider.deleteTransaction(pending.target.id);
+      if (_lastSavedId == pending.target.id) _lastSavedId = null;
+      _messages.add(AiAssistantMessage.assistant(
+        '🗑️ Deleted "${pending.target.title}".',
+        suggestions: const ['How much did I spend this month?'],
+      ));
+      return true;
+    }
+
+    pending.target.amount = pending.newAmount!;
+    await provider.updateTransaction(pending.target);
+    _messages.add(AiAssistantMessage.assistant(
+      '✏️ Updated "${pending.target.title}".',
+      suggestions: const ['How much did I spend this month?'],
+    ));
+    return true;
+  }
+
   Future<void> confirmPendingDraft(
     TransactionProvider provider, {
     String currencySymbol = '',
@@ -522,6 +702,7 @@ class AiAssistantProvider extends ChangeNotifier {
     _messages.clear();
     _pendingDraft = null;
     _pendingTransfer = null;
+    _pendingEdit = null;
     _lastSummary = null;
     notifyListeners();
   }
@@ -574,38 +755,23 @@ class AiAssistantProvider extends ChangeNotifier {
     String currencyCode,
   ) {
     final money = _money(draft.amount, currencySymbol, currencyCode);
-    final intros = draft.isExpense
-        ? [
-            'Got it! $money for ${draft.title} — review and save. 👇',
-            'One sec... $money on ${draft.title}? Check the details below. 👇',
-            'Here\'s your ${draft.title} expense ($money) — look good?',
-          ]
-        : [
-            'Nice! 🎉 $money coming in from ${draft.title} — review below.',
-            'Cha-ching! 💰 $money from ${draft.title} — check and save.',
-          ];
-    return intros[_random.nextInt(intros.length)];
+    return draft.isExpense
+        ? '$money for ${draft.title} — check it and save. 👇'
+        : '$money in from ${draft.title} — check it and save. 👇';
   }
 
+  /// One steady line, not a rotating set of exclamations. "Cha-ching!" is
+  /// charming for a week and wearing by the second month, and a confirmation
+  /// is something the user reads every single time they log anything.
   String _confirmationFor(
     AiTransactionDraft draft,
     String currencySymbol,
     String currencyCode,
   ) {
     final money = _money(draft.amount, currencySymbol, currencyCode);
-    final confirmations = draft.isExpense
-        ? [
-            '💸 Logged! ${draft.title} — $money.',
-            '✅ Saved ${draft.title} ($money). Anything else?',
-            '📝 ${draft.title} for $money is in the books!',
-            '✅ Done! $money on ${draft.title}, tracked.',
-          ]
-        : [
-            '🎉 Sweet! ${draft.title} +$money added.',
-            '💰 Income logged: ${draft.title} — $money.',
-            '✅ Nice one! $money from ${draft.title}, saved.',
-          ];
-    return confirmations[_random.nextInt(confirmations.length)];
+    return draft.isExpense
+        ? '✅ Saved ${draft.title} — $money.'
+        : '✅ Saved ${draft.title} — +$money.';
   }
 
   /// Suggestion chip that opens the Charts tab instead of sending a prompt.

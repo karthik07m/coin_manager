@@ -153,4 +153,27 @@ void main() {
     expect(text, contains('Patterns'));
     expect(text, startsWith('Spending review'));
   });
+  // "top 3 categories" lands on the topCategory metric, and a one-line answer
+  // was not an answer to it.
+  test('top category ranks the runners-up too', () async {
+    await add(500, 3, DateTime(2026, 8, 5));
+    await add(300, 2, DateTime(2026, 8, 6));
+    await add(100, 1, DateTime(2026, 8, 7));
+
+    final answer = await service.buildSummary(
+      request: AiSummaryRequest(
+        metric: AiSummaryMetric.topCategory,
+        startDate: DateTime(2026, 8, 1),
+        endDate: DateTime(2026, 8, 20),
+      ),
+      categories: categories,
+      currencySymbol: r'$',
+      currencyCode: 'USD',
+    );
+
+    expect(answer, contains('Dining Out'));
+    expect(answer, contains('House Rent'));
+    expect(answer, contains('House Loan'));
+  });
+
 }

@@ -19,6 +19,11 @@ class AiAssistantService {
 
   final http.Client _client;
 
+  /// AI requests left in this month's allowance, as of the last cloud call.
+  /// Null until the cloud has answered once, or when talking to a deployment
+  /// that predates the field.
+  int? lastCreditsRemaining;
+
   AiAssistantService({http.Client? client}) : _client = client ?? http.Client();
 
   Future<AiIntent> parseMessage({
@@ -81,6 +86,9 @@ class AiAssistantService {
     if (decoded is! Map<String, dynamic>) {
       throw AiAssistantException('AI returned an invalid response.');
     }
+
+    final remaining = decoded['creditsRemaining'];
+    if (remaining is num) lastCreditsRemaining = remaining.toInt();
 
     try {
       return AiIntent.fromJson(decoded);

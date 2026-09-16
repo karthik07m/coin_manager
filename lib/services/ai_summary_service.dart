@@ -578,9 +578,12 @@ class AiSummaryService {
     ];
 
     if (income > 0) {
+      // Qualified deliberately: this is a rate against the income *logged in
+      // the app*, which is not the same as the user's real income. Stating a
+      // bare "saved 12%" claimed knowledge the app does not have.
       lines.add(savingsRate != null && savingsRate >= 0
-          ? '• Earned ${m(income)}, saved ${savingsRate.round()}%'
-          : '• Earned ${m(income)}, overspent by ${m(total - income)}');
+          ? '• Of the ${m(income)} income logged, ${savingsRate.round()}% is left'
+          : '• Logged income ${m(income)}, ${m(total - income)} less than spending');
     }
 
     lines.addAll([
@@ -631,38 +634,10 @@ class AiSummaryService {
     // ── Personalised Financial Advice ──
     final tips = <String>[];
 
-    // Tip 1: Savings rate advice
-    if (savingsRate != null) {
-      if (savingsRate < 0) {
-        tips.add('You\'re spending more than you earn. This is unsustainable '
-            '— review your wants spending (${m(wantsTotal)}) and find '
-            '${m((total - income).abs())} to cut immediately.');
-      } else if (savingsRate < 10) {
-        tips.add('Your savings rate is only ${savingsRate.round()}%. '
-            'Financial experts recommend saving at least 20% of income. '
-            'Try to free up ${m(income * 0.2 - (income - total))} more '
-            'from your lifestyle spending.');
-      } else if (savingsRate < 20) {
-        tips.add('You\'re saving ${savingsRate.round()}% — good, but aim '
-            'for 20%+. Trimming ${m(income * 0.2 - (income - total))} from '
-            'wants could get you there.');
-      } else {
-        tips.add('Excellent! You\'re saving ${savingsRate.round()}% of your '
-            'income — that\'s above the recommended 20%. Keep it up!');
-      }
-    }
-
-    // Tip 2: Needs/wants balance
-    if (wantsPct > 40) {
-      tips.add('$wantsPct% of spending goes to wants — a financial '
-          'planner would suggest keeping this under 30%. Consider reviewing '
-          '${_categoryName(categories, topCategory.key)} and similar '
-          'discretionary categories.');
-    } else if (wantsPct <= 30 && total > 0) {
-      tips.add('Your needs/wants balance looks healthy at $needsPct/$wantsPct '
-          '— well within the recommended 50/30 guideline.');
-    }
-
+    // Tips that quote a rule of thumb rather than the user's own data
+    // ("experts recommend 20%", "the 50/30 guideline") were cut: sitting next
+    // to budget-grounded advice, they made the grounded lines look like
+    // filler too. What is left is only what this ledger actually shows.
     // Tip 3: Weekend spending
     if (weekendTxns > 0 && weekdayTxns > 0) {
       final weekdayDayCount = days > 7
@@ -698,18 +673,11 @@ class AiSummaryService {
           'setting a weekly $catName budget.');
     }
 
-    // Tip 6: Top category concentration
-    if (topCatPct >= 50) {
-      tips.add('${_categoryName(categories, topCategory.key)} alone '
-          'accounts for $topCatPct% of all spending. Diversifying could '
-          'reduce risk of overspending in this area.');
-    }
-
     // Budget-grounded advice leads: it names the user's own limits and
     // last month's figures, so it is always more useful than habit heuristics.
-    // Budget-grounded advice first, then habit heuristics, capped: a page of
-    // suggestions gets skimmed and none of them get acted on.
-    final allTips = [...groundedAdvice, ...tips].take(4).toList();
+    // Budget-grounded advice first, then habit heuristics, capped at two: a
+    // page of suggestions gets skimmed and none of them get acted on.
+    final allTips = [...groundedAdvice, ...tips].take(2).toList();
     if (allTips.isNotEmpty) {
       lines.add('');
       lines.add('**Suggestions**');
@@ -808,7 +776,21 @@ class AiSummaryService {
     final top = totals.entries.reduce(
       (a, b) => a.value >= b.value ? a : b,
     );
-    return '🏆 Your top spending category was ${_categoryName(categories, top.key)} at ${_money(top.value, currencySymbol, currencyCode)} ${_periodText(request)}.';
+    final header =
+        '🏆 Your top spending category was ${_categoryName(categories, top.key)} at ${_money(top.value, currencySymbol, currencyCode)} ${_periodText(request)}.';
+
+    // "top 3 categories" lands here too, and a single line was not an answer
+    // to it. The ranked list costs nothing and answers both phrasings.
+    final expenses = transactions.where((t) => t.isExpense).toList();
+    final total = expenses.fold(0.0, (sum, t) => sum + _amt(t));
+    final breakdown = _topCategoryBreakdown(
+      expenses,
+      categories,
+      total,
+      currencySymbol,
+      currencyCode,
+    );
+    return breakdown.isEmpty ? header : '$header\n\n$breakdown';
   }
 
   /// Builds a "🥇 Food — ₹2,100 (39%)" style top-3 list for spending answers.

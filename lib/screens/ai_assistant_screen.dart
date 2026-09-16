@@ -209,20 +209,6 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     _send();
   }
 
-  void _preparePrompt(String prompt) {
-    _controller.text = prompt;
-    _controller.selection = TextSelection.collapsed(offset: prompt.length);
-    _inputFocusNode.requestFocus();
-  }
-
-  void _handlePrompt(_AiPrompt prompt) {
-    if (prompt.autoSubmit) {
-      _submitPrompt(prompt.prompt);
-    } else {
-      _preparePrompt(prompt.prompt);
-    }
-  }
-
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
@@ -265,16 +251,28 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                         style: AppTextStyles.bodyLarge.copyWith(
                             color: context.textPrimary,
                             fontWeight: FontWeight.w700)),
-                    Selector<SettingsProvider, bool>(
-                      selector: (_, settings) => settings.aiAssistantEnabled,
-                      builder: (context, cloud, _) => Text(
-                          cloud
-                              ? 'Cloud AI enabled · Beta'
-                              : 'On-device assistant · Beta',
+                    Consumer2<SettingsProvider, AiAssistantProvider>(
+                      builder: (context, settings, ai, _) {
+                        // The monthly allowance used to be invisible until the
+                        // moment it ran out. Below a fifth left, say so here.
+                        final left = ai.creditsRemaining;
+                        final lowOnCredits =
+                            settings.aiAssistantEnabled && left != null && left <= 20;
+                        return Text(
+                          lowOnCredits
+                              ? '$left cloud AI request${left == 1 ? '' : 's'} left this month'
+                              : settings.aiAssistantEnabled
+                                  ? 'Cloud AI enabled · Beta'
+                                  : 'On-device assistant · Beta',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.caption
-                              .copyWith(color: context.textSecondary)),
+                          style: AppTextStyles.caption.copyWith(
+                            color: lowOnCredits
+                                ? AppColors.warning
+                                : context.textSecondary,
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -302,7 +300,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                   CheckedPopupMenuItem(
                     value: 'cloud',
                     checked: settings.aiAssistantEnabled,
-                    child: const Text('Cloud AI for free-form text'),
+                    child: const Text('Cloud AI for wording I miss'),
                   ),
                   const PopupMenuItem(
                     value: 'help',
@@ -354,71 +352,51 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    final prompts = _buildPromptData();
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final largeText = MediaQuery.textScalerOf(context).scale(14) > 19;
-        final columns = constraints.maxWidth >= 760
-            ? (largeText ? 2 : 3)
-            : constraints.maxWidth >= 360 && !largeText
-                ? 2
-                : 1;
-        final cardWidth =
-            (constraints.maxWidth - 32 - 12 * (columns - 1)) / columns;
-
-        return ListView(
-          padding: const EdgeInsets.all(AppDimensions.spacing16),
+    // Chips only. The old "Quick actions" grid prefilled a word ("Add expense
+    // ") into the input and left the user to type the rest, which is slower
+    // than just typing "coffee 150" — six cards of it read as instructions
+    // for a syntax nobody needs.
+    return ListView(
+      padding: const EdgeInsets.all(AppDimensions.spacing16),
+      children: [
+        _SectionLabel('Try asking'),
+        const SizedBox(height: AppDimensions.spacing12),
+        Wrap(
+          spacing: AppDimensions.spacing8,
+          runSpacing: AppDimensions.spacing8,
           children: [
-            _SectionLabel('Try asking'),
-            const SizedBox(height: AppDimensions.spacing8),
-            SizedBox(
-              height: 24 + MediaQuery.textScalerOf(context).scale(14) * 1.5,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                // Let chips paint into the page's side padding so the row
-                // reads as scrollable instead of chopped 16px from the edge.
-                clipBehavior: Clip.none,
-                itemCount: _starterQuestions.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(width: AppDimensions.spacing8),
-                itemBuilder: (context, index) => _SuggestionChip(
-                  label: _starterQuestions[index],
-                  onTap: () => _submitPrompt(_starterQuestions[index]),
-                ),
+            for (final question in _starterQuestions)
+              _SuggestionChip(
+                label: question,
+                onTap: () => _submitPrompt(question),
               ),
-            ),
-            const SizedBox(height: AppDimensions.spacing20),
-            _SectionLabel('Quick actions'),
-            const SizedBox(height: AppDimensions.spacing8),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                for (final prompt in prompts)
-                  SizedBox(
-                    width: cardWidth,
-                    child: _PromptCard(
-                        prompt: prompt, onTap: () => _handlePrompt(prompt)),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppDimensions.spacing16),
-            Center(
-              child: Text(
-                context.watch<SettingsProvider>().aiAssistantEnabled
-                    ? 'Cloud AI is on. Manage it in the menu above.'
-                    : 'On-device mode · Your commands stay on your phone',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.caption.copyWith(
-                  color: context.textSecondary,
-                  letterSpacing: 0,
-                ),
-              ),
-            ),
           ],
-        );
-      },
+        ),
+        const SizedBox(height: AppDimensions.spacing20),
+        Center(
+          child: Text(
+            'Or just type it: "coffee 150", "rent 25000 every month".',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.caption.copyWith(
+              color: context.textSecondary,
+              letterSpacing: 0,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppDimensions.spacing16),
+        Center(
+          child: Text(
+            context.watch<SettingsProvider>().aiAssistantEnabled
+                ? 'Cloud AI is on. Manage it in the menu above.'
+                : 'On-device mode · Your commands stay on your phone',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.caption.copyWith(
+              color: context.textSecondary,
+              letterSpacing: 0,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -785,61 +763,10 @@ const _starterQuestions = [
   'What\'s my net worth?',
   'My spending habits',
   'Compare this month vs last',
+  'Top category this month',
+  'Upcoming bills',
   'Show recent transactions',
 ];
-
-class _AiPrompt {
-  final IconData icon;
-  final String title;
-  final String prompt;
-  final bool autoSubmit;
-
-  const _AiPrompt({
-    required this.icon,
-    required this.title,
-    required this.prompt,
-    this.autoSubmit = true,
-  });
-}
-
-List<_AiPrompt> _buildPromptData() {
-  return [
-    const _AiPrompt(
-      icon: Icons.add_card_outlined,
-      title: 'Add expense',
-      prompt: 'Add expense ',
-      autoSubmit: false,
-    ),
-    const _AiPrompt(
-      icon: Icons.savings_outlined,
-      title: 'Add income',
-      prompt: 'Add income ',
-      autoSubmit: false,
-    ),
-    const _AiPrompt(
-      icon: Icons.swap_horiz_rounded,
-      title: 'Transfer',
-      prompt: 'Transfer ',
-      autoSubmit: false,
-    ),
-    const _AiPrompt(
-      icon: Icons.search_rounded,
-      title: 'Find',
-      prompt: 'Find ',
-      autoSubmit: false,
-    ),
-    const _AiPrompt(
-      icon: Icons.category_outlined,
-      title: 'Top category',
-      prompt: 'What is my top spending category this month?',
-    ),
-    const _AiPrompt(
-      icon: Icons.event_repeat_outlined,
-      title: 'Upcoming bills',
-      prompt: 'Show my upcoming recurring payments',
-    ),
-  ];
-}
 
 class _SectionLabel extends StatelessWidget {
   final String text;
@@ -1072,75 +999,6 @@ class _MessageAvatar extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Icon(icon, color: Colors.white, size: 16),
-    );
-  }
-}
-
-class _PromptCard extends StatelessWidget {
-  final _AiPrompt prompt;
-  final VoidCallback onTap;
-
-  const _PromptCard({
-    required this.prompt,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Material(
-      color: context.appSurface,
-      borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 84),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimensions.spacing12,
-            vertical: AppDimensions.spacing12,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-            border: context.cardBorder,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  prompt.icon,
-                  color: colorScheme.primary,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: AppDimensions.spacing8),
-              Expanded(
-                child: Text(
-                  prompt.title,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: context.textPrimary,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ),
-              if (!prompt.autoSubmit)
-                Icon(
-                  Icons.edit_outlined,
-                  size: 14,
-                  color: context.textSecondary,
-                ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
