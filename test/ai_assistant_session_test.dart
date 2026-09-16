@@ -126,4 +126,40 @@ void main() {
 
     expect(bearers, ['Bearer fresh']);
   });
+  // The allowance is only visible if the app reads it back off the response.
+  // The deployed function returns it alongside the intent.
+  test('reads the remaining allowance off the reply', () async {
+    SharedPreferences.setMockInitialValues({});
+    final client = MockClient((req) async {
+      if (req.url.path == '/auth/v1/signup') {
+        return http.Response(session('a1', 'r1'), 200);
+      }
+      return http.Response(
+        '{"intent":"unsupported","confidence":0,"message":"ok",'
+        '"creditsRemaining":17}',
+        200,
+      );
+    });
+    final service = AiAssistantService(client: client);
+
+    expect(service.lastCreditsRemaining, isNull);
+    await ask(service);
+    expect(service.lastCreditsRemaining, 17);
+  });
+
+  test('an older deployment without the field leaves it unknown', () async {
+    SharedPreferences.setMockInitialValues({});
+    final client = MockClient((req) async {
+      if (req.url.path == '/auth/v1/signup') {
+        return http.Response(session('a1', 'r1'), 200);
+      }
+      return http.Response(ok, 200);
+    });
+    final service = AiAssistantService(client: client);
+
+    await ask(service);
+    // Null must mean "not known", never "none left" — the header keys off it.
+    expect(service.lastCreditsRemaining, isNull);
+  });
+
 }
