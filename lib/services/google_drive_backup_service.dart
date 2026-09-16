@@ -58,12 +58,28 @@ class GoogleDriveBackupService {
   /// Interactive sign-in. Returns the account email, or null if cancelled.
   Future<String?> signIn() async {
     final account = await _googleSignIn.signIn();
-    return account?.email;
+    if (account == null) return null;
+    await _ensureDriveAccess();
+    return account.email;
+  }
+
+  /// Asks for Drive consent up front. Without this, the first token request
+  /// hits NEED_REMOTE_CONSENT and google_sign_in_android 6.2.1 retries it on
+  /// the main thread: "PlatformException(exception, Calling this from your
+  /// main thread can lead to deadlock)". No UI when already granted.
+  Future<void> _ensureDriveAccess() async {
+    final granted =
+        await _googleSignIn.requestScopes([drive.DriveApi.driveFileScope]);
+    if (!granted) {
+      throw Exception(
+          'Google Drive access was not granted. Sign in again and allow access.');
+    }
   }
 
   Future<void> signOut() => _googleSignIn.signOut();
 
   Future<drive.DriveApi> _driveApi() async {
+    if (_googleSignIn.currentUser != null) await _ensureDriveAccess();
     final client = await _googleSignIn.authenticatedClient();
     if (client == null) {
       throw Exception('Not signed in to Google.');

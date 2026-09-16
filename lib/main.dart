@@ -22,13 +22,13 @@ import 'providers/ai_assistant_provider.dart';
 
 import 'screens/ai_assistant_screen.dart';
 import 'screens/category_manger.dart';
-import 'screens/create_category.dart';
 import 'screens/menu_scrn.dart';
 import 'screens/transaction_form.dart';
 import 'screens/privacy_policy.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/manage_budget.dart';
 import 'screens/backup_management_screen.dart';
+import 'screens/cloud_backup_screen.dart';
 import 'screens/debt_list_screen.dart';
 import 'screens/debt_form_screen.dart';
 import 'screens/debt_detail_screen.dart';
@@ -39,6 +39,8 @@ import 'screens/all_transactions_screen.dart';
 import 'screens/account_management_screen.dart';
 import 'screens/account_form_screen.dart';
 import 'screens/upcoming_payments_screen.dart';
+import 'screens/activity_history_screen.dart';
+import 'screens/recurring_manager_screen.dart';
 import 'utilities/page_transitions.dart';
 import 'widgets/app_lock_gate.dart';
 
@@ -533,13 +535,13 @@ class MyApp extends StatelessWidget {
       routes: {
         TransactionForm.routeName: (ctx) => const TransactionForm(),
         AiAssistantScreen.routeName: (ctx) => const AiAssistantScreen(),
-        CreateCategoryScreen.routeName: (ctx) => const CreateCategoryScreen(),
         CategoryManagementScreen.routeName: (ctx) =>
             const CategoryManagementScreen(),
         PrivacyPolicyScreen.routeName: (ctx) => const PrivacyPolicyScreen(),
         OnboardingScreen.routeName: (ctx) => const OnboardingScreen(),
         BackupManagementScreen.routeName: (ctx) =>
             const BackupManagementScreen(),
+        CloudBackupScreen.routeName: (ctx) => const CloudBackupScreen(),
         DebtListScreen.routeName: (ctx) => const DebtListScreen(),
         DebtFormScreen.routeName: (ctx) => const DebtFormScreen(),
         DebtDetailScreen.routeName: (ctx) => const DebtDetailScreen(debtId: ''),
@@ -552,6 +554,9 @@ class MyApp extends StatelessWidget {
         AccountFormScreen.routeName: (ctx) => const AccountFormScreen(),
         UpcomingPaymentsScreen.routeName: (ctx) =>
             const UpcomingPaymentsScreen(),
+        ActivityHistoryScreen.routeName: (ctx) => const ActivityHistoryScreen(),
+        RecurringManagerScreen.routeName: (ctx) =>
+            const RecurringManagerScreen(),
       },
     );
   }
