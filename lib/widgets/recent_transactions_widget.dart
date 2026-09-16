@@ -128,11 +128,11 @@ class RecentTransactionsWidget extends StatelessWidget {
                         height: 40,
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          // Neutral backing, matching the transaction rows:
+                          // Category tint, matching the transaction rows:
                           // the amount colour already carries the sign.
                           color: transaction.isTransfer
                               ? context.appAccent.withValues(alpha: 0.1)
-                              : context.textPrimary.withValues(alpha: 0.06),
+                              : category.color.withValues(alpha: 0.15),
                           shape: BoxShape.circle,
                         ),
                         child: transaction.isTransfer

@@ -36,6 +36,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       context,
       initialName: category?.name,
       initialIcon: category?.icon,
+      initialColor: category?.color.toARGB32(),
       initialIsExpense: category?.isExpense ?? _isExpenseSelected,
       showTypeToggle: true,
       isEditing: category != null,
@@ -54,6 +55,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       id: existing?.id,
       name: result.name,
       icon: result.icon,
+      colorValue: result.color,
       isExpense: result.isExpense,
       budget: existing?.budget,
       createdOn: existing?.createdOn ?? now,
@@ -231,7 +233,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
             height: 42,
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: context.appAccent.withValues(alpha: 0.1),
+              color: category.color.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
             child: category.icon.isNotEmpty

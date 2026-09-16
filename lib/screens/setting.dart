@@ -82,7 +82,7 @@ class SettingsScreen extends StatelessWidget {
                     icon: Icons.repeat_outlined,
                     activeIcon: Icons.repeat_rounded,
                     title: 'Recurring',
-                    subtitle: 'Stop repeating income or payments',
+                    subtitle: 'Manage repeating income and bills',
                     onTap: () => Navigator.pushNamed(
                         context, RecurringManagerScreen.routeName),
                   ),

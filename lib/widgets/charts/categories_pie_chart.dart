@@ -255,15 +255,10 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
                                     (sel != null && filteredTotal > 0)
                                         ? sel.amount / filteredTotal * 100
                                         : 0.0;
-                                final int selColorIndex = hasTouched
-                                    ? sortedCategories
-                                        .indexWhere((c) => c.name == sel!.name)
-                                    : -1;
-                                final Color selColor = hasTouched
-                                    ? _getColor(selColorIndex != -1
-                                        ? selColorIndex
-                                        : _touchedIndex!)
-                                    : context.appAccent;
+                                final Color selColor =
+                                    hasTouched && sel != null
+                                        ? sel.color
+                                        : context.appAccent;
 
                                 return GestureDetector(
                                   onTap: () => _openTransactions(sel?.id),
@@ -376,8 +371,7 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
                 ? (category.amount / filteredTotal * 100)
                 : 0.0;
             final isSelected = _selectedCategories.contains(category.name);
-            final color = _getColor(
-                index); // Use sorted index for consistent rank-based color
+            final color = category.color;
 
             return InkWell(
               onTap: () {
@@ -687,10 +681,7 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
       final percentage =
           totalVisible > 0 ? (cat.amount / totalVisible * 100) : 0.0;
 
-      // Find the consistent color based on rank in the full list
-      final colorIndex =
-          allSortedCategories.indexWhere((c) => c.name == cat.name);
-      final color = _getColor(colorIndex != -1 ? colorIndex : i);
+      final color = cat.color;
 
       sections.add(PieChartSectionData(
         color: color,
@@ -787,16 +778,6 @@ class CategoriesPieChartState extends State<CategoriesPieChart>
     );
   }
 
-  Color _getColor(int index) {
-    final colors = [
-      AppColors.positive, // fixed palette green, not the user accent
-      AppColors.accentBlue,
-      AppColors.warning,
-      AppColors.accentPurple,
-      AppColors.negative,
-      AppColors.secondary,
-    ];
-    return colors[index % colors.length];
-  }
+
 }
 

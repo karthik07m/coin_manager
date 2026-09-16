@@ -12,7 +12,7 @@ import '../widgets/tappable.dart';
 /// Hero tint: a deeper wash of the accent than the page, so the card is the
 /// focal surface without going white or fully saturated.
 Color _cardColor(BuildContext context) => Color.alphaBlend(
-    context.appAccent.withValues(alpha: context.isDark ? 0.22 : 0.2),
+    context.appAccent.withValues(alpha: context.isDark ? 0.12 : 0.2),
     context.appBackground);
 
 /// Inner tiles lift off the card instead of punching white holes in it.
@@ -62,7 +62,6 @@ class BalanceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final balance = totalIncome - totalExpenses;
-    final isPositive = balance >= 0;
     final currencySymbol = context.watch<SettingsProvider>().currencySymbol;
 
     return Padding(
@@ -80,7 +79,7 @@ class BalanceCard extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text('Total Balance',
+                    child: Text('Left this month',
                         style: AppTextStyles.bodyMedium.copyWith(
                             color: context.textSecondary,
                             fontWeight: FontWeight.w600)),
@@ -111,30 +110,27 @@ class BalanceCard extends StatelessWidget {
                   style: AppTextStyles.h1.copyWith(
                       fontSize: 40,
                       letterSpacing: -1.4,
-                      color: isPositive
-                          ? context.textPrimary
-                          : AppColors.negative),
+                      color: context.textPrimary),
                   duration: MediaQuery.disableAnimationsOf(context)
                       ? Duration.zero
                       : const Duration(milliseconds: 900),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Row(
                 children: [
-                  Icon(isPositive ? Icons.trending_up : Icons.trending_down,
-                      size: 16, color: context.textSecondary),
-                  const SizedBox(width: 6),
-                  Text(isPositive ? 'Healthy' : 'Deficit',
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: context.textSecondary)),
-                  const SizedBox(width: 8),
                   Expanded(
-                      child: Text('·  View calendar',
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: context.textSecondary))),
-                  Icon(Icons.arrow_forward_rounded,
-                      size: 16, color: context.textSecondary),
+                    child: Text(
+                      _caption(currencySymbol),
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: context.textSecondary),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(Icons.chevron_right_rounded,
+                      size: 20, color: context.textSecondary),
                 ],
               ),
               const SizedBox(height: 24),
@@ -172,6 +168,17 @@ class BalanceCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// One quiet sentence under the figure, the way banking apps caption a
+  /// balance, instead of a status badge.
+  String _caption(String currencySymbol) {
+    final balance = totalIncome - totalExpenses;
+    String money(double v) =>
+        UtilityFunction.addCommaWithSign(v.abs(), currencySymbol: currencySymbol);
+    if (totalIncome == 0 && totalExpenses == 0) return 'No activity yet';
+    if (balance < 0) return 'Spent ${money(balance)} more than you earned';
+    return 'Left after expenses from ${money(totalIncome)} earned';
   }
 
   Widget _buildMetricCard(

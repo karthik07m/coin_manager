@@ -271,7 +271,7 @@ class QuickStatsWidget extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.caption.copyWith(
-                              color: statusColor,
+                              color: context.textSecondary,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0,
@@ -342,9 +342,6 @@ class QuickStatsWidget extends StatelessWidget {
                             label: projectedSpend > totalBudget
                                 ? 'Projected · over'
                                 : 'Projected',
-                            valueColor: projectedSpend > totalBudget
-                                ? AppColors.negative
-                                : null,
                           ),
                         ],
                       ),

@@ -9,6 +9,7 @@ import '../utilities/functions.dart';
 class BudgetProgressCard extends StatelessWidget {
   final String categoryName;
   final String categoryIcon;
+  final Color categoryColor;
   final double budgetAmount;
   final double spentAmount;
   final int transactionCount;
@@ -22,6 +23,7 @@ class BudgetProgressCard extends StatelessWidget {
     super.key,
     required this.categoryName,
     required this.categoryIcon,
+    required this.categoryColor,
     required this.budgetAmount,
     required this.spentAmount,
     required this.transactionCount,
@@ -90,6 +92,14 @@ class BudgetProgressCard extends StatelessWidget {
                             valueColor:
                                 AlwaysStoppedAnimation<Color>(statusColor),
                           ),
+                        ),
+                      ),
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: categoryColor.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
                         ),
                       ),
                       Image.asset(

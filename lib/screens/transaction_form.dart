@@ -29,7 +29,7 @@ import '../utilities/constants.dart';
 import '../utilities/functions.dart';
 import '../utilities/theme_helper.dart';
 import '../db/receipt_db_helper.dart';
-import 'create_category.dart';
+import '../widgets/category_editor_sheet.dart';
 import 'receipt_scan_screen.dart';
 import 'receipt_viewer_screen.dart';
 
@@ -681,14 +681,24 @@ class TransactionFormState extends State<TransactionForm> {
                     icon: const Icon(Icons.add_circle_outline),
                     tooltip: 'Create category',
                     onPressed: () async {
-                      await Navigator.of(context)
-                          .pushNamed(CreateCategoryScreen.routeName);
-                      if (context.mounted) {
-                        final categoryProvider = Provider.of<CategoryProvider>(
-                            context,
-                            listen: false);
-                        await _fetchAndMapCategories(categoryProvider);
-                      }
+                      final result = await showCategoryEditorSheet(
+                        context,
+                        initialIsExpense: _isExpense,
+                      );
+                      if (result == null || !context.mounted) return;
+                      final categoryProvider = Provider.of<CategoryProvider>(
+                          context,
+                          listen: false);
+                      final now = DateTime.now().toIso8601String();
+                      await categoryProvider.addCategory(Category(
+                        name: result.name,
+                        icon: result.icon,
+                        isExpense: result.isExpense,
+                        colorValue: result.color,
+                        createdOn: now,
+                        modifiedOn: now,
+                      ));
+                      await _fetchAndMapCategories(categoryProvider);
                     },
                   ),
                 ],

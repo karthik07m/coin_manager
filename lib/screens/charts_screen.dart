@@ -528,6 +528,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                     const SizedBox(height: 2),
                     Text(
                       _insightSummary(
+                        hasPrevious: previousExpenses > 0,
                         expenseDelta: expenseDelta,
                         expensePercent: expensePercent,
                         topCategory: topCategory.name,
@@ -551,15 +552,18 @@ class _ChartsScreenState extends State<ChartsScreen> {
                 child: _buildInsightMetric(
                   context,
                   label: 'Expense trend',
-                  value: _formatSignedMoney(
-                    expenseDelta,
-                    currencySymbol,
-                    currencyCode,
-                  ),
+                  // With no previous month there is no trend, only a total.
+                  value: previousExpenses > 0
+                      ? _formatSignedMoney(
+                          expenseDelta, currencySymbol, currencyCode)
+                      : UtilityFunction.formatMoney(totalExpenses,
+                          symbol: currencySymbol, currencyCode: currencyCode),
                   detail: previousExpenses > 0
                       ? '${expensePercent.abs().toStringAsFixed(0)}% vs last month'
                       : 'No previous data',
-                  color: trendColor,
+                  color: previousExpenses > 0
+                      ? trendColor
+                      : context.textPrimary,
                 ),
               ),
               const SizedBox(width: AppDimensions.spacing12),
@@ -567,11 +571,8 @@ class _ChartsScreenState extends State<ChartsScreen> {
                 child: _buildInsightMetric(
                   context,
                   label: 'Net this month',
-                  value: UtilityFunction.formatMoney(
-                    netSavings.abs(),
-                    symbol: currencySymbol,
-                    currencyCode: currencyCode,
-                  ),
+                  value: _formatSignedMoney(
+                      netSavings, currencySymbol, currencyCode),
                   detail: netSavings >= 0 ? 'saved' : 'deficit',
                   color:
                       netSavings >= 0 ? AppColors.positive : AppColors.negative,
@@ -602,15 +603,18 @@ class _ChartsScreenState extends State<ChartsScreen> {
                 child: _buildInsightMetric(
                   context,
                   label: 'Income change',
-                  value: _formatSignedMoney(
-                    incomeDelta,
-                    currencySymbol,
-                    currencyCode,
-                  ),
+                  value: previousIncome > 0
+                      ? _formatSignedMoney(
+                          incomeDelta, currencySymbol, currencyCode)
+                      : UtilityFunction.formatMoney(totalIncome,
+                          symbol: currencySymbol, currencyCode: currencyCode),
                   detail:
                       previousIncome > 0 ? 'vs last month' : 'No previous data',
-                  color:
-                      incomeDelta >= 0 ? AppColors.positive : AppColors.warning,
+                  color: previousIncome <= 0
+                      ? context.textPrimary
+                      : incomeDelta >= 0
+                          ? AppColors.positive
+                          : AppColors.warning,
                 ),
               ),
             ],
@@ -907,10 +911,14 @@ class _ChartsScreenState extends State<ChartsScreen> {
   }
 
   String _insightSummary({
+    required bool hasPrevious,
     required double expenseDelta,
     required double expensePercent,
     required String topCategory,
   }) {
+    if (!hasPrevious) {
+      return 'First month of data. $topCategory leads this month.';
+    }
     if (expenseDelta == 0) {
       return 'Spending is flat compared with last month.';
     }

@@ -18,6 +18,7 @@ import '../utilities/theme_helper.dart';
 import '../utilities/responsive.dart';
 import '../widgets/shimmer_loading.dart';
 import '../utilities/functions.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import '../models/account.dart';
 import 'account_management_screen.dart';
@@ -281,20 +282,11 @@ class _HomePageState extends State<HomePage> {
                         style: AppTextStyles.h2.copyWith(
                             color: context.textPrimary, letterSpacing: -0.6)),
                     const SizedBox(height: 4),
-                    Text('A little clarity for your money.',
+                    Text(DateFormat('EEEE, d MMMM').format(DateTime.now()),
                         style: AppTextStyles.bodyMedium
                             .copyWith(color: context.textSecondary)),
                   ],
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: context.appAccentSurface,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(Icons.account_balance_wallet_outlined,
-                    color: context.appAccent, size: 24),
               ),
             ],
           ),
@@ -579,7 +571,8 @@ class _HomePageState extends State<HomePage> {
                                 showDecimals: true,
                               ),
                               style: AppTextStyles.bodyLarge.copyWith(
-                                color: isLiability
+                                // Owed or overdrawn is real money out, so red.
+                                color: isLiability || acc.currentBalance < 0
                                     ? AppColors.negative
                                     : context.textPrimary,
                                 fontWeight: FontWeight.w800,

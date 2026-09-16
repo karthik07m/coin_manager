@@ -50,6 +50,23 @@ class AppColors {
   // UI Elements
   static const Color divider = Color(0xFF27272A);
   static const Color border = Color(0xFF27272A);
+
+  /// Categorical palette for category tints and chart slices. No green or
+  /// red: those mean income and expense everywhere else in the app.
+  static const List<Color> categoryPalette = [
+    Color(0xFF3498DB), // blue
+    Color(0xFF00ACC1), // cyan
+    Color(0xFF1ABC9C), // teal
+    Color(0xFF5C6BC0), // indigo
+    Color(0xFF9B59B6), // purple
+    Color(0xFFEC407A), // pink
+    Color(0xFFFF7043), // coral
+    Color(0xFFE67E22), // orange
+    Color(0xFFFFA726), // amber
+    Color(0xFFF1C40F), // yellow
+    Color(0xFF8D6E63), // brown
+    Color(0xFF78909C), // slate
+  ];
 }
 
 // Dropshadows for depth

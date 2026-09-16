@@ -10,7 +10,6 @@ import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
 import '../utilities/functions.dart';
 import '../utilities/budget_period.dart';
-import '../utilities/budget_scope_summary.dart';
 import '../screens/manage_budget.dart';
 import '../screens/all_transactions_screen.dart';
 import 'package:intl/intl.dart';
@@ -134,201 +133,11 @@ class BudgetOverviewWidget extends StatelessWidget {
           );
         }
 
-        // Per-category budgets drive the breakdown below and the on-track
-        // count, but the summary tracks the OVERALL budget so it matches the
-        // Monthly Budget card (one honest "am I over?" number).
-        double sumCategoryBudgets = 0;
-        int onTrackCount = 0;
-        for (var category in categoriesWithBudgets) {
-          final budget = budgetProvider.getBudget(category.name, currentMonth);
-          final spent = transactionProvider.getCategorySpending(
-            category.id!,
-            startDate,
-            endDate,
-          );
-          sumCategoryBudgets += budget;
-
-          final percentSpent = budget > 0 ? (spent / budget) : 0.0;
-          if (percentSpent < 0.8) {
-            onTrackCount++;
-          }
-        }
-
-        // Overall budget = the month's total budget (fall back to the sum of
-        // category budgets if no total is set). Spent is measured on the same
-        // basis as the top card — all expenses, or only budgeted categories.
-        final totalBudget =
-            overallBudget > 0 ? overallBudget : sumCategoryBudgets;
-        final summary = BudgetScopeSummary.compute(
-          monthExpenses: transactionProvider.transactions
-              .where((t) =>
-                  t.isExpense &&
-                  !t.isTransfer &&
-                  !t.date.isBefore(startDate) &&
-                  !t.date.isAfter(endDate))
-              .toList(),
-          amountOf: transactionProvider.baseAmount,
-          scope: budgetProvider.getScope(currentMonth),
-          budgetedCategoryIds: BudgetScopeSummary.budgetedCategoryIds(
-            categories: expenseCategories,
-            budgetFor: (name) => budgetProvider.getBudget(name, currentMonth),
-          ),
-        );
-        final totalSpent = summary.countedSpent;
-
-        final totalPercent = totalBudget > 0 ? (totalSpent / totalBudget) : 0.0;
-
-        // Determine overall status color
-        Color statusColor;
-        if (totalPercent >= 1.0) {
-          statusColor = AppColors.negative;
-        } else if (totalPercent >= 0.8) {
-          statusColor = AppColors.warning;
-        } else {
-          statusColor = AppColors.positive;
-        }
-
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Summary Card
-            Container(
-              padding: const EdgeInsets.all(AppDimensions.spacing20),
-              decoration: BoxDecoration(
-                // Neutral like the other cards; the pill and bar carry status.
-                color: context.appSurface,
-                borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-                border: context.cardBorder,
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            summary.isCategoryScoped
-                                ? 'Category budget'
-                                : 'Total budget',
-                            style: AppTextStyles.caption.copyWith(
-                              color: context.textSecondary,
-                              fontSize: 11,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            UtilityFunction.formatMoney(totalBudget,
-                                symbol: currencySymbol),
-                            style: AppTextStyles.h2.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: statusColor.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Text(
-                          // Past 999% the exact figure is noise, not news.
-                          totalPercent >= 10
-                              ? '999%+'
-                              : '${(totalPercent * 100).toStringAsFixed(0)}%',
-                          style: AppTextStyles.amount.copyWith(
-                            color: statusColor,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppDimensions.spacing16),
-
-                  // Progress bar
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: TweenAnimationBuilder<double>(
-                      duration: const Duration(milliseconds: 1000),
-                      curve: Curves.easeOutCubic,
-                      tween: Tween<double>(
-                        begin: 0,
-                        end: totalPercent.clamp(0.0, 1.0),
-                      ),
-                      builder: (context, value, _) => LinearProgressIndicator(
-                        value: value,
-                        backgroundColor: Theme.of(context)
-                            .colorScheme
-                            .surface
-                            .withValues(alpha: 0.3),
-                        valueColor: AlwaysStoppedAnimation<Color>(statusColor),
-                        minHeight: 12,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: AppDimensions.spacing16),
-
-                  // Stats row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatBox(
-                          context,
-                          icon: Icons.shopping_bag,
-                          label: 'Spent',
-                          value: UtilityFunction.formatMoney(totalSpent,
-                              symbol: currencySymbol),
-                          color: statusColor,
-                        ),
-                      ),
-                      const SizedBox(width: AppDimensions.spacing12),
-                      Expanded(
-                        // When the budget only covers some categories, what
-                        // it ignores matters more than how many it counts.
-                        child: summary.isCategoryScoped
-                            ? _buildStatBox(
-                                context,
-                                icon: Icons.remove_circle_outline,
-                                label: 'Unbudgeted',
-                                value: UtilityFunction.formatMoney(
-                                    summary.unbudgetedSpent,
-                                    symbol: currencySymbol),
-                                color: context.textSecondary,
-                              )
-                            : _buildStatBox(
-                                context,
-                                icon: Icons.calendar_today,
-                                label: 'Categories',
-                                value: '${categoriesWithBudgets.length}',
-                                color: context.appAccent,
-                              ),
-                      ),
-                      const SizedBox(width: AppDimensions.spacing12),
-                      Expanded(
-                        child: _buildStatBox(
-                          context,
-                          icon: Icons.check_circle,
-                          label: 'On Track',
-                          value: '$onTrackCount',
-                          color: AppColors.positive,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: AppDimensions.spacing24),
-
+            // The Monthly budget card above already carries the total,
+            // bar and status; this section is only the category split.
             // Editing lives beside the month selector; this section explains
             // the breakdown instead of duplicating the same editor action.
             Wrap(
@@ -374,6 +183,7 @@ class BudgetOverviewWidget extends StatelessWidget {
               return BudgetProgressCard(
                 categoryName: category.name,
                 categoryIcon: category.icon,
+                categoryColor: category.color,
                 budgetAmount: budget,
                 spentAmount: spent,
                 transactionCount: txCount,
@@ -462,43 +272,6 @@ class BudgetOverviewWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildStatBox(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(AppDimensions.spacing12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(AppDimensions.radiusSmall),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, size: 20, color: color),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: AppTextStyles.caption.copyWith(
-              color: context.textSecondary,
-              fontSize: 10,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: AppTextStyles.bodyLarge.copyWith(
-              fontWeight: FontWeight.bold,
-              color: color,
-              fontSize: 16,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _BudgetHistoryItem {

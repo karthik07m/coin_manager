@@ -33,13 +33,14 @@ class DBHelper {
             icon TEXT NOT NULL,
             isExpense INTEGER NOT NULL,
             budget REAL,
+            color INTEGER,
             created_on TEXT,
             modified_on TEXT
           )
         ''');
         await _insertDefaultCategories(db);
       },
-      version: 5,
+      version: 6,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           // Add Subscriptions category if upgrading from version 1
@@ -74,6 +75,10 @@ class DBHelper {
             where: 'name = ? AND icon = ?',
             whereArgs: ['Transit', 'assets/categories/transport.png'],
           );
+        }
+        if (oldVersion < 6) {
+          // User-chosen category colour; null falls back to the palette.
+          await db.execute('ALTER TABLE categories ADD COLUMN color INTEGER');
         }
       },
     );
@@ -175,7 +180,10 @@ class DBHelper {
   }
 
   Future<int> insertCategory(String name, String icon, bool isExpense,
-      {double? budget, String? createdOn, String? modifiedOn}) async {
+      {double? budget,
+      int? color,
+      String? createdOn,
+      String? modifiedOn}) async {
     final db = await database;
     return await db.insert(
       'categories',
@@ -184,6 +192,7 @@ class DBHelper {
         'icon': icon,
         'isExpense': isExpense ? 1 : 0,
         'budget': budget,
+        'color': color,
         'created_on': createdOn,
         'modified_on': modifiedOn,
       },
@@ -204,6 +213,7 @@ class DBHelper {
       String? icon,
       bool? isExpense,
       double? budget,
+      int? color,
       String? modifiedOn}) async {
     final db = await database;
     Map<String, dynamic> updatedFields = {};
@@ -212,6 +222,7 @@ class DBHelper {
     if (icon != null) updatedFields['icon'] = icon;
     if (isExpense != null) updatedFields['isExpense'] = isExpense ? 1 : 0;
     if (budget != null) updatedFields['budget'] = budget;
+    if (color != null) updatedFields['color'] = color;
     if (modifiedOn != null) updatedFields['modified_on'] = modifiedOn;
 
     return await db.update(
@@ -270,6 +281,7 @@ class CategoryProvider with ChangeNotifier {
       category.icon,
       category.isExpense,
       budget: category.budget,
+      color: category.colorValue,
       createdOn: category.createdOn,
       modifiedOn: category.modifiedOn,
     );
@@ -290,6 +302,7 @@ class CategoryProvider with ChangeNotifier {
       icon: category.icon,
       isExpense: category.isExpense,
       budget: category.budget,
+      color: category.colorValue,
       modifiedOn: category.modifiedOn,
     );
     await fetchCategories(category.isExpense);

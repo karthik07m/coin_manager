@@ -546,6 +546,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
       context,
       initialName: category?.name,
       initialIcon: category?.icon,
+      initialColor: category?.color.toARGB32(),
       initialIsExpense: true,
       showTypeToggle: false,
       isEditing: category != null,
@@ -565,6 +566,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
       id: existing?.id,
       name: result.name,
       icon: result.icon,
+      colorValue: result.color,
       isExpense: true, // budget categories are always expenses
       budget: existing?.budget,
       createdOn: existing?.createdOn ?? now,
@@ -1347,8 +1349,8 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                             height: 48,
                                             padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
-                                              color: progressColor.withValues(
-                                                  alpha: 0.15),
+                                              color: category.color
+                                                  .withValues(alpha: 0.15),
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),

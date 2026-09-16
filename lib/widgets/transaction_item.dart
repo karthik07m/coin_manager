@@ -135,7 +135,8 @@ class _TransactionItemState extends State<TransactionItem> {
     final amountColor = isExpense ? AppColors.negative : AppColors.positive;
     // Neutral backing: the amount's colour already says income vs expense,
     // so tinting every icon red or green too was saying it twice.
-    final iconBgColor = context.textPrimary.withValues(alpha: 0.06);
+    final iconBgColor = widget.category?.color.withValues(alpha: 0.15) ??
+        context.textPrimary.withValues(alpha: 0.06);
 
     // Show the amount in its account's own currency (multi-currency); totals
     // elsewhere convert to the base currency.

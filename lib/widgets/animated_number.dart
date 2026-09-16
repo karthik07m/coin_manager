@@ -118,7 +118,12 @@ class AnimatedMoney extends StatelessWidget {
 
   String _formatMoney(double value) {
     final absValue = value.abs();
-    final sign = showSign && value >= 0 ? '+' : '';
+    // Always show a real minus; a red-but-unsigned figure reads as positive.
+    final sign = value < 0
+        ? '\u2212'
+        : showSign
+            ? '+'
+            : '';
 
     // Format with commas
     final formatted = _formatWithCommas(absValue);

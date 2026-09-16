@@ -642,9 +642,7 @@ class _DayDetailsSheet extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: (transaction.isTransfer
                                       ? context.appAccent
-                                      : (transaction.isExpense
-                                          ? AppColors.negative
-                                          : AppColors.positive))
+                                      : category.color)
                                   .withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                             ),

@@ -6,7 +6,9 @@ import '../db/receipt_db_helper.dart';
 import '../services/bill_reminder_scheduler.dart';
 import '../utilities/id_generator.dart';
 import '../utilities/financial_year.dart';
+import '../models/category.dart' as models;
 import '../models/category_amount.dart';
+import '../utilities/constants.dart';
 import '../models/transaction.dart';
 import '../models/activity_log.dart';
 import '../services/activity_logger.dart';
@@ -493,6 +495,7 @@ class TransactionProvider extends ChangeNotifier {
           id: categoryId,
           name: categoryDetails['name'],
           icon: categoryDetails['icon'],
+          color: models.Category.fromMap(categoryDetails).color,
           amount: amount,
         ));
       } else {
@@ -501,6 +504,7 @@ class TransactionProvider extends ChangeNotifier {
           id: categoryId,
           name: 'Unknown',
           icon: 'assets/categories/other.png',
+          color: AppColors.categoryPalette.last,
           amount: amount,
         ));
       }

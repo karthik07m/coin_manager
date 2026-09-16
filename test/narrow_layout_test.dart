@@ -29,6 +29,7 @@ void main() {
     return BudgetProgressCard(
       categoryName: name,
       categoryIcon: 'assets/categories/bill.png',
+      categoryColor: const Color(0xFF3498DB),
       budgetAmount: budget,
       spentAmount: spent,
       daysRemaining: 14,

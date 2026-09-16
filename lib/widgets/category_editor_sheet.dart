@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import '../utilities/constants.dart';
 import '../utilities/theme_helper.dart';
@@ -7,11 +9,13 @@ class CategoryEditorResult {
   final String name;
   final String icon;
   final bool isExpense;
+  final int color;
 
   const CategoryEditorResult({
     required this.name,
     required this.icon,
     required this.isExpense,
+    required this.color,
   });
 }
 
@@ -27,6 +31,7 @@ Future<CategoryEditorResult?> showCategoryEditorSheet(
   BuildContext context, {
   String? initialName,
   String? initialIcon,
+  int? initialColor,
   bool initialIsExpense = true,
   bool showTypeToggle = true,
   bool isEditing = false,
@@ -40,6 +45,7 @@ Future<CategoryEditorResult?> showCategoryEditorSheet(
       pageBuilder: (_, __, ___) => _CategoryEditorPage(
         initialName: initialName,
         initialIcon: initialIcon,
+        initialColor: initialColor,
         initialIsExpense: initialIsExpense,
         showTypeToggle: showTypeToggle,
         isEditing: isEditing,
@@ -65,6 +71,7 @@ Future<CategoryEditorResult?> showCategoryEditorSheet(
 class _CategoryEditorPage extends StatefulWidget {
   final String? initialName;
   final String? initialIcon;
+  final int? initialColor;
   final bool initialIsExpense;
   final bool showTypeToggle;
   final bool isEditing;
@@ -72,6 +79,7 @@ class _CategoryEditorPage extends StatefulWidget {
   const _CategoryEditorPage({
     this.initialName,
     this.initialIcon,
+    this.initialColor,
     this.initialIsExpense = true,
     this.showTypeToggle = true,
     this.isEditing = false,
@@ -85,6 +93,7 @@ class _CategoryEditorPageState extends State<_CategoryEditorPage> {
   late final TextEditingController _nameController;
   final FocusNode _focusNode = FocusNode();
   late String _selectedIcon;
+  late Color _selectedColor;
   late bool _isExpense;
 
   @override
@@ -93,6 +102,11 @@ class _CategoryEditorPageState extends State<_CategoryEditorPage> {
     _nameController = TextEditingController(text: widget.initialName ?? '');
     _selectedIcon = widget.initialIcon ??
         (categoryIcons.isNotEmpty ? categoryIcons.first : '');
+    // A random start keeps new categories from all defaulting to blue.
+    _selectedColor = widget.initialColor != null
+        ? Color(widget.initialColor!)
+        : AppColors.categoryPalette[
+            Random().nextInt(AppColors.categoryPalette.length)];
     _isExpense = widget.initialIsExpense;
 
     // Focus after the entrance animation so the keyboard doesn't fight it.
@@ -121,6 +135,7 @@ class _CategoryEditorPageState extends State<_CategoryEditorPage> {
         name: name,
         icon: _selectedIcon,
         isExpense: _isExpense,
+        color: _selectedColor.toARGB32(),
       ),
     );
   }
@@ -190,6 +205,28 @@ class _CategoryEditorPageState extends State<_CategoryEditorPage> {
                 ),
               ),
             Padding(
+              padding: const EdgeInsets.fromLTRB(20, 22, 20, 8),
+              child: Text(
+                'Colour',
+                style: AppTextStyles.caption.copyWith(
+                  color: context.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            SizedBox(
+              height: 40,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: AppColors.categoryPalette.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, i) =>
+                    _swatch(AppColors.categoryPalette[i]),
+              ),
+            ),
+            Padding(
               padding: const EdgeInsets.fromLTRB(20, 22, 20, 4),
               child: Text(
                 'Icon',
@@ -249,19 +286,49 @@ class _CategoryEditorPageState extends State<_CategoryEditorPage> {
     );
   }
 
+  Widget _swatch(Color color) {
+    final isSelected = _selectedColor == color;
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: 'Colour swatch',
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedColor = color),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isSelected ? context.textPrimary : Colors.transparent,
+              width: 3,
+            ),
+          ),
+          child: isSelected
+              ? const Icon(Icons.check_rounded, size: 20, color: Colors.white)
+              : null,
+        ),
+      ),
+    );
+  }
+
   Widget _iconTile(String icon) {
     final isSelected = _selectedIcon == icon;
+    // The selected tile previews the chosen colour, so icon and colour are
+    // judged together.
     return GestureDetector(
       onTap: () => setState(() => _selectedIcon = icon),
       child: Container(
         decoration: BoxDecoration(
           color: isSelected
-              ? context.appAccent.withValues(alpha: 0.18)
+              ? _selectedColor.withValues(alpha: 0.18)
               : context.appSurfaceLight,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected
-                ? context.appAccent
+                ? _selectedColor
                 : AppColors.divider.withValues(alpha: 0.3),
             width: isSelected ? 2 : 1,
           ),
