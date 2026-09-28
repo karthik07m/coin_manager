@@ -8,6 +8,10 @@ class UtilityFunction {
     return DateFormat.yMMMd().format(date);
   }
 
+  /// "42%", capped at "999%+" so a near-zero budget can't print "50538%".
+  static String budgetPercent(double percent) =>
+      percent >= 1000 ? '999%+' : '${percent.toStringAsFixed(0)}%';
+
   static String getScreenTitle(int screenId) {
     switch (screenId) {
       case 0:

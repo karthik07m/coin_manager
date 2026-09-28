@@ -1513,7 +1513,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                                               MainAxisAlignment.spaceBetween,
                                           children: [
                                             Text(
-                                              '${(percentSpent * 100).toStringAsFixed(0)}% used',
+                                              '${UtilityFunction.budgetPercent(percentSpent * 100)} used',
                                               style: AppTextStyles.caption
                                                   .copyWith(
                                                 color: context.textSecondary,

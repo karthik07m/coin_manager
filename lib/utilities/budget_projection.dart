@@ -61,9 +61,12 @@ class BudgetProjection {
     final daysRemaining = daysInMonth - now.day + 1;
 
     // Unusually large single payments (rent paid as a plain transaction,
-    // an annual insurance bill…) shouldn't drive the daily run-rate.
+    // an annual insurance bill…) shouldn't drive the daily run-rate. Measured
+    // against spending too: with an unrealistically small budget every
+    // purchase would count as "large" and the run-rate would drop to zero.
+    final base = totalBudget > totalSpent ? totalBudget : totalSpent;
     final largeOneTimeThreshold =
-        totalBudget > 0 ? totalBudget * 0.20 : double.infinity;
+        totalBudget > 0 ? base * 0.20 : double.infinity;
 
     double variableSpent = 0;
     for (final t in monthExpensesToDate) {

@@ -238,6 +238,19 @@ void main() {
       expect(provider.hasPendingEdit, isFalse);
     });
 
+    test('a later "yes" does not answer an abandoned delete', () async {
+      final hit = row('a', 'Netflix', 649, DateTime(2026, 9, 3));
+      final txns = _FakeTransactions([hit]);
+      final provider = build(txns, [hit]);
+
+      await send(provider, 'delete netflix', txns);
+      await send(provider, "how's my budget?", txns);
+      expect(provider.hasPendingEdit, isFalse);
+
+      await send(provider, 'yes', txns);
+      expect(txns.deleted, isEmpty);
+    });
+
     test('several matches list them instead of picking one', () async {
       final a = row('a', 'Netflix', 649, DateTime(2026, 9, 3));
       final b = row('b', 'Netflix', 649, DateTime(2026, 8, 3));

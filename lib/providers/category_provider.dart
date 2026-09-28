@@ -62,6 +62,7 @@ class CategoryProvider with ChangeNotifier {
       category.icon,
       category.isExpense,
       budget: category.budget,
+      color: category.colorValue,
       createdOn: category.createdOn,
       modifiedOn: category.modifiedOn,
     );
@@ -90,6 +91,7 @@ class CategoryProvider with ChangeNotifier {
       icon: category.icon,
       isExpense: category.isExpense,
       budget: category.budget,
+      color: category.colorValue,
       modifiedOn: category.modifiedOn,
     );
     ActivityLogger().updated(ActivityEntity.category, category.name);

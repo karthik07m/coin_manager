@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../db/category_db_helper.dart';
 import '../db/receipt_db_helper.dart';
@@ -510,8 +509,47 @@ class TransactionProvider extends ChangeNotifier {
       }
     }
 
+    categoryList = distinctSliceColors(categoryList, chosenColorIds: {
+      for (final row in allCategories)
+        if (row['color'] != null) row['id'] as int,
+    });
+
     // Update the categories list — caller will notify.
     categories = categoryList;
+  }
+
+  /// Unset colours come from id % palette, so categories 12 ids apart (Food
+  /// and Subscriptions) share one and their slices blur together. Bigger
+  /// slices keep theirs; a clashing colour the user never chose takes the
+  /// first unused palette entry. Order of the list is preserved.
+  static List<CategoryAmount> distinctSliceColors(
+    List<CategoryAmount> slices, {
+    required Set<int> chosenColorIds,
+  }) {
+    final used = <int>{};
+    final recoloured = <int, Color>{};
+    final bySize = [...slices]..sort((a, b) => b.amount.compareTo(a.amount));
+    for (final c in bySize) {
+      var color = c.color;
+      if (!chosenColorIds.contains(c.id) && used.contains(color.toARGB32())) {
+        color = AppColors.categoryPalette.firstWhere(
+            (p) => !used.contains(p.toARGB32()),
+            orElse: () => color);
+        recoloured[c.id] = color;
+      }
+      used.add(color.toARGB32());
+    }
+    return [
+      for (final c in slices)
+        recoloured.containsKey(c.id)
+            ? CategoryAmount(
+                id: c.id,
+                name: c.name,
+                icon: c.icon,
+                color: recoloured[c.id]!,
+                amount: c.amount)
+            : c,
+    ];
   }
 
   List<Transaction> getTransactionsByCategory(int categoryId) {

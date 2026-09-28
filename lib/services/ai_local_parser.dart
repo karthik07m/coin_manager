@@ -312,19 +312,25 @@ class AiLocalParser {
         : RegExp(r'^(?:change|edit|update|modify|correct|make)\s+(.+?)\s+to\s+(.+)$')
             .firstMatch(text);
     if (changed != null) {
-      final amount = _parseAmount(changed.group(2)!);
       final target = changed.group(1)!.trim();
+      final period = _matchPeriod(target);
+      final term = pronouns.contains(target)
+          ? null
+          : clean(target, period?.token ?? '');
+      // "make payment to landlord 5000" names nothing to find and no "that":
+      // it is a new expense, not an edit of whatever was saved last.
+      if (term == null && period == null && !pronouns.contains(target)) {
+        return null;
+      }
+      final amount = _parseAmount(changed.group(2)!);
       if (amount == null) {
         return AiIntent.unsupported(
           "✋ I can only change the amount for now — try \"change that to 250\". "
           'For anything else, open the transaction on the Transactions tab.',
         );
       }
-      final period = _matchPeriod(target);
       return edit(AiEditRequest(
-        term: pronouns.contains(target)
-            ? null
-            : clean(target, period?.token ?? ''),
+        term: term,
         newAmount: amount.value,
         start: period?.start,
         end: period?.end,
@@ -334,9 +340,15 @@ class AiLocalParser {
     // A delete never carries an amount — "remove stains 200" is an expense
     // someone is logging, not a request to erase anything.
     final removed = RegExp(r'^(?:delete|remove)\s+(.+)$').firstMatch(text);
-    if (removed != null && _parseAmount(text) == null) {
+    final removedPeriod =
+        removed == null ? null : _matchPeriod(removed.group(1)!.trim());
+    // The numbers in a named date ("on sep 12, 2026") are not an amount.
+    final withoutDate = removedPeriod == null
+        ? text
+        : text.replaceAll(removedPeriod.token, ' ');
+    if (removed != null && _parseAmount(withoutDate) == null) {
       final target = removed.group(1)!.trim();
-      final period = _matchPeriod(target);
+      final period = removedPeriod;
       return edit(AiEditRequest(
         isDelete: true,
         term: pronouns.contains(target)
@@ -987,12 +999,36 @@ class AiLocalParser {
     );
   }
 
+  /// "on sep 12, 2026" / "12 sep" — one named day. The assistant suggests
+  /// this form when several transactions share a title. Without a year it is
+  /// the most recent such day.
+  ({DateTime start, DateTime end, String token})? _matchDay(
+      String text, DateTime today) {
+    final m = RegExp(r'(?:\bon\s+)?\b(?:' '$_monthRe' r'\s+(\d{1,2})|(\d{1,2})\s+'
+            '$_monthRe' r')\b(?:,?\s*(\d{4})\b)?')
+        .firstMatch(text);
+    if (m == null) return null;
+    final month =
+        _months.indexOf((m.group(1) ?? m.group(4))!.substring(0, 3)) + 1;
+    final dayOfMonth = int.parse(m.group(2) ?? m.group(3)!);
+    final hasYear = m.group(5) != null;
+    var date = DateTime(
+        hasYear ? int.parse(m.group(5)!) : today.year, month, dayOfMonth);
+    if (date.month != month) return null; // "feb 31"
+    if (!hasYear && date.isAfter(today)) {
+      date = DateTime(date.year - 1, month, dayOfMonth);
+    }
+    return (start: date, end: date, token: m.group(0)!);
+  }
+
   /// The period a message names, or null when it names none.
   ({DateTime start, DateTime end, String token})? _matchPeriod(String text) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final thisWeekStart = today.subtract(Duration(days: today.weekday - 1));
 
+    final day = _matchDay(text, today);
+    if (day != null) return day;
     if (text.contains('today')) {
       return (start: today, end: today, token: 'today');
     }

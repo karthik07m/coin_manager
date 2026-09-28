@@ -45,8 +45,10 @@ class AiAssistantProvider extends ChangeNotifier {
 
   static Future<List<Transaction>> _defaultFinder(
       String term, DateTime start, DateTime end) async {
+    // Periods end on a date at midnight; include that whole last day.
+    final endOfDay = DateTime(end.year, end.month, end.day, 23, 59, 59, 999);
     final rows = await TransactionDBHelper()
-        .getTransactionsByType(startDate: start, endDate: end);
+        .getTransactionsByType(startDate: start, endDate: endOfDay);
     final needle = term.toLowerCase();
     final matches = rows
         .where((t) => !t.isTransfer && t.title.toLowerCase().contains(needle))
@@ -180,6 +182,12 @@ class AiAssistantProvider extends ChangeNotifier {
         );
         if (handled) return;
       }
+
+      // The message didn't answer the waiting yes/no, so the conversation has
+      // moved on: a later "yes" must not apply an older edit, delete or
+      // transfer the user has stopped looking at.
+      _pendingEdit = null;
+      _pendingTransfer = null;
 
       // On-device parsing first: instant, offline, and doesn't need any
       // AI setup. The remote AI is only consulted for messages the local
@@ -893,11 +901,11 @@ class AiAssistantProvider extends ChangeNotifier {
           'tab and I\'ll track it for you. 📊';
     }
     final used = spent ?? 0;
-    final pct = (used / total * 100).round();
+    final pct = UtilityFunction.budgetPercent(used / total * 100);
     String money(double v) => _money(v, symbol, code);
     if (used > total) {
       return '🚨 You\'re over budget: spent ${money(used)} of '
-          '${money(total)} ($pct%). Over by ${money(used - total)}.';
+          '${money(total)} ($pct). Over by ${money(used - total)}.';
     }
     final now = DateTime.now();
     final daysLeft = BudgetPeriod.daysRemaining(now);
@@ -911,7 +919,7 @@ class AiAssistantProvider extends ChangeNotifier {
         ? 'You\'re on track — ${money(expected - used)} under an even pace.'
         : 'Slightly ahead of pace — ${money(used - expected)} over an even '
             'spread.';
-    return '📊 Budget: ${money(used)} of ${money(total)} used ($pct%).\n'
+    return '📊 Budget: ${money(used)} of ${money(total)} used ($pct).\n'
         '${money(left)} left · about ${money(perDay)} a day for the next '
         '$daysLeft day${daysLeft == 1 ? '' : 's'}.\n\n$pace';
   }

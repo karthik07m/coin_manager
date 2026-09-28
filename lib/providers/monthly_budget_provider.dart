@@ -56,6 +56,16 @@ class MonthlyBudgetProvider with ChangeNotifier {
 
   double getTotalBudget(String month) => _totalBudgets[month] ?? 0.0;
 
+  /// The budget to measure a month against: its saved total, or — for months
+  /// saved before totals were always written — the sum of its category
+  /// budgets. Read-only views use this; the editor keeps [getTotalBudget] so
+  /// it never shows (or saves) a total the user didn't set.
+  double effectiveTotalBudget(String month) {
+    final total = getTotalBudget(month);
+    if (total > 0) return total;
+    return _monthlyBudgets.fold(0.0, (sum, b) => sum + b.getBudget(month));
+  }
+
   Future<double> fetchTotalBudget(String month) async {
     if (_totalBudgets.containsKey(month)) {
       return _totalBudgets[month] ?? 0.0;

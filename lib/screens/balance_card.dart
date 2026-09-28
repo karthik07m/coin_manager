@@ -28,6 +28,11 @@ class BalanceCard extends StatelessWidget {
   final double totalExpenses;
   final double previousMonthExpenses;
   final DateTime selectedMonth;
+
+  bool get _isCurrentMonth {
+    final now = DateTime.now();
+    return selectedMonth.year == now.year && selectedMonth.month == now.month;
+  }
   final ValueChanged<DateTime> onMonthChanged;
 
   const BalanceCard({
@@ -79,7 +84,10 @@ class BalanceCard extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text('Left this month',
+                    child: Text(
+                        _isCurrentMonth
+                            ? 'Left this month'
+                            : 'Left in ${DateFormat('MMMM').format(selectedMonth)}',
                         style: AppTextStyles.bodyMedium.copyWith(
                             color: context.textSecondary,
                             fontWeight: FontWeight.w600)),

@@ -175,7 +175,8 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                   label: 'Assets',
                   value: UtilityFunction.formatMoney(assets,
                       symbol: currencySymbol, showDecimals: true),
-                  color: AppColors.positive,
+                  // An overdrawn cash account can push assets below zero.
+                  color: assets < 0 ? AppColors.negative : AppColors.positive,
                   icon: Icons.arrow_upward_rounded,
                 ),
               ),

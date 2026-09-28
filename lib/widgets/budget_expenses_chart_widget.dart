@@ -96,7 +96,7 @@ class _BudgetExpensesChartWidgetState extends State<BudgetExpensesChartWidget>
       builder: (context, transactionProvider, budgetProvider, settingsProvider,
           child) {
         final currentMonth = BudgetPeriod.keyFor(widget.selectedMonth);
-        final totalBudget = budgetProvider.getTotalBudget(currentMonth);
+        final totalBudget = budgetProvider.effectiveTotalBudget(currentMonth);
         final currencySymbol = settingsProvider.currencySymbol;
 
         final categoryProvider = Provider.of<CategoryProvider>(context);

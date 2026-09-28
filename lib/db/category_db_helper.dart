@@ -1,7 +1,5 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import 'package:flutter/material.dart';
-import '../models/category.dart';
 
 class DBHelper {
   static final DBHelper _instance = DBHelper._internal();
@@ -241,81 +239,5 @@ class DBHelper {
       whereArgs: [id],
     );
     return result.isNotEmpty ? result.first : null;
-  }
-}
-
-class CategoryProvider with ChangeNotifier {
-  final List<Category> _categories = [];
-  final Map<int, Category> _categoryMap = {};
-
-  List<Category> get categories => List.unmodifiable(_categories);
-  Map<int, Category> get categoryMap => Map.unmodifiable(_categoryMap);
-
-  Future<void> fetchCategories(bool isExpense) async {
-    final data = await DBHelper().getCategories(isExpense);
-    _categories
-      ..clear()
-      ..addAll(data.map((map) => Category.fromMap(map)));
-    _categoryMap
-      ..clear()
-      ..addEntries(
-          _categories.map((category) => MapEntry(category.id!, category)));
-    notifyListeners();
-  }
-
-  Future<void> fetchAllCategories() async {
-    final data = await DBHelper().getAllCategories();
-    _categories
-      ..clear()
-      ..addAll(data.map((map) => Category.fromMap(map)));
-    _categoryMap
-      ..clear()
-      ..addEntries(
-          _categories.map((category) => MapEntry(category.id!, category)));
-    notifyListeners();
-  }
-
-  Future<void> addCategory(Category category) async {
-    await DBHelper().insertCategory(
-      category.name,
-      category.icon,
-      category.isExpense,
-      budget: category.budget,
-      color: category.colorValue,
-      createdOn: category.createdOn,
-      modifiedOn: category.modifiedOn,
-    );
-    await fetchCategories(category.isExpense);
-  }
-
-  Future<void> deleteCategory(int id) async {
-    await DBHelper().deleteCategory(id);
-    _categories.removeWhere((category) => category.id == id);
-    _categoryMap.remove(id);
-    notifyListeners();
-  }
-
-  Future<void> updateCategory(Category category) async {
-    await DBHelper().updateCategory(
-      category.id!,
-      name: category.name,
-      icon: category.icon,
-      isExpense: category.isExpense,
-      budget: category.budget,
-      color: category.colorValue,
-      modifiedOn: category.modifiedOn,
-    );
-    await fetchCategories(category.isExpense);
-  }
-
-  Future<Category?> getCategoryDetailsById(int id) async {
-    if (_categoryMap.containsKey(id)) return _categoryMap[id];
-    final map = await DBHelper().getCategoryDetailsById(id);
-    if (map != null) {
-      final category = Category.fromMap(map);
-      _categoryMap[id] = category;
-      return category;
-    }
-    return null;
   }
 }

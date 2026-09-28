@@ -185,6 +185,26 @@ void main() {
       expect(out('delete spotify')?.edit?.term, 'spotify');
     });
 
+    test('the dated phrase the assistant suggests picks that one day', () {
+      final edit = out('delete coffee on Sep 12, 2026')?.edit;
+      expect(edit?.isDelete, isTrue);
+      expect(edit?.term, 'coffee');
+      expect(edit?.start, DateTime(2026, 9, 12));
+      expect(edit?.end, DateTime(2026, 9, 12));
+
+      final change = out('change netflix on 3 aug to 199')?.edit;
+      expect(change?.term, 'netflix');
+      expect(change?.newAmount, 199);
+      expect(change?.start?.month, 8);
+      expect(change?.start?.day, 3);
+    });
+
+    test('"make payment to landlord 5000" is a new expense, not an edit', () {
+      final intent = out('make payment to landlord 5000');
+      expect(intent?.type, isNot(AiIntentType.editTransaction));
+      expect(intent?.transaction?.amount, 5000);
+    });
+
     test('a delete carrying an amount is an expense, not a deletion', () {
       final t = out('remove stains 200')?.transaction;
       expect(t?.amount, 200);

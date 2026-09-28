@@ -34,8 +34,11 @@ class BudgetProgressCard extends StatelessWidget {
     this.onTap,
   });
 
-  String _money(double v) =>
-      UtilityFunction.formatMoney(v, symbol: currencySymbol);
+  // Rounded like other summaries, except small amounts with cents: a 1.30
+  // budget rounded to "1" (or 0.40 to "0") misstates it.
+  String _money(double v) => UtilityFunction.formatMoney(v,
+      symbol: currencySymbol,
+      showDecimals: v.abs() < 100 && v != v.roundToDouble());
 
   @override
   Widget build(BuildContext context) {

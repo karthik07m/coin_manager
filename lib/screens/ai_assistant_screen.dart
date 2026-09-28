@@ -150,7 +150,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     final monthStart = BudgetPeriod.startOfMonth(now);
     final monthEnd = BudgetPeriod.endOfMonth(now);
     final monthKey = BudgetPeriod.keyFor(now);
-    final total = budgetProvider.getTotalBudget(monthKey);
+    final total = budgetProvider.effectiveTotalBudget(monthKey);
     final spent = BudgetScopeSummary.compute(
       monthExpenses: transactionProvider.transactions
           .where((t) =>

@@ -172,6 +172,10 @@ class BottomNavBarState extends State<MenuScrn>
   void _onItemTapped(int index) {
     if (index == _selectedIndex) return;
 
+    // A field on the tab being hidden (the AI chat input) would otherwise keep
+    // focus inside the IndexedStack; popping any route later restores that
+    // focus and pops the keyboard up over the new tab.
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _tabDirection = index > _selectedIndex ? 1 : -1;
       if (index == 3) {

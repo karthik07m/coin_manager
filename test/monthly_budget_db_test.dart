@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:coin_manager/db/monthly_budget_db_helper.dart';
 import 'package:coin_manager/models/budget_scope.dart';
+import 'package:coin_manager/providers/monthly_budget_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -203,5 +204,18 @@ void main() {
       expect(await budgets.getTotalBudget('2027-08'), 999);
       expect(await budgets.getTotalBudget('2027-09'), 0);
     });
+  });
+
+  test('a month with category budgets but no total still has a budget',
+      () async {
+    // Older saves could write the category split without a total.
+    await budgets.setBudget('Food', '2026-07', 400);
+    await budgets.setBudget('Rent', '2026-07', 1100);
+
+    final provider = MonthlyBudgetProvider();
+    await provider.loadMonthlyData('2026-07');
+    expect(provider.getTotalBudget('2026-07'), 0,
+        reason: 'the editor must not see a total that was never set');
+    expect(provider.effectiveTotalBudget('2026-07'), 1500);
   });
 }

@@ -75,6 +75,25 @@ void main() {
       expect(result.projected, closeTo(2620.0, 0.0001));
     });
 
+    test('a tiny budget does not make every purchase "large"', () {
+      // Budget 7.20 against 657 spent: the cut-off follows spending
+      // (657 * 0.2 = 131.4), so only the 520 is a one-off and the small
+      // purchases still project forward.
+      final result = BudgetProjection.compute(
+        monthExpensesToDate: [
+          expense(85, DateTime(2026, 7, 2)),
+          expense(520, DateTime(2026, 7, 4)),
+          expense(52, DateTime(2026, 7, 4)),
+        ],
+        upcomingRecurring: const [],
+        selectedMonth: july,
+        totalBudget: 7.20,
+        now: now,
+      );
+      expect(result.variableDailyAverage, closeTo(137 / 5, 0.0001));
+      expect(result.projected, closeTo(657 + 137 / 5 * 26, 0.0001));
+    });
+
     test('zero budget disables the large-one-time filter', () {
       // Threshold is infinity, so the 2000 DOES enter the run-rate.
       final result = BudgetProjection.compute(

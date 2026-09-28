@@ -71,6 +71,9 @@ class GoogleDriveBackupService {
     final granted =
         await _googleSignIn.requestScopes([drive.DriveApi.driveFileScope]);
     if (!granted) {
+      // Otherwise the declined account stays cached: the next "Sign in" reuses
+      // it with no account picker, and there is no way to choose another.
+      await _googleSignIn.signOut();
       throw Exception(
           'Google Drive access was not granted. Sign in again and allow access.');
     }

@@ -56,7 +56,7 @@ class QuickStatsWidget extends StatelessWidget {
         final endDate = BudgetPeriod.endOfMonth(selectedMonth);
         final currencySymbol = settingsProvider.currencySymbol;
 
-        final totalBudget = budgetProvider.getTotalBudget(currentMonth);
+        final totalBudget = budgetProvider.effectiveTotalBudget(currentMonth);
         final allMonthExpenses = transactionProvider.transactions
             .where((transaction) =>
                 transaction.isExpense &&
@@ -265,9 +265,7 @@ class QuickStatsWidget extends StatelessWidget {
                         // Colour-matched to the fill so it's clearly the bar's value.
                         Flexible(
                           child: Text(
-                            budgetUsedPercent >= 1000
-                                ? 'Spent 999%+ of budget'
-                                : 'Spent ${budgetUsedPercent.toStringAsFixed(0)}% of budget',
+                            'Spent ${UtilityFunction.budgetPercent(budgetUsedPercent)} of budget',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.caption.copyWith(

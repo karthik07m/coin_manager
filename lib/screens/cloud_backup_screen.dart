@@ -48,7 +48,13 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
     try {
       await action();
     } catch (e) {
-      if (mounted) setState(() => _error = _friendlyError(e));
+      if (mounted) {
+        setState(() {
+          _error = _friendlyError(e);
+          // A declined Drive consent signs out; don't keep showing "Connected".
+          _email = _drive.accountEmail;
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -65,9 +71,7 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
         s.toLowerCase().contains('developer') ||
         s.contains('12500') ||
         s.contains('sign_in_failed')) {
-      return 'Google sign-in failed. This usually means the app isn\'t yet '
-          'registered in a Google Cloud project (OAuth consent screen + this '
-          'app\'s SHA-1 + Drive API enabled). See setup below.';
+      return 'Google sign-in failed. Check your connection and try again.';
     }
     return s.replaceFirst('Exception: ', '');
   }
@@ -204,7 +208,7 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
                   ..._backups.map(_backupTile),
               ],
               const SizedBox(height: 28),
-              _setupNote(),
+              _privacyNote(),
             ],
           ),
           if (_busy)
@@ -345,7 +349,7 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
     );
   }
 
-  Widget _setupNote() {
+  Widget _privacyNote() {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -357,20 +361,17 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.info_outline, size: 18, color: context.textSecondary),
+              Icon(Icons.lock_outline, size: 18, color: context.textSecondary),
               const SizedBox(width: 8),
-              Text('One-time setup',
+              Text('Your Drive stays private',
                   style: AppTextStyles.bodySmall
                       .copyWith(fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            'Google sign-in needs this app registered in a Google Cloud '
-            'project: create an OAuth consent screen, enable the Drive API, '
-            'and add an Android OAuth client with this app\'s package name and '
-            'signing SHA-1. Only the drive.file scope is used, so the app can '
-            'only ever see backups it created — never the rest of your Drive.',
+            'Coinly can only see the backups it creates — never the rest of '
+            'your Drive.',
             style: AppTextStyles.caption.copyWith(
               color: context.textSecondary,
               height: 1.4,
